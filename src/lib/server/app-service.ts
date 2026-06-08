@@ -1,0 +1,961 @@
+import { headers } from "next/headers";
+import { timingSafeEqual } from "node:crypto";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { db, pool } from "@/db/client";
+import {
+  debts,
+  expenses,
+  investments,
+  investors,
+  monthlyReports,
+  products,
+  restockLogs,
+  storeProfiles,
+  transactionItems,
+  transactions,
+  userRoles,
+} from "@/db/schema";
+import { auth } from "@/lib/auth";
+import { getUserRole, Role } from "@/lib/server/rbac";
+import { AppState, DebtDraft, PaymentMethod, ProductDraft, Settings, Transaction } from "@/lib/types";
+
+let initializationPromise: Promise<void> | null = null;
+const supportedPaymentMethods: PaymentMethod[] = ["Tunai", "QRIS", "Transfer"];
+
+type SessionHint = {
+  user?: {
+    id?: string;
+    name?: string | null;
+    email?: string | null;
+  };
+} | null;
+
+function createId(prefix: string) {
+  return `${prefix}_${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function parseDueDate(value: string) {
+  if (value.includes("T")) {
+    return new Date(value).toISOString();
+  }
+
+  return new Date(`${value}T00:00:00.000Z`).toISOString();
+}
+
+async function ensureTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS store_profiles (
+      user_id text PRIMARY KEY,
+      store_name text NOT NULL,
+      store_tagline text NOT NULL,
+      store_address text NOT NULL,
+      pcm_name text NOT NULL DEFAULT '',
+      pcm_chairman_name text NOT NULL DEFAULT '',
+      pcm_address text NOT NULL DEFAULT '',
+      owner_name text NOT NULL,
+      owner_whatsapp text NOT NULL,
+      city text NOT NULL,
+      business_notes text NOT NULL,
+      stock_alert_threshold integer NOT NULL,
+      profit_share_pcm_pct integer NOT NULL DEFAULT 30,
+      profit_share_reserve_pct integer NOT NULL DEFAULT 20,
+      enabled_payments jsonb NOT NULL,
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS user_roles (
+      user_id text PRIMARY KEY,
+      role text NOT NULL,
+      workspace_owner_id text NOT NULL,
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL,
+      CONSTRAINT user_roles_role_check
+        CHECK (role in ('pimpinan', 'pengelola_keuangan', 'kasir'))
+    );
+
+    CREATE INDEX IF NOT EXISTS user_roles_workspace_idx
+      ON user_roles(workspace_owner_id);
+
+    CREATE TABLE IF NOT EXISTS products (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      name text NOT NULL,
+      category text NOT NULL,
+      buy_price integer NOT NULL,
+      sell_price integer NOT NULL,
+      stock integer NOT NULL,
+      minimum_stock integer NOT NULL,
+      description text NOT NULL,
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS investors (
+      id text PRIMARY KEY,
+      workspace_owner_id text NOT NULL,
+      name text NOT NULL,
+      whatsapp text NOT NULL,
+      address text NOT NULL,
+      notes text NOT NULL,
+      is_active integer NOT NULL,
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS investors_workspace_idx
+      ON investors(workspace_owner_id);
+
+    CREATE TABLE IF NOT EXISTS investments (
+      id text PRIMARY KEY,
+      investor_id text NOT NULL,
+      workspace_owner_id text NOT NULL,
+      type text NOT NULL,
+      amount integer,
+      profit_share_pct integer,
+      product_id text,
+      unit_count integer,
+      unit_cost integer,
+      profit_share_per_unit_pct integer,
+      start_date timestamptz NOT NULL,
+      end_date timestamptz,
+      is_active integer NOT NULL,
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL,
+      CONSTRAINT investments_type_check
+        CHECK (type in ('uang', 'barang_titip_jual'))
+    );
+
+    CREATE INDEX IF NOT EXISTS investments_workspace_idx
+      ON investments(workspace_owner_id);
+
+    CREATE INDEX IF NOT EXISTS investments_investor_idx
+      ON investments(investor_id);
+
+    CREATE INDEX IF NOT EXISTS investments_product_idx
+      ON investments(product_id);
+
+    CREATE TABLE IF NOT EXISTS investor_payouts (
+      id text PRIMARY KEY,
+      investment_id text NOT NULL,
+      investor_id text NOT NULL,
+      workspace_owner_id text NOT NULL,
+      period_start timestamptz NOT NULL,
+      period_end timestamptz NOT NULL,
+      base_profit integer NOT NULL,
+      share_pct integer NOT NULL,
+      amount integer NOT NULL,
+      status text NOT NULL,
+      paid_at timestamptz,
+      note text NOT NULL,
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL,
+      CONSTRAINT investor_payouts_status_check
+        CHECK (status in ('draft', 'disetujui', 'dibayar'))
+    );
+
+    CREATE INDEX IF NOT EXISTS investor_payouts_workspace_idx
+      ON investor_payouts(workspace_owner_id);
+
+    CREATE INDEX IF NOT EXISTS investor_payouts_investment_idx
+      ON investor_payouts(investment_id);
+
+    CREATE INDEX IF NOT EXISTS investor_payouts_investor_idx
+      ON investor_payouts(investor_id);
+
+    CREATE INDEX IF NOT EXISTS investor_payouts_period_idx
+      ON investor_payouts(workspace_owner_id, period_start, period_end);
+
+    CREATE TABLE IF NOT EXISTS transactions (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      total integer NOT NULL,
+      payment_method text NOT NULL,
+      created_at timestamptz NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS transaction_items (
+      id text PRIMARY KEY,
+      transaction_id text NOT NULL,
+      product_id text NOT NULL,
+      product_name text NOT NULL,
+      quantity integer NOT NULL,
+      unit_price integer NOT NULL,
+      cost_price integer NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS debts (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      borrower_name text NOT NULL,
+      whatsapp text NOT NULL,
+      amount integer NOT NULL,
+      created_at timestamptz NOT NULL,
+      due_date timestamptz NOT NULL,
+      is_paid integer NOT NULL,
+      last_reminder_at timestamptz
+    );
+
+    CREATE TABLE IF NOT EXISTS expenses (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      title text NOT NULL,
+      amount integer NOT NULL,
+      created_at timestamptz NOT NULL,
+      category text NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS restock_logs (
+      id text PRIMARY KEY,
+      workspace_owner_id text NOT NULL,
+      product_id text NOT NULL,
+      performed_by_user_id text NOT NULL,
+      source text NOT NULL,
+      quantity integer NOT NULL,
+      unit_cost integer,
+      receipt_image_url text,
+      ocr_raw jsonb,
+      note text NOT NULL,
+      created_at timestamptz NOT NULL,
+      CONSTRAINT restock_logs_source_check
+        CHECK (source in ('manual', 'ai_chat', 'ai_ocr'))
+    );
+
+    CREATE INDEX IF NOT EXISTS restock_logs_workspace_idx
+      ON restock_logs(workspace_owner_id);
+
+    CREATE INDEX IF NOT EXISTS restock_logs_product_idx
+      ON restock_logs(product_id);
+
+    CREATE INDEX IF NOT EXISTS restock_logs_performed_by_idx
+      ON restock_logs(performed_by_user_id);
+
+    CREATE TABLE IF NOT EXISTS monthly_reports (
+      id text PRIMARY KEY,
+      workspace_owner_id text NOT NULL,
+      period_year integer NOT NULL,
+      period_month integer NOT NULL,
+      data jsonb NOT NULL,
+      pdf_url text,
+      status text NOT NULL,
+      finalized_at timestamptz,
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL,
+      CONSTRAINT monthly_reports_status_check
+        CHECK (status in ('draft', 'final'))
+    );
+
+    CREATE INDEX IF NOT EXISTS monthly_reports_workspace_idx
+      ON monthly_reports(workspace_owner_id);
+
+    CREATE INDEX IF NOT EXISTS monthly_reports_period_idx
+      ON monthly_reports(workspace_owner_id, period_year, period_month);
+
+    ALTER TABLE store_profiles
+      ADD COLUMN IF NOT EXISTS store_tagline text NOT NULL DEFAULT '';
+
+    ALTER TABLE store_profiles
+      ADD COLUMN IF NOT EXISTS store_address text NOT NULL DEFAULT '';
+
+    ALTER TABLE store_profiles
+      ADD COLUMN IF NOT EXISTS pcm_name text NOT NULL DEFAULT '';
+
+    ALTER TABLE store_profiles
+      ADD COLUMN IF NOT EXISTS pcm_chairman_name text NOT NULL DEFAULT '';
+
+    ALTER TABLE store_profiles
+      ADD COLUMN IF NOT EXISTS pcm_address text NOT NULL DEFAULT '';
+
+    ALTER TABLE store_profiles
+      ADD COLUMN IF NOT EXISTS business_notes text NOT NULL DEFAULT '';
+
+    ALTER TABLE store_profiles
+      ADD COLUMN IF NOT EXISTS profit_share_pcm_pct integer NOT NULL DEFAULT 30;
+
+    ALTER TABLE store_profiles
+      ADD COLUMN IF NOT EXISTS profit_share_reserve_pct integer NOT NULL DEFAULT 20;
+
+    CREATE TABLE IF NOT EXISTS ai_chats (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      title text NOT NULL,
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS ai_chats_user_idx ON ai_chats(user_id, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ai_messages (
+      id text PRIMARY KEY,
+      chat_id text NOT NULL,
+      user_id text NOT NULL,
+      role text NOT NULL,
+      content text NOT NULL,
+      tool_name text,
+      tool_call_id text,
+      tool_calls jsonb,
+      tool_args jsonb,
+      tool_result jsonb,
+      created_at timestamptz NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS ai_messages_chat_idx ON ai_messages(chat_id, created_at);
+  `);
+}
+
+async function ensureWorkspace(userId: string, session?: SessionHint) {
+  const existingRole = await getUserRole(userId);
+  if (existingRole) {
+    return existingRole;
+  }
+
+  const existing = await db
+    .select({ userId: storeProfiles.userId })
+    .from(storeProfiles)
+    .where(eq(storeProfiles.userId, userId))
+    .limit(1);
+
+  const timestamp = nowIso();
+  const role = { role: "pimpinan" as Role, workspaceOwnerId: userId };
+
+  await db.transaction(async (tx) => {
+    if (existing.length === 0) {
+      await tx.insert(storeProfiles).values({
+        userId,
+        storeName: session?.user?.name ? `Warung ${session.user.name}` : "Warung Baru",
+        storeTagline: "Warung harian untuk warga sekitar",
+        storeAddress: "Alamat belum diisi",
+        pcmName: "",
+        pcmChairmanName: "",
+        pcmAddress: "",
+        ownerName: session?.user?.name ?? "Pemilik Warung",
+        ownerWhatsapp: "-",
+        city: "Indonesia",
+        businessNotes: "",
+        stockAlertThreshold: 8,
+        profitSharePcmPct: 30,
+        profitShareReservePct: 20,
+        enabledPayments: ["Tunai", "QRIS", "Transfer"],
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+    }
+
+    await tx
+      .insert(userRoles)
+      .values({
+        userId,
+        role: role.role,
+        workspaceOwnerId: role.workspaceOwnerId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .onConflictDoNothing();
+  });
+
+  return (await getUserRole(userId)) ?? role;
+}
+
+export async function ensureAppReady() {
+  if (!initializationPromise) {
+    initializationPromise = ensureTables();
+  }
+
+  await initializationPromise;
+}
+
+/**
+ * Static Bearer-token auth for API testing in production.
+ *
+ * Active only when BOTH `API_TEST_TOKEN` and `API_TEST_USER_ID` env vars are
+ * set. A request with `Authorization: Bearer <API_TEST_TOKEN>` is treated as
+ * the user identified by `API_TEST_USER_ID`. Token compare is constant-time.
+ *
+ * This is a long-lived credential with no expiry — keep it secret, scope it to
+ * a throwaway test account, and rotate it by changing the env var.
+ */
+function resolveTestBearer(headerList: Headers): SessionHint {
+  const token = process.env.API_TEST_TOKEN;
+  const testUserId = process.env.API_TEST_USER_ID;
+  if (!token || !testUserId) {
+    return null;
+  }
+
+  const match = /^Bearer\s+(.+)$/i.exec((headerList.get("authorization") ?? "").trim());
+  if (!match) {
+    return null;
+  }
+
+  const provided = Buffer.from(match[1]);
+  const expected = Buffer.from(token);
+  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+    return null;
+  }
+
+  return {
+    user: {
+      id: testUserId,
+      name: process.env.API_TEST_USER_NAME ?? "API Test",
+      email: process.env.API_TEST_USER_EMAIL ?? null,
+    },
+  };
+}
+
+export async function getRequestUser() {
+  await ensureAppReady();
+
+  const headerList = await headers();
+
+  const testSession = resolveTestBearer(headerList);
+  if (testSession?.user?.id) {
+    const role = await ensureWorkspace(testSession.user.id, testSession);
+    return {
+      userId: testSession.user.id,
+      role: role.role,
+      workspaceOwnerId: role.workspaceOwnerId,
+      session: testSession,
+    };
+  }
+
+  const session = await auth.api.getSession({
+    headers: headerList,
+  });
+
+  if (!session?.user?.id) {
+    throw new Error("UNAUTHORIZED");
+  }
+
+  const role = await ensureWorkspace(session.user.id, session);
+  return {
+    userId: session.user.id,
+    role: role.role,
+    workspaceOwnerId: role.workspaceOwnerId,
+    session,
+  };
+}
+
+function mapSettings(profile: typeof storeProfiles.$inferSelect): Settings {
+  return {
+    storeName: profile.storeName,
+    storeTagline: profile.storeTagline,
+    storeAddress: profile.storeAddress,
+    pcmName: profile.pcmName,
+    pcmChairmanName: profile.pcmChairmanName,
+    pcmAddress: profile.pcmAddress,
+    ownerName: profile.ownerName,
+    ownerWhatsapp: profile.ownerWhatsapp,
+    city: profile.city,
+    businessNotes: profile.businessNotes,
+    stockAlertThreshold: profile.stockAlertThreshold,
+    profitSharePcmPct: profile.profitSharePcmPct,
+    profitShareReservePct: profile.profitShareReservePct,
+    enabledPayments: profile.enabledPayments,
+  };
+}
+
+function normalizeSettings(settings: Settings): Settings {
+  const enabledPayments = Array.from(
+    new Set(
+      settings.enabledPayments.filter((method): method is PaymentMethod =>
+        supportedPaymentMethods.includes(method)
+      )
+    )
+  );
+
+  return {
+    storeName: settings.storeName.trim(),
+    storeTagline: settings.storeTagline.trim(),
+    storeAddress: settings.storeAddress.trim(),
+    pcmName: settings.pcmName.trim(),
+    pcmChairmanName: settings.pcmChairmanName.trim(),
+    pcmAddress: settings.pcmAddress.trim(),
+    ownerName: settings.ownerName.trim(),
+    ownerWhatsapp: settings.ownerWhatsapp.trim(),
+    city: settings.city.trim(),
+    businessNotes: settings.businessNotes.trim(),
+    stockAlertThreshold: Math.max(1, Math.round(settings.stockAlertThreshold || 0)),
+    profitSharePcmPct: Math.min(100, Math.max(0, Math.round(settings.profitSharePcmPct || 0))),
+    profitShareReservePct: Math.min(100, Math.max(0, Math.round(settings.profitShareReservePct || 0))),
+    enabledPayments,
+  };
+}
+
+export async function getBootstrapState(userId: string): Promise<AppState> {
+  await ensureAppReady();
+
+  const [profile] = await db
+    .select()
+    .from(storeProfiles)
+    .where(eq(storeProfiles.userId, userId))
+    .limit(1);
+
+  if (!profile) {
+    throw new Error("Profil warung tidak ditemukan.");
+  }
+
+  const productRows = await db
+    .select()
+    .from(products)
+    .where(eq(products.userId, userId))
+    .orderBy(desc(products.createdAt));
+
+  const transactionRows = await db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.userId, userId))
+    .orderBy(desc(transactions.createdAt));
+
+  const transactionIds = transactionRows.map((transaction) => transaction.id);
+  const itemRows =
+    transactionIds.length > 0
+      ? await db
+          .select()
+          .from(transactionItems)
+          .where(inArray(transactionItems.transactionId, transactionIds))
+      : [];
+
+  const debtRows = await db
+    .select()
+    .from(debts)
+    .where(eq(debts.userId, userId))
+    .orderBy(desc(debts.createdAt));
+
+  const expenseRows = await db
+    .select()
+    .from(expenses)
+    .where(eq(expenses.userId, userId))
+    .orderBy(desc(expenses.createdAt));
+
+  const itemsByTransaction = new Map<string, Transaction["items"]>();
+  for (const item of itemRows) {
+    const existing = itemsByTransaction.get(item.transactionId) ?? [];
+    existing.push({
+      productId: item.productId,
+      productName: item.productName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      costPrice: item.costPrice,
+    });
+    itemsByTransaction.set(item.transactionId, existing);
+  }
+
+  return {
+    products: productRows.map((product) => ({
+      id: product.id,
+      name: product.name,
+      category: product.category as AppState["products"][number]["category"],
+      buyPrice: product.buyPrice,
+      sellPrice: product.sellPrice,
+      stock: product.stock,
+      minimumStock: product.minimumStock,
+      description: product.description,
+    })),
+    cart: [],
+    paymentMethod: (profile.enabledPayments[0] ?? "Tunai") as PaymentMethod,
+    transactions: transactionRows.map((transaction) => ({
+      id: transaction.id,
+      paymentMethod: transaction.paymentMethod as PaymentMethod,
+      total: transaction.total,
+      createdAt: transaction.createdAt,
+      items: itemsByTransaction.get(transaction.id) ?? [],
+    })),
+    debts: debtRows.map((debt) => ({
+      id: debt.id,
+      borrowerName: debt.borrowerName,
+      whatsapp: debt.whatsapp,
+      amount: debt.amount,
+      createdAt: debt.createdAt,
+      dueDate: debt.dueDate,
+      isPaid: debt.isPaid === 1,
+      lastReminderAt: debt.lastReminderAt ?? undefined,
+    })),
+    expenses: expenseRows.map((expense) => ({
+      id: expense.id,
+      title: expense.title,
+      amount: expense.amount,
+      createdAt: expense.createdAt,
+      category: expense.category as AppState["expenses"][number]["category"],
+    })),
+    settings: mapSettings(profile),
+  };
+}
+
+export async function createProduct(userId: string, draft: ProductDraft) {
+  const timestamp = nowIso();
+  const [product] = await db
+    .insert(products)
+    .values({
+      id: createId("prd"),
+      userId,
+      name: draft.name,
+      category: draft.category,
+      buyPrice: draft.buyPrice,
+      sellPrice: draft.sellPrice,
+      stock: draft.stock,
+      minimumStock: draft.minimumStock,
+      description: draft.description,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })
+    .returning();
+
+  return {
+    id: product.id,
+    name: product.name,
+    category: product.category as AppState["products"][number]["category"],
+    buyPrice: product.buyPrice,
+    sellPrice: product.sellPrice,
+    stock: product.stock,
+    minimumStock: product.minimumStock,
+    description: product.description,
+  };
+}
+
+export async function updateProduct(userId: string, productId: string, draft: ProductDraft) {
+  const [updated] = await db
+    .update(products)
+    .set({
+      name: draft.name,
+      category: draft.category,
+      buyPrice: draft.buyPrice,
+      sellPrice: draft.sellPrice,
+      stock: draft.stock,
+      minimumStock: draft.minimumStock,
+      description: draft.description,
+      updatedAt: nowIso(),
+    })
+    .where(and(eq(products.id, productId), eq(products.userId, userId)))
+    .returning();
+
+  if (!updated) {
+    throw new Error("Produk tidak ditemukan.");
+  }
+
+  return {
+    id: updated.id,
+    name: updated.name,
+    category: updated.category as AppState["products"][number]["category"],
+    buyPrice: updated.buyPrice,
+    sellPrice: updated.sellPrice,
+    stock: updated.stock,
+    minimumStock: updated.minimumStock,
+    description: updated.description,
+  };
+}
+
+export async function restockProduct(userId: string, productId: string, quantity: number) {
+  const [existing] = await db
+    .select()
+    .from(products)
+    .where(and(eq(products.id, productId), eq(products.userId, userId)))
+    .limit(1);
+
+  if (!existing) {
+    throw new Error("Produk tidak ditemukan.");
+  }
+
+  const [updated] = await db
+    .update(products)
+    .set({
+      stock: existing.stock + quantity,
+      updatedAt: nowIso(),
+    })
+    .where(and(eq(products.id, productId), eq(products.userId, userId)))
+    .returning();
+
+  return {
+    id: updated.id,
+    name: updated.name,
+    category: updated.category as AppState["products"][number]["category"],
+    buyPrice: updated.buyPrice,
+    sellPrice: updated.sellPrice,
+    stock: updated.stock,
+    minimumStock: updated.minimumStock,
+    description: updated.description,
+  };
+}
+
+export async function createTransaction(
+  userId: string,
+  payload: {
+    paymentMethod: PaymentMethod;
+    items: Array<{ productId: string; quantity: number }>;
+  }
+) {
+  if (payload.items.length === 0) {
+    throw new Error("Keranjang masih kosong.");
+  }
+
+  const productIds = payload.items.map((item) => item.productId);
+  const productRows = await db
+    .select()
+    .from(products)
+    .where(and(eq(products.userId, userId), inArray(products.id, productIds)));
+
+  const productMap = new Map(productRows.map((product) => [product.id, product]));
+  const lineItems = payload.items.map((item) => {
+    const product = productMap.get(item.productId);
+    if (!product) {
+      throw new Error("Salah satu produk tidak ditemukan.");
+    }
+
+    if (product.stock < item.quantity) {
+      throw new Error(`Stok ${product.name} tidak cukup.`);
+    }
+
+    return { product, quantity: item.quantity };
+  });
+
+  const transactionId = createId("trx");
+  const createdAt = nowIso();
+  const total = lineItems.reduce(
+    (sum, item) => sum + item.product.sellPrice * item.quantity,
+    0
+  );
+
+  await db.transaction(async (tx) => {
+    await tx.insert(transactions).values({
+      id: transactionId,
+      userId,
+      total,
+      paymentMethod: payload.paymentMethod,
+      createdAt,
+    });
+
+    await tx.insert(transactionItems).values(
+      lineItems.map((item) => ({
+        id: createId("itm"),
+        transactionId,
+        productId: item.product.id,
+        productName: item.product.name,
+        quantity: item.quantity,
+        unitPrice: item.product.sellPrice,
+        costPrice: item.product.buyPrice,
+      }))
+    );
+
+    for (const item of lineItems) {
+      await tx
+        .update(products)
+        .set({
+          stock: item.product.stock - item.quantity,
+          updatedAt: createdAt,
+        })
+        .where(and(eq(products.id, item.product.id), eq(products.userId, userId)));
+    }
+  });
+
+  const nextState = await getBootstrapState(userId);
+  const transaction = nextState.transactions.find((item) => item.id === transactionId);
+
+  if (!transaction) {
+    throw new Error("Transaksi gagal dibuat.");
+  }
+
+  return {
+    transaction,
+    products: nextState.products,
+  };
+}
+
+export async function createDebt(userId: string, draft: DebtDraft) {
+  const [debt] = await db
+    .insert(debts)
+    .values({
+      id: createId("debt"),
+      userId,
+      borrowerName: draft.borrowerName,
+      whatsapp: draft.whatsapp,
+      amount: draft.amount,
+      createdAt: nowIso(),
+      dueDate: parseDueDate(draft.dueDate),
+      isPaid: 0,
+      lastReminderAt: null,
+    })
+    .returning();
+
+  return {
+    id: debt.id,
+    borrowerName: debt.borrowerName,
+    whatsapp: debt.whatsapp,
+    amount: debt.amount,
+    createdAt: debt.createdAt,
+    dueDate: debt.dueDate,
+    isPaid: false,
+    lastReminderAt: undefined,
+  };
+}
+
+export async function markDebtPaid(userId: string, debtId: string) {
+  const [updated] = await db
+    .update(debts)
+    .set({
+      isPaid: 1,
+    })
+    .where(and(eq(debts.id, debtId), eq(debts.userId, userId)))
+    .returning();
+
+  if (!updated) {
+    throw new Error("Data hutang tidak ditemukan.");
+  }
+
+  return {
+    id: updated.id,
+    borrowerName: updated.borrowerName,
+    whatsapp: updated.whatsapp,
+    amount: updated.amount,
+    createdAt: updated.createdAt,
+    dueDate: updated.dueDate,
+    isPaid: true,
+    lastReminderAt: updated.lastReminderAt ?? undefined,
+  };
+}
+
+export async function remindDebt(userId: string, debtId: string) {
+  const [updated] = await db
+    .update(debts)
+    .set({
+      lastReminderAt: nowIso(),
+    })
+    .where(and(eq(debts.id, debtId), eq(debts.userId, userId)))
+    .returning();
+
+  if (!updated) {
+    throw new Error("Data hutang tidak ditemukan.");
+  }
+
+  return {
+    id: updated.id,
+    borrowerName: updated.borrowerName,
+    whatsapp: updated.whatsapp,
+    amount: updated.amount,
+    createdAt: updated.createdAt,
+    dueDate: updated.dueDate,
+    isPaid: updated.isPaid === 1,
+    lastReminderAt: updated.lastReminderAt ?? undefined,
+  };
+}
+
+export async function createExpense(
+  userId: string,
+  draft: { title: string; amount: number; category: "Operasional" | "Belanja" | "Utilitas" }
+) {
+  const [expense] = await db
+    .insert(expenses)
+    .values({
+      id: createId("exp"),
+      userId,
+      title: draft.title,
+      amount: draft.amount,
+      category: draft.category,
+      createdAt: nowIso(),
+    })
+    .returning();
+
+  return {
+    id: expense.id,
+    title: expense.title,
+    amount: expense.amount,
+    category: expense.category as "Operasional" | "Belanja" | "Utilitas",
+    createdAt: expense.createdAt,
+  };
+}
+
+export async function updateStoreSettings(userId: string, settings: Settings) {
+  const nextSettings = normalizeSettings(settings);
+
+  if (
+    nextSettings.storeName.length === 0 ||
+    nextSettings.storeAddress.length === 0 ||
+    nextSettings.ownerName.length === 0 ||
+    nextSettings.ownerWhatsapp.length < 10 ||
+    nextSettings.city.length === 0 ||
+    nextSettings.enabledPayments.length === 0
+  ) {
+    throw new Error(
+      "Lengkapi nama warung, alamat, pemilik, WhatsApp, kota, dan pilih minimal satu metode bayar."
+    );
+  }
+
+  const [updated] = await db
+    .update(storeProfiles)
+    .set({
+      storeName: nextSettings.storeName,
+      storeTagline: nextSettings.storeTagline,
+      storeAddress: nextSettings.storeAddress,
+      pcmName: nextSettings.pcmName,
+      pcmChairmanName: nextSettings.pcmChairmanName,
+      pcmAddress: nextSettings.pcmAddress,
+      ownerName: nextSettings.ownerName,
+      ownerWhatsapp: nextSettings.ownerWhatsapp,
+      city: nextSettings.city,
+      businessNotes: nextSettings.businessNotes,
+      stockAlertThreshold: nextSettings.stockAlertThreshold,
+      profitSharePcmPct: nextSettings.profitSharePcmPct,
+      profitShareReservePct: nextSettings.profitShareReservePct,
+      enabledPayments: nextSettings.enabledPayments,
+      updatedAt: nowIso(),
+    })
+    .where(eq(storeProfiles.userId, userId))
+    .returning();
+
+  if (!updated) {
+    throw new Error("Pengaturan warung tidak ditemukan.");
+  }
+
+  return mapSettings(updated);
+}
+
+export async function resetWorkspace(userId: string) {
+  await ensureAppReady();
+
+  const transactionIds = (
+    await db
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(eq(transactions.userId, userId))
+  ).map((transaction) => transaction.id);
+
+  if (transactionIds.length > 0) {
+    await db
+      .delete(transactionItems)
+      .where(inArray(transactionItems.transactionId, transactionIds));
+  }
+
+  await db.delete(transactions).where(eq(transactions.userId, userId));
+  await db.delete(debts).where(eq(debts.userId, userId));
+  await db.delete(expenses).where(eq(expenses.userId, userId));
+  await db.delete(restockLogs).where(eq(restockLogs.workspaceOwnerId, userId));
+  await db.delete(monthlyReports).where(eq(monthlyReports.workspaceOwnerId, userId));
+  await db.delete(investments).where(eq(investments.workspaceOwnerId, userId));
+  await db.delete(investors).where(eq(investors.workspaceOwnerId, userId));
+  await db.delete(products).where(eq(products.userId, userId));
+  await db.delete(storeProfiles).where(eq(storeProfiles.userId, userId));
+
+  const timestamp = nowIso();
+  await db.insert(storeProfiles).values({
+    userId,
+    storeName: "Warung Baru",
+    storeTagline: "Warung harian untuk warga sekitar",
+    storeAddress: "Alamat belum diisi",
+    pcmName: "",
+    pcmChairmanName: "",
+    pcmAddress: "",
+    ownerName: "Pemilik Warung",
+    ownerWhatsapp: "-",
+    city: "Indonesia",
+    businessNotes: "",
+    stockAlertThreshold: 8,
+    profitSharePcmPct: 30,
+    profitShareReservePct: 20,
+    enabledPayments: ["Tunai", "QRIS", "Transfer"],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+
+  return getBootstrapState(userId);
+}

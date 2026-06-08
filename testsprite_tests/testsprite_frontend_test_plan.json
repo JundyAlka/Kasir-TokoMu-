@@ -1,0 +1,1264 @@
+[
+  {
+    "id": "TC001",
+    "title": "Create new account and land on initialized dashboard",
+    "description": "Verifies a user can sign up from /auth and is redirected to the dashboard after account creation.",
+    "category": "Account Authentication",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign up mode"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"Owner TC001\" into the owner name field"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"owner.tc001+{{timestamp}}@example.com\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"ValidPass123!\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Submit the auth form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the dashboard"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify dashboard overview metrics are displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Sign in with existing credentials redirects to dashboard",
+    "description": "Verifies a user can sign in from /auth with valid credentials and reach the dashboard.",
+    "category": "Account Authentication",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign in mode"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Submit the auth form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the dashboard"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify recent transactions and recent debts sections are displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Sign in with incorrect password shows error and stays on auth page",
+    "description": "Verifies invalid credentials show an authentication error and do not navigate away from /auth.",
+    "category": "Account Authentication",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign in mode"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"WrongPassword!\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Submit the auth form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an authentication error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user remains on the authentication page"
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Sign out from authenticated area redirects to auth",
+    "description": "Verifies a signed-in user can sign out and is redirected back to /auth.",
+    "category": "Account Authentication",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign in mode"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Submit the auth form"
+      },
+      {
+        "type": "action",
+        "description": "Open the account panel"
+      },
+      {
+        "type": "action",
+        "description": "Trigger the sign out action"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user is redirected to the authentication page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the authentication form is displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Switching between sign in and sign up preserves being on auth screen",
+    "description": "Verifies toggling between modes works and the appropriate fields for each mode are available.",
+    "category": "Account Authentication",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign up mode"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"Owner TC005\" into the owner name field"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign in mode"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign up mode"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the owner name field is available in the current mode"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the email and password fields are displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Accessing dashboard while unauthenticated redirects to auth",
+    "description": "Verifies the dashboard route is protected and redirects unauthenticated users to /auth.",
+    "category": "Dashboard Overview",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /dashboard"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user is redirected to the authentication page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the authentication form is displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Dashboard loads primary overview content after login",
+    "description": "Verifies the dashboard renders key summary cards and recent activity for an authenticated user.",
+    "category": "Dashboard Overview",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign in mode"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Submit the auth form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify dashboard overview metrics are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify latest transaction details and recent debt entries are displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Navigate from dashboard to POS using sidebar or menu",
+    "description": "Verifies a user can navigate from the dashboard to the POS screen via in-app navigation.",
+    "category": "Dashboard Overview",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign in mode"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Submit the auth form"
+      },
+      {
+        "type": "action",
+        "description": "Open the main navigation menu"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation item for the POS page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the POS product list is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the cart area is displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Complete a POS checkout with a single product and valid payment method",
+    "description": "Verifies the end-to-end cashier flow can add an item, choose a payment method, and complete checkout with a success confirmation.",
+    "category": "POS Checkout",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign in mode"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Submit the auth form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation item for the POS page"
+      },
+      {
+        "type": "action",
+        "description": "Add the first available product to the cart"
+      },
+      {
+        "type": "action",
+        "description": "Select the Tunai payment method"
+      },
+      {
+        "type": "action",
+        "description": "Complete checkout"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a success confirmation is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the cart is cleared after successful checkout"
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "POS prevents checkout with an empty cart",
+    "description": "Verifies validation blocks completing a transaction when no items are in the cart.",
+    "category": "POS Checkout",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign in mode"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Submit the auth form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation item for the POS page"
+      },
+      {
+        "type": "action",
+        "description": "Complete checkout"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error preventing checkout is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no items are shown in the cart"
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "POS search and category filtering updates product results",
+    "description": "Verifies product discovery via keyword search and category chip filtering changes the displayed product list.",
+    "category": "POS Checkout",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign in mode"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Submit the auth form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation item for the POS page"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"a\" into the product search field"
+      },
+      {
+        "type": "action",
+        "description": "Select a category filter chip"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the product list shows results matching the active search and filter state"
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Adjust cart line quantity and remove item updates cart state",
+    "description": "Verifies quantity controls and removal work and the cart updates accordingly.",
+    "category": "POS Checkout",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Toggle to the sign in mode"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Fill text \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Submit the auth form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation item for the POS page"
+      },
+      {
+        "type": "action",
+        "description": "Add the first available product to the cart"
+      },
+      {
+        "type": "action",
+        "description": "Increase the quantity for the cart line item"
+      },
+      {
+        "type": "action",
+        "description": "Remove the cart line item"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the cart shows no items"
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Add a new product and verify it appears in inventory list",
+    "description": "Creates a new inventory product via the add-product flow and verifies it is listed afterward.",
+    "category": "Inventory Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation link to open the inventory page"
+      },
+      {
+        "type": "action",
+        "description": "Open the add-product flow"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the product name field with Test Product A"
+      },
+      {
+        "type": "action",
+        "description": "Fill valid values into the remaining product fields including category, buy price, sell price, initial stock, min stock, and description"
+      },
+      {
+        "type": "action",
+        "description": "Save the new product"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the inventory list contains the product name Test Product A"
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "Search products by name and see matching results",
+    "description": "Searches the inventory list by a known product name and verifies the list filters to show it.",
+    "category": "Inventory Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation link to open the inventory page"
+      },
+      {
+        "type": "action",
+        "description": "Open the add-product flow"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the product name field with Searchable Product B"
+      },
+      {
+        "type": "action",
+        "description": "Fill valid values into the remaining product fields including category, buy price, sell price, initial stock, min stock, and description"
+      },
+      {
+        "type": "action",
+        "description": "Save the new product"
+      },
+      {
+        "type": "action",
+        "description": "Search products by name with Searchable Product B"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the inventory list contains the product name Searchable Product B"
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "Edit an existing product and verify updated data is shown",
+    "description": "Updates an existing product using the edit flow and verifies the updated product name is reflected in the list.",
+    "category": "Inventory Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation link to open the inventory page"
+      },
+      {
+        "type": "action",
+        "description": "Open the add-product flow"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the product name field with Editable Product C"
+      },
+      {
+        "type": "action",
+        "description": "Fill valid values into the remaining product fields including category, buy price, sell price, initial stock, min stock, and description"
+      },
+      {
+        "type": "action",
+        "description": "Save the new product"
+      },
+      {
+        "type": "action",
+        "description": "Search products by name with Editable Product C"
+      },
+      {
+        "type": "action",
+        "description": "Open the edit flow for the product"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the product name field with Editable Product C Updated"
+      },
+      {
+        "type": "action",
+        "description": "Save changes"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the inventory list contains the product name Editable Product C Updated"
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "Restock an existing product and verify stock increases",
+    "description": "Restocks a product and verifies that the displayed stock value increases afterward.",
+    "category": "Inventory Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation link to open the inventory page"
+      },
+      {
+        "type": "action",
+        "description": "Open the add-product flow"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the product name field with Restockable Product D"
+      },
+      {
+        "type": "action",
+        "description": "Fill valid values into the remaining product fields including category, buy price, sell price, initial stock, min stock, and description"
+      },
+      {
+        "type": "action",
+        "description": "Save the new product"
+      },
+      {
+        "type": "action",
+        "description": "Search products by name with Restockable Product D"
+      },
+      {
+        "type": "action",
+        "description": "Record the current stock shown for the product"
+      },
+      {
+        "type": "action",
+        "description": "Open the restock flow for the product"
+      },
+      {
+        "type": "action",
+        "description": "Fill a valid stock increase amount into the restock amount field"
+      },
+      {
+        "type": "action",
+        "description": "Submit the restock"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the stock shown for Restockable Product D is higher than it was before restocking"
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "Prevent creating a product with missing required fields",
+    "description": "Attempts to create a product without required fields and verifies a validation error is shown and the product is not added.",
+    "category": "Inventory Management",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation link to open the inventory page"
+      },
+      {
+        "type": "action",
+        "description": "Open the add-product flow"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the product name field with Invalid Product E"
+      },
+      {
+        "type": "action",
+        "description": "Leave at least one required field empty"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to save the new product"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the inventory list does not contain the product name Invalid Product E"
+      }
+    ]
+  },
+  {
+    "id": "TC018",
+    "title": "Prevent updating a product with missing required fields",
+    "description": "Attempts to update a product while clearing a required field and verifies a validation error and no update is applied.",
+    "category": "Inventory Management",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation link to open the inventory page"
+      },
+      {
+        "type": "action",
+        "description": "Open the add-product flow"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the product name field with Required Field Product F"
+      },
+      {
+        "type": "action",
+        "description": "Fill valid values into the remaining product fields including category, buy price, sell price, initial stock, min stock, and description"
+      },
+      {
+        "type": "action",
+        "description": "Save the new product"
+      },
+      {
+        "type": "action",
+        "description": "Search products by name with Required Field Product F"
+      },
+      {
+        "type": "action",
+        "description": "Open the edit flow for the product"
+      },
+      {
+        "type": "action",
+        "description": "Clear a required field value"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to save changes"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the inventory list contains the product name Required Field Product F"
+      }
+    ]
+  },
+  {
+    "id": "TC019",
+    "title": "Search by category or notes and verify results update",
+    "description": "Creates a product with a distinctive category or note, searches by that value, and verifies the product appears in results.",
+    "category": "Inventory Management",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation link to open the inventory page"
+      },
+      {
+        "type": "action",
+        "description": "Open the add-product flow"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the product name field with Categorized Product G"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the category field with Category-G"
+      },
+      {
+        "type": "action",
+        "description": "Fill valid values into the remaining product fields including buy price, sell price, initial stock, min stock, and description"
+      },
+      {
+        "type": "action",
+        "description": "Save the new product"
+      },
+      {
+        "type": "action",
+        "description": "Search products by category or notes with Category-G"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the inventory list contains the product name Categorized Product G"
+      }
+    ]
+  },
+  {
+    "id": "TC020",
+    "title": "Update and persist store profile settings",
+    "description": "Verifies a user can edit store profile fields, save changes, and see them persist after a reload.",
+    "category": "Store Settings And Workspace Reset",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /pengaturan"
+      },
+      {
+        "type": "action",
+        "description": "Fill Unique Store Name TC001 into the store name field"
+      },
+      {
+        "type": "action",
+        "description": "Fill Unique Tagline TC001 into the store tagline field"
+      },
+      {
+        "type": "action",
+        "description": "Fill Bandung into the city field"
+      },
+      {
+        "type": "action",
+        "description": "Fill Jalan Test TC001 into the address field"
+      },
+      {
+        "type": "action",
+        "description": "Fill Owner TC001 into the owner name field"
+      },
+      {
+        "type": "action",
+        "description": "Fill a valid WhatsApp number into the owner WhatsApp field"
+      },
+      {
+        "type": "action",
+        "description": "Fill Business notes TC001 into the business notes field"
+      },
+      {
+        "type": "action",
+        "description": "Save the profile changes"
+      },
+      {
+        "type": "action",
+        "description": "Reload the page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the store name field shows Unique Store Name TC001"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the owner name field shows Owner TC001"
+      }
+    ]
+  },
+  {
+    "id": "TC021",
+    "title": "Toggle payment methods and persist selection after reload",
+    "description": "Verifies enabled payment methods can be toggled and the selection persists after saving and reloading.",
+    "category": "Store Settings And Workspace Reset",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /pengaturan"
+      },
+      {
+        "type": "action",
+        "description": "Toggle one payment method option"
+      },
+      {
+        "type": "action",
+        "description": "Toggle a different payment method option"
+      },
+      {
+        "type": "action",
+        "description": "Save the profile changes"
+      },
+      {
+        "type": "action",
+        "description": "Reload the page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the enabled payment method selection reflects the last saved toggles"
+      }
+    ]
+  },
+  {
+    "id": "TC022",
+    "title": "Change stock alert threshold and persist after reload",
+    "description": "Verifies the stock alert threshold can be updated, saved, and persists after reload.",
+    "category": "Store Settings And Workspace Reset",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /pengaturan"
+      },
+      {
+        "type": "action",
+        "description": "Fill 7 into the stock alert threshold field"
+      },
+      {
+        "type": "action",
+        "description": "Save the profile changes"
+      },
+      {
+        "type": "action",
+        "description": "Reload the page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the stock alert threshold field shows 7"
+      }
+    ]
+  },
+  {
+    "id": "TC023",
+    "title": "Validate required owner name prevents saving",
+    "description": "Verifies saving is blocked and a validation error is shown when owner name is missing.",
+    "category": "Store Settings And Workspace Reset",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /pengaturan"
+      },
+      {
+        "type": "action",
+        "description": "Fill 9 into the stock alert threshold field"
+      },
+      {
+        "type": "action",
+        "description": "Clear the owner name field"
+      },
+      {
+        "type": "action",
+        "description": "Save the profile changes"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a required-field validation error is visible for the owner name"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the stock alert threshold field does not show 9 after the save attempt"
+      }
+    ]
+  },
+  {
+    "id": "TC024",
+    "title": "Workspace reset restores defaults and reloads app state",
+    "description": "Verifies the user can reset the workspace and the app returns to default seeded state after confirmation.",
+    "category": "Store Settings And Workspace Reset",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /pengaturan"
+      },
+      {
+        "type": "action",
+        "description": "Fill Unique Store Name TC005 into the store name field"
+      },
+      {
+        "type": "action",
+        "description": "Fill Owner TC005 into the owner name field"
+      },
+      {
+        "type": "action",
+        "description": "Save the profile changes"
+      },
+      {
+        "type": "action",
+        "description": "Click the workspace reset action to restore initial data"
+      },
+      {
+        "type": "action",
+        "description": "Confirm the workspace reset intent"
+      },
+      {
+        "type": "action",
+        "description": "Wait for the reset process to complete"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the store name is no longer Unique Store Name TC005"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the owner name is no longer Owner TC005"
+      }
+    ]
+  },
+  {
+    "id": "TC025",
+    "title": "Settings page loads primary content for authenticated user",
+    "description": "Verifies the settings page loads and shows profile, payment, and reset sections for an authenticated user.",
+    "category": "Store Settings And Workspace Reset",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /pengaturan"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify store profile settings fields are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify workspace reset controls are displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC026",
+    "title": "Edits are not persisted without saving",
+    "description": "Verifies unsaved changes are not persisted after a reload.",
+    "category": "Store Settings And Workspace Reset",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /auth"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /pengaturan"
+      },
+      {
+        "type": "action",
+        "description": "Fill Unsaved Store Name TC007 into the store name field"
+      },
+      {
+        "type": "action",
+        "description": "Reload the page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the store name field is not Unsaved Store Name TC007"
+      }
+    ]
+  }
+]
