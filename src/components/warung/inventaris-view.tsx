@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { AlertTriangle, PackagePlus, PencilLine, Search, Warehouse } from "lucide-react";
+import { AlertTriangle, Camera, PackagePlus, PencilLine, Search, Warehouse } from "lucide-react";
 import { toast } from "sonner";
 import { useAppState } from "@/components/providers/app-state-provider";
 import { useCurrentRole } from "@/components/role-gate";
@@ -241,12 +242,21 @@ export function InventarisView() {
           description="Pantau dan restok sebelum pelanggan kehabisan pilihan."
           tone="warn"
         />
-        <StatCard
-          title="Nilai stok"
-          value={formatCurrency(totalInventoryValue)}
-          description="Perkiraan modal yang sedang tersimpan di inventaris."
-          tone="accent"
-        />
+        {canMutateInventory ? (
+          <StatCard
+            title="Nilai stok"
+            value={formatCurrency(totalInventoryValue)}
+            description="Perkiraan modal yang sedang tersimpan di inventaris."
+            tone="accent"
+          />
+        ) : (
+          <StatCard
+            title="Produk aktif"
+            value={`${products.filter((product) => product.stock > 0).length} siap jual`}
+            description="Produk yang masih bisa dipilih dari layar kasir."
+            tone="accent"
+          />
+        )}
       </section>
 
       <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
@@ -269,30 +279,42 @@ export function InventarisView() {
               />
             </div>
             {canMutateInventory ? (
-              <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                <DialogTrigger
-                  render={<Button size="lg" className="h-11 rounded-2xl" />}
+              <>
+                <Button
+                  render={<Link href="/inventaris/restok-ai" />}
+                  nativeButton={false}
+                  variant="outline"
+                  size="lg"
+                  className="h-11 rounded-2xl"
                 >
-                  <PackagePlus className="size-4" />
-                  Tambah barang
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl rounded-[28px] p-0">
-                  <DialogHeader className="p-6 pb-0">
-                    <DialogTitle className="font-heading text-2xl">Tambah produk baru</DialogTitle>
-                    <DialogDescription>
-                      Isi data minimum supaya kasir bisa langsung menjual barang ini.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="p-6 pt-4">
-                    <ProductForm draft={draft} onChange={setDraft} />
-                  </div>
-                  <DialogFooter className="rounded-b-[28px]" showCloseButton>
-                    <Button type="button" onClick={() => void handleCreateProduct()}>
-                      Simpan produk
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                  <Camera className="size-4" />
+                  Restok via Scan Struk
+                </Button>
+                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                  <DialogTrigger
+                    render={<Button size="lg" className="h-11 rounded-2xl" />}
+                  >
+                    <PackagePlus className="size-4" />
+                    Tambah barang
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl rounded-[28px] p-0">
+                    <DialogHeader className="p-6 pb-0">
+                      <DialogTitle className="font-heading text-2xl">Tambah produk baru</DialogTitle>
+                      <DialogDescription>
+                        Isi data minimum supaya kasir bisa langsung menjual barang ini.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="p-6 pt-4">
+                      <ProductForm draft={draft} onChange={setDraft} />
+                    </div>
+                    <DialogFooter className="rounded-b-[28px]" showCloseButton>
+                      <Button type="button" onClick={() => void handleCreateProduct()}>
+                        Simpan produk
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </>
             ) : null}
           </div>
         </CardHeader>
@@ -302,7 +324,7 @@ export function InventarisView() {
               <TableRow>
                 <TableHead>Produk</TableHead>
                 <TableHead>Kategori</TableHead>
-                <TableHead>Harga beli</TableHead>
+                {canMutateInventory ? <TableHead>Harga beli</TableHead> : null}
                 <TableHead>Harga jual</TableHead>
                 <TableHead>Stok</TableHead>
                 <TableHead>Minimum</TableHead>
@@ -322,7 +344,7 @@ export function InventarisView() {
                       </div>
                     </TableCell>
                     <TableCell>{product.category}</TableCell>
-                    <TableCell>{formatCurrency(product.buyPrice)}</TableCell>
+                    {canMutateInventory ? <TableCell>{formatCurrency(product.buyPrice)}</TableCell> : null}
                     <TableCell>{formatCurrency(product.sellPrice)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

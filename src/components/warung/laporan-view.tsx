@@ -230,7 +230,7 @@ export function LaporanView() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="rounded-[30px] bg-[#fffaf5] p-6 shadow-inner ring-1 ring-border/80 dark:bg-card/82 dark:ring-border/70">
+            <div className="rounded-[30px] bg-card/78 p-6 shadow-inner ring-1 ring-border/80 dark:bg-muted/35 dark:ring-border/70">
               <div className="flex items-start justify-between gap-4 border-b border-dashed border-border/80 pb-5">
                 <div>
                   <p className="text-sm uppercase tracking-[0.22em] text-primary">TokoMu report</p>
@@ -242,8 +242,8 @@ export function LaporanView() {
                     {settings.storeAddress}
                   </p>
                 </div>
-                <div className="rounded-[22px] bg-foreground px-4 py-3 text-right text-background dark:bg-muted/80 dark:text-foreground">
-                  <p className="text-xs uppercase tracking-[0.18em] text-background/70 dark:text-muted-foreground">{periodLabel}</p>
+                <div className="rounded-[22px] bg-muted/70 px-4 py-3 text-right text-foreground ring-1 ring-border/70">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{periodLabel}</p>
                   <p className="mt-2 font-heading text-2xl font-semibold">{formatCurrency(summary.netProfit)}</p>
                 </div>
               </div>

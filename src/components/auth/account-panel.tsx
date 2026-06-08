@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +11,12 @@ import { getInitials } from "@/lib/format";
 export function AccountPanel() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   async function handleSignOut() {
     try {
@@ -22,7 +29,7 @@ export function AccountPanel() {
     }
   }
 
-  if (isPending) {
+  if (!mounted || isPending) {
     return (
       <div className="mt-4 rounded-[24px] border border-border/70 bg-card/55 p-4">
         <p className="text-sm text-muted-foreground">Memuat sesi akun...</p>

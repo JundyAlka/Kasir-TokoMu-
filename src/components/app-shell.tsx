@@ -64,6 +64,11 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
     subtitle:
       "Pantau produk aktif, restok cepat, dan sorot barang yang mulai menipis.",
   },
+  "/inventaris/restok-ai": {
+    title: "Restok via scan struk",
+    subtitle:
+      "Upload foto struk, cek hasil AI, lalu konfirmasi item sebelum stok bertambah.",
+  },
   "/buku-hutang": {
     title: "Catatan kasbon yang rapi",
     subtitle:
@@ -108,6 +113,7 @@ export function AppShell({
   const { settings } = useAppState();
   const activePage = pageTitles[pathname] ?? pageTitles["/kasir"];
   const visibleNavigation = navigation.filter((item) => item.roles.includes(role));
+  const exactActiveHref = visibleNavigation.find((item) => pathname === item.href)?.href;
   const [aiOpen, setAiOpen] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
 
@@ -178,8 +184,9 @@ export function AppShell({
           >
             {visibleNavigation.map((item) => {
               const Icon = item.icon;
-              const isActive =
-                pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const isActive = exactActiveHref
+                ? pathname === item.href
+                : pathname.startsWith(`${item.href}/`);
 
               return (
                 <Link
@@ -232,8 +239,9 @@ export function AppShell({
               <div className="space-y-2 px-4 pb-6">
                 {visibleNavigation.map((item) => {
                   const Icon = item.icon;
-                  const isActive =
-                    pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  const isActive = exactActiveHref
+                    ? pathname === item.href
+                    : pathname.startsWith(`${item.href}/`);
                   return (
                     <Link
                       key={item.href}

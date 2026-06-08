@@ -228,7 +228,7 @@ export function MonthlyReportPreview() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table className="min-w-[860px]">
+            <Table className="min-w-full">
               <TableHeader>
                 <TableRow>
                   <TableHead>Periode</TableHead>
@@ -309,14 +309,14 @@ export function MonthlyReportPreview() {
                 })}
                 {!isLoading && reports.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-28 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-28 whitespace-normal text-center text-muted-foreground">
                       Belum ada laporan. Buat laporan bulan ini untuk mulai preview PDF.
                     </TableCell>
                   </TableRow>
                 ) : null}
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-28 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-28 whitespace-normal text-center text-muted-foreground">
                       Memuat laporan...
                     </TableCell>
                   </TableRow>

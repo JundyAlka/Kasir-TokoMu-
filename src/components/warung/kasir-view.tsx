@@ -4,13 +4,14 @@ import { useState } from "react";
 import { BanknoteArrowDown, Coffee, CreditCard, Minus, PackageSearch, Plus, ReceiptText, Search, ShoppingBasket, Sparkles, Wheat, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAppState } from "@/components/providers/app-state-provider";
+import { ReceiptPrintDialog } from "@/components/tokomu/receipt-print";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/format";
-import { PaymentMethod, Product, ProductCategory } from "@/lib/types";
+import { PaymentMethod, Product, ProductCategory, Transaction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const paymentLabels: Record<PaymentMethod, string> = {
@@ -111,6 +112,8 @@ export function KasirView() {
   } = useAppState();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<"Semua" | ProductCategory>("Semua");
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [lastTransaction, setLastTransaction] = useState<Transaction | null>(null);
 
   const filteredProducts = products.filter((product) => {
     const queryMatch =
@@ -123,6 +126,14 @@ export function KasirView() {
 
   async function handleCheckout() {
     try {
+      const invalidStockLine = cartLines.find((line) => line.quantity > line.product.stock);
+      if (invalidStockLine) {
+        toast.error(`Stok ${invalidStockLine.product.name} tidak cukup.`, {
+          description: `Diminta ${invalidStockLine.quantity} pcs, tersedia ${invalidStockLine.product.stock} pcs.`,
+        });
+        return;
+      }
+
       const transaction = await checkout();
       if (!transaction) {
         toast.error("Keranjang masih kosong.");
@@ -145,6 +156,8 @@ export function KasirView() {
       toast.success("Transaksi berhasil disimpan.", {
         description: `${transaction.items.length} produk masuk ke penjualan ${paymentLabels[transaction.paymentMethod]}.`,
       });
+      setLastTransaction(transaction);
+      setReceiptOpen(true);
 
       if (lowProducts.length > 0) {
         toast.warning("Ada produk yang mendekati stok minimum.", {
@@ -158,6 +171,12 @@ export function KasirView() {
 
   return (
     <div className="grid gap-4 xl:grid-cols-[1.7fr_0.95fr]">
+      <ReceiptPrintDialog
+        open={receiptOpen}
+        onOpenChange={setReceiptOpen}
+        settings={settings}
+        transaction={lastTransaction}
+      />
       <div>
         <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
           <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -201,6 +220,14 @@ export function KasirView() {
                     key={product.id}
                     product={product}
                     onAdd={() => {
+                      const existingLine = cartLines.find((line) => line.product.id === product.id);
+                      if (existingLine && existingLine.quantity >= product.stock) {
+                        toast.error(`Stok ${product.name} tidak cukup.`, {
+                          description: `Keranjang sudah mencapai stok tersedia (${product.stock} pcs).`,
+                        });
+                        return;
+                      }
+
                       addToCart(product.id);
                       toast.success(`${product.name} ditambahkan ke keranjang.`, {
                         description: `Stok tersedia ${product.stock} pcs.`,
@@ -276,7 +303,16 @@ export function KasirView() {
                             size="icon-sm"
                             variant="ghost"
                             className="rounded-full"
-                            onClick={() => updateCartQuantity(line.product.id, line.quantity + 1)}
+                            onClick={() => {
+                              if (line.quantity >= line.product.stock) {
+                                toast.error(`Stok ${line.product.name} tidak cukup.`, {
+                                  description: `Stok tersedia hanya ${line.product.stock} pcs.`,
+                                });
+                                return;
+                              }
+
+                              updateCartQuantity(line.product.id, line.quantity + 1);
+                            }}
                           >
                             <Plus className="size-4" />
                           </Button>
@@ -318,8 +354,8 @@ export function KasirView() {
               </div>
             </div>
 
-            <div className="rounded-[24px] bg-foreground px-4 py-4 text-background">
-              <div className="flex items-center justify-between text-sm text-background/70">
+            <div className="rounded-[24px] border border-border/70 bg-card/70 px-4 py-4 text-card-foreground shadow-inner dark:bg-muted/45">
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>Total tagihan</span>
                 <span>{cartLines.reduce((sum, line) => sum + line.quantity, 0)} pcs</span>
               </div>
@@ -334,7 +370,7 @@ export function KasirView() {
               >
                 Selesaikan transaksi
               </Button>
-              <p className="mt-3 text-sm text-background/70">
+              <p className="mt-3 text-sm text-muted-foreground">
                 Checkout akan mengurangi stok dan menyimpan transaksi ke laporan.
               </p>
             </div>
