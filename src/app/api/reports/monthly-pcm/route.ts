@@ -3,11 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, pool } from "@/db/client";
 import { monthlyReports, storeProfiles } from "@/db/schema";
 import { getRequestUser } from "@/lib/server/app-service";
+import { logEvent } from "@/lib/server/audit";
 import { calculatePayouts } from "@/lib/server/profit-sharing";
 import { getPeriodRange, getTopProductsForPeriod } from "@/lib/server/reporting";
 import { handleRouteError } from "@/lib/server/route-error";
 import { requireRole } from "@/lib/server/rbac";
 import { PcmMonthlyReportData } from "@/lib/server/pdf-pcm";
+import { JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
 
 export const runtime = "nodejs";
 
@@ -46,8 +48,9 @@ function parsePeriodPayload(body: unknown) {
 function periodLabel(year: number, month: number) {
   return new Intl.DateTimeFormat("id-ID", {
     month: "long",
+    timeZone: JAKARTA_TIME_ZONE,
     year: "numeric",
-  }).format(new Date(Date.UTC(year, month - 1, 1)));
+  }).format(new Date(getPeriodRange(year, month).start));
 }
 
 function normalizeOwnerName(value: string | null | undefined) {
@@ -235,7 +238,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     await requireRole(["pimpinan", "pengelola_keuangan"]);
-    const { workspaceOwnerId } = await getRequestUser();
+    const { userId, workspaceOwnerId } = await getRequestUser();
     const body = (await request.json()) as { id?: unknown; status?: unknown };
 
     if (typeof body.id !== "string" || body.id.trim().length === 0) {
@@ -265,6 +268,13 @@ export async function PATCH(request: NextRequest) {
     if (!report) {
       throw new Error("Laporan tidak ditemukan.");
     }
+
+    await logEvent(
+      { workspaceOwnerId, actorUserId: userId },
+      "REPORT_FINALIZED",
+      { type: "monthly_report", id: report.id },
+      { periodYear: report.periodYear, periodMonth: report.periodMonth, finalizedAt: report.finalizedAt }
+    );
 
     return NextResponse.json({ report });
   } catch (error) {

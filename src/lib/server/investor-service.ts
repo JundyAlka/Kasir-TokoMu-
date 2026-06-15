@@ -1,4 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
+import { formatInTimeZone } from "date-fns-tz";
 import { db, pool } from "@/db/client";
 import {
   investorPayouts,
@@ -7,6 +8,7 @@ import {
   products,
   restockLogs,
 } from "@/db/schema";
+import { getJakartaMonthRange, JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
 
 type InvestmentType = "uang" | "barang_titip_jual";
 
@@ -74,7 +76,12 @@ function parseNumber(value: unknown, field: string) {
 }
 
 function parsePercentage(value: unknown, field: string) {
-  const percentage = parseNumber(value, field);
+  const numberValue = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+  if (typeof numberValue !== "number" || !Number.isFinite(numberValue)) {
+    throw new Error(`${field} harus berupa angka.`);
+  }
+
+  const percentage = numberValue;
   if (percentage < 0 || percentage > 100) {
     throw new Error(`${field} harus antara 0 sampai 100.`);
   }
@@ -289,6 +296,9 @@ export async function listInvestors(
   const status = options.status ?? "active";
   const statusWhere =
     status === "all" ? "" : status === "inactive" ? "and inv.is_active = 0" : "and inv.is_active = 1";
+  const currentYear = Number(formatInTimeZone(new Date(), JAKARTA_TIME_ZONE, "yyyy"));
+  const currentMonth = Number(formatInTimeZone(new Date(), JAKARTA_TIME_ZONE, "M"));
+  const monthRange = getJakartaMonthRange(currentYear, currentMonth);
 
   const result = await pool.query<{
     id: string;
@@ -323,8 +333,9 @@ export async function listInvestors(
         coalesce(payouts.payout_count_this_month, 0)::int as "payoutCountThisMonth",
         coalesce(payouts.payout_amount_this_month, 0)::int as "payoutAmountThisMonth"
       from investors inv
-      left join lateral (
+      left join (
         select
+          i.investor_id,
           count(*)::int as investment_count,
           coalesce(sum(case
             when i.type = 'uang' then i.amount
@@ -338,23 +349,25 @@ export async function listInvestors(
           end), 0)::int as total_modal_barang
         from investments i
         where i.workspace_owner_id = $1
-          and i.investor_id = inv.id
           and i.is_active = 1
-      ) summary on true
-      left join lateral (
+        group by i.investor_id
+      ) summary on summary.investor_id = inv.id
+      left join (
         select
+          p.investor_id,
           count(*)::int as payout_count_this_month,
           coalesce(sum(p.amount), 0)::int as payout_amount_this_month
         from investor_payouts p
         where p.workspace_owner_id = $1
-          and p.investor_id = inv.id
-          and date_trunc('month', p.period_end) = date_trunc('month', now())
-      ) payouts on true
+          and p.period_end >= $2::timestamptz
+          and p.period_end < $3::timestamptz
+        group by p.investor_id
+      ) payouts on payouts.investor_id = inv.id
       where inv.workspace_owner_id = $1
       ${statusWhere}
       order by inv.created_at desc
     `,
-    [workspaceOwnerId]
+    [workspaceOwnerId, monthRange.start, monthRange.end]
   );
 
   return result.rows;

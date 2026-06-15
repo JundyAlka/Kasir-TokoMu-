@@ -34,6 +34,25 @@ TokoMu is a tablet-first retail operating system for PCM Muhammadiyah Grabag. Th
 - Better Auth
 - React PDF renderer
 
+## Gemini AI Setup
+
+TokoMu AI uses the Gemini API through Google's OpenAI-compatible endpoint:
+`https://generativelanguage.googleapis.com/v1beta/openai/`.
+
+To configure it locally:
+
+1. Open [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. Create or copy an API key.
+3. Add these values to `.env.local`:
+
+```env
+GEMINI_API_KEY=replace-with-google-ai-studio-key
+GEMINI_TEXT_MODEL=gemini-2.0-flash
+GEMINI_VISION_MODEL=gemini-2.0-flash
+```
+
+The chat assistant and receipt OCR both use Gemini. Receipt OCR sends base64 `image_url` content to `GEMINI_VISION_MODEL`.
+
 ## Data And Access Model
 
 TokoMu uses a workspace ownership model. The first registered user becomes `pimpinan` for their workspace. Additional users can be invited as `pengelola_keuangan` or `kasir`, with server-side RBAC applied to pages and API routes.

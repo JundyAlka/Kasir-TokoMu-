@@ -1,7 +1,10 @@
 import EmbeddedPostgres from "embedded-postgres";
+import { access } from "node:fs/promises";
+
+const databaseDir = "./.local/postgres";
 
 const pg = new EmbeddedPostgres({
-  databaseDir: "./.local/postgres",
+  databaseDir,
   user: "postgres",
   password: "postgres",
   port: 5439,
@@ -11,7 +14,12 @@ const pg = new EmbeddedPostgres({
 });
 
 async function start() {
-  await pg.initialise();
+  try {
+    await access(`${databaseDir}/PG_VERSION`);
+  } catch {
+    await pg.initialise();
+  }
+
   await pg.start();
 
   try {

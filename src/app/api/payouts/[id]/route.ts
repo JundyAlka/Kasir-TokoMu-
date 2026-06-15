@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/server/app-service";
+import { logEvent } from "@/lib/server/audit";
 import { updatePayoutStatus } from "@/lib/server/profit-sharing";
 import { handleRouteError } from "@/lib/server/route-error";
 import { requireRole } from "@/lib/server/rbac";
@@ -20,14 +21,21 @@ export async function PATCH(
 ) {
   try {
     await requireRole(["pimpinan", "pengelola_keuangan"]);
-    const { workspaceOwnerId } = await getRequestUser();
+    const { userId, workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const body = (await request.json()) as { status?: unknown; paidAt?: string | null };
+    const status = parseStatus(body.status);
     const payout = await updatePayoutStatus(
       workspaceOwnerId,
       id,
-      parseStatus(body.status),
+      status,
       body.paidAt
+    );
+    await logEvent(
+      { workspaceOwnerId, actorUserId: userId },
+      status === "dibayar" ? "PAYOUT_PAID" : "PAYOUT_APPROVED",
+      { type: "payout", id: payout.id },
+      { status, amount: payout.amount, investorId: payout.investorId, paidAt: payout.paidAt }
     );
 
     return NextResponse.json({ payout });

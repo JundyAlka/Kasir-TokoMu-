@@ -6,14 +6,14 @@ import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatDateTime, formatTime } from "@/lib/format";
+import { getJakartaDayRange, isWithinJakartaRange } from "@/lib/server/timezone";
 
 export function DashboardView() {
   const { debts, lowStockProducts, products, transactions } = useAppState();
+  const todayRange = getJakartaDayRange();
 
   const todayTransactions = transactions.filter((transaction) => {
-    const value = new Date(transaction.createdAt);
-    const now = new Date();
-    return value.toDateString() === now.toDateString();
+    return isWithinJakartaRange(transaction.createdAt, todayRange);
   });
 
   const todaySales = todayTransactions.reduce(
@@ -62,8 +62,8 @@ export function DashboardView() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-            <div className="rounded-[26px] bg-foreground px-5 py-5 text-background ring-1 ring-transparent dark:bg-card/85 dark:text-card-foreground dark:ring-border/70">
-              <div className="flex items-center gap-2 text-background/75 dark:text-muted-foreground">
+            <div className="rounded-[26px] border border-primary/20 bg-primary/10 px-5 py-5 text-foreground dark:border-primary/25 dark:bg-muted/55">
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <ReceiptText className="size-4 text-primary" />
                 <p className="text-sm font-medium">Transaksi terakhir</p>
               </div>
@@ -73,8 +73,8 @@ export function DashboardView() {
                   <p className="mt-3 font-heading text-4xl font-semibold">
                     {formatCurrency(latestTransaction.total)}
                   </p>
-                  <p className="mt-2 text-sm text-background/75 dark:text-muted-foreground">
-                    {latestTransaction.paymentMethod} • {formatTime(latestTransaction.createdAt)}
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {latestTransaction.paymentMethod} - {formatTime(latestTransaction.createdAt)}
                   </p>
                   <div className="mt-5 space-y-3">
                     {latestTransaction.items.map((item) => (
@@ -93,7 +93,7 @@ export function DashboardView() {
                   </div>
                 </>
               ) : (
-                <p className="mt-4 text-sm text-background/75 dark:text-muted-foreground">
+                <p className="mt-4 text-sm text-muted-foreground">
                   Belum ada transaksi yang tersimpan.
                 </p>
               )}
@@ -113,7 +113,7 @@ export function DashboardView() {
                     <div>
                       <p className="font-medium">{formatCurrency(transaction.total)}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {transaction.items.length} produk • {transaction.paymentMethod}
+                        {transaction.items.length} produk - {transaction.paymentMethod}
                       </p>
                     </div>
                     <p className="text-sm text-muted-foreground">

@@ -1,37 +1,26 @@
 import { Expense, Product, Transaction } from "@/lib/types";
+import {
+  getJakartaDayRange,
+  getJakartaMonthRange,
+  getJakartaWeekRange,
+  isWithinJakartaRange,
+  jakartaNow,
+  JAKARTA_TIME_ZONE,
+} from "@/lib/server/timezone";
 
 export type ReportRange = "harian" | "mingguan" | "bulanan";
 
-function startOfDay(date: Date) {
-  const value = new Date(date);
-  value.setHours(0, 0, 0, 0);
-  return value;
-}
-
-function startOfWeek(date: Date) {
-  const value = startOfDay(date);
-  const currentDay = value.getDay();
-  const diff = currentDay === 0 ? 6 : currentDay - 1;
-  value.setDate(value.getDate() - diff);
-  return value;
-}
-
-function startOfMonth(date: Date) {
-  const value = startOfDay(date);
-  value.setDate(1);
-  return value;
-}
-
-export function getRangeStart(range: ReportRange, now = new Date()) {
+function getRange(range: ReportRange, now = new Date()) {
   if (range === "harian") {
-    return startOfDay(now);
+    return getJakartaDayRange(now);
   }
 
   if (range === "mingguan") {
-    return startOfWeek(now);
+    return getJakartaWeekRange(now);
   }
 
-  return startOfMonth(now);
+  const currentJakarta = jakartaNow();
+  return getJakartaMonthRange(currentJakarta.getFullYear(), currentJakarta.getMonth() + 1);
 }
 
 export function summarizeReport(
@@ -39,12 +28,12 @@ export function summarizeReport(
   transactions: Transaction[],
   expenses: Expense[]
 ) {
-  const start = getRangeStart(range);
+  const selectedRange = getRange(range);
   const filteredTransactions = transactions.filter(
-    (transaction) => new Date(transaction.createdAt) >= start
+    (transaction) => isWithinJakartaRange(transaction.createdAt, selectedRange)
   );
   const filteredExpenses = expenses.filter(
-    (expense) => new Date(expense.createdAt) >= start
+    (expense) => isWithinJakartaRange(expense.createdAt, selectedRange)
   );
 
   const revenue = filteredTransactions.reduce(
@@ -87,17 +76,14 @@ export function buildSeries(range: ReportRange, transactions: Transaction[]) {
     return Array.from({ length: 7 }, (_, index) => {
       const date = new Date(now);
       date.setDate(now.getDate() - (6 - index));
-      const label = new Intl.DateTimeFormat("id-ID", { weekday: "short" }).format(
-        date
-      );
+      const itemRange = getJakartaDayRange(date);
+      const label = new Intl.DateTimeFormat("id-ID", {
+        timeZone: JAKARTA_TIME_ZONE,
+        weekday: "short",
+      }).format(new Date(itemRange.start));
       const revenue = transactions
         .filter((transaction) => {
-          const value = new Date(transaction.createdAt);
-          return (
-            value.getFullYear() === date.getFullYear() &&
-            value.getMonth() === date.getMonth() &&
-            value.getDate() === date.getDate()
-          );
+          return isWithinJakartaRange(transaction.createdAt, itemRange);
         })
         .reduce((sum, transaction) => sum + transaction.total, 0);
       return { label, revenue };
@@ -106,15 +92,21 @@ export function buildSeries(range: ReportRange, transactions: Transaction[]) {
 
   if (range === "mingguan") {
     return Array.from({ length: 6 }, (_, index) => {
-      const start = startOfWeek(now);
-      start.setDate(start.getDate() - (5 - index) * 7);
-      const end = new Date(start);
-      end.setDate(start.getDate() + 7);
-      const label = `${start.getDate()}-${new Date(end.getTime() - 1).getDate()}`;
+      const anchor = new Date(now);
+      anchor.setDate(now.getDate() - (5 - index) * 7);
+      const itemRange = getJakartaWeekRange(anchor);
+      const startLabel = new Intl.DateTimeFormat("id-ID", {
+        day: "numeric",
+        timeZone: JAKARTA_TIME_ZONE,
+      }).format(new Date(itemRange.start));
+      const endLabel = new Intl.DateTimeFormat("id-ID", {
+        day: "numeric",
+        timeZone: JAKARTA_TIME_ZONE,
+      }).format(new Date(new Date(itemRange.end).getTime() - 1));
+      const label = `${startLabel}-${endLabel}`;
       const revenue = transactions
         .filter((transaction) => {
-          const value = new Date(transaction.createdAt);
-          return value >= start && value < end;
+          return isWithinJakartaRange(transaction.createdAt, itemRange);
         })
         .reduce((sum, transaction) => sum + transaction.total, 0);
       return { label, revenue };
@@ -123,14 +115,14 @@ export function buildSeries(range: ReportRange, transactions: Transaction[]) {
 
   return Array.from({ length: 6 }, (_, index) => {
     const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
-    const label = new Intl.DateTimeFormat("id-ID", { month: "short" }).format(date);
+    const itemRange = getJakartaMonthRange(date.getFullYear(), date.getMonth() + 1);
+    const label = new Intl.DateTimeFormat("id-ID", {
+      month: "short",
+      timeZone: JAKARTA_TIME_ZONE,
+    }).format(new Date(itemRange.start));
     const revenue = transactions
       .filter((transaction) => {
-        const value = new Date(transaction.createdAt);
-        return (
-          value.getFullYear() === date.getFullYear() &&
-          value.getMonth() === date.getMonth()
-        );
+        return isWithinJakartaRange(transaction.createdAt, itemRange);
       })
       .reduce((sum, transaction) => sum + transaction.total, 0);
     return { label, revenue };

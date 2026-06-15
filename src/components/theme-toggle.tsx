@@ -16,10 +16,10 @@ const options: { value: Mode; label: string; icon: typeof Sun }[] = [
 
 const styles: Record<Variant, { container: string; active: string; inactive: string }> = {
   sidebar: {
-    container: "border-sidebar-border/60 bg-sidebar-accent/40",
-    active: "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm",
+    container: "border-border/60 bg-muted/60 dark:border-sidebar-border/60 dark:bg-sidebar-accent/40",
+    active: "bg-primary text-primary-foreground shadow-sm dark:bg-sidebar-primary dark:text-sidebar-primary-foreground",
     inactive:
-      "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+      "text-muted-foreground hover:bg-card hover:text-foreground dark:text-sidebar-foreground/70 dark:hover:bg-sidebar-accent dark:hover:text-sidebar-foreground",
   },
   default: {
     container: "border-border/60 bg-muted/60",

@@ -264,6 +264,19 @@ Replace store settings. Body = full `Settings` object.
 
 ## AI Assistant
 
+AI routes use Gemini API via Google's OpenAI-compatible endpoint:
+`https://generativelanguage.googleapis.com/v1beta/openai/`.
+
+Required server-side env:
+
+```env
+GEMINI_API_KEY=replace-with-google-ai-studio-key
+GEMINI_TEXT_MODEL=gemini-2.0-flash
+GEMINI_VISION_MODEL=gemini-2.0-flash
+```
+
+Get the API key from [Google AI Studio](https://aistudio.google.com/app/apikey), then put it in `.env.local`. The key must stay server-side.
+
 ### `GET /api/ai/chats`
 
 List user's AI chats.
@@ -322,6 +335,25 @@ Body:
 }
 ```
 
+### `POST /api/ai/scan-receipt`
+
+Read a restock receipt image with Gemini vision and match detected rows to products.
+
+Body:
+
+```json
+{ "imageDataUrl": "data:image/jpeg;base64,..." }
+```
+
+**200** -> `{ "items": ReceiptScanItem[] }`
+**400** -> invalid image payload or matching error
+**401** -> no valid session
+**403** -> role not allowed
+**502** -> Gemini could not read the receipt
+
+`imageDataUrl` must be a base64 data URL under 5 MB. The server sends it as OpenAI-compatible content:
+`[{ "type": "text" }, { "type": "image_url", "image_url": { "url": "data:image/..." } }]`.
+
 ---
 
 ## Route summary
@@ -344,3 +376,4 @@ Body:
 | `POST` | `/api/ai/chats` | ✓ | create AI chat |
 | `GET` | `/api/ai/chats/:id/messages` | ✓ | get chat messages |
 | `POST` | `/api/ai/chats/:id/messages` | ✓ | send message to AI |
+| `POST` | `/api/ai/scan-receipt` | ✓ | scan restock receipt with Gemini vision |

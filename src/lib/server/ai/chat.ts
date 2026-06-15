@@ -1,4 +1,4 @@
-import { callOpenRouter, type OpenRouterMessage } from "./openrouter";
+import { callGemini, type GeminiMessage } from "./gemini";
 import {
   appendMessage,
   listMessages,
@@ -9,8 +9,8 @@ import { buildSystemContext, executeTool, toolDefinitions } from "./tools";
 
 const MAX_TOOL_ITERATIONS = 5;
 
-function storedToOpenRouter(messages: StoredMessage[]): OpenRouterMessage[] {
-  const out: OpenRouterMessage[] = [];
+function storedToGemini(messages: StoredMessage[]): GeminiMessage[] {
+  const out: GeminiMessage[] = [];
   for (const m of messages) {
     if (m.role === "system") {
       out.push({ role: "system", content: m.content });
@@ -58,13 +58,13 @@ export async function runUserTurn(input: {
 
   for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter += 1) {
     const history = await listMessages(chatId);
-    const orMessages: OpenRouterMessage[] = [
+    const geminiMessages: GeminiMessage[] = [
       { role: "system", content: systemContent },
-      ...storedToOpenRouter(history),
+      ...storedToGemini(history),
     ];
 
-    const response = await callOpenRouter({
-      messages: orMessages,
+    const response = await callGemini({
+      messages: geminiMessages,
       tools: toolDefinitions,
     });
 

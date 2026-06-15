@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS "ai_chats" (
+CREATE TABLE "ai_chats" (
   "id" text PRIMARY KEY NOT NULL,
   "user_id" text NOT NULL,
   "title" text NOT NULL,
@@ -6,9 +6,9 @@ CREATE TABLE IF NOT EXISTS "ai_chats" (
   "updated_at" timestamp with time zone NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "ai_chats_user_idx" ON "ai_chats" ("user_id", "updated_at" DESC);
+CREATE INDEX "ai_chats_user_idx" ON "ai_chats" ("user_id", "updated_at" DESC);
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "ai_messages" (
+CREATE TABLE "ai_messages" (
   "id" text PRIMARY KEY NOT NULL,
   "chat_id" text NOT NULL,
   "user_id" text NOT NULL,
@@ -22,4 +22,4 @@ CREATE TABLE IF NOT EXISTS "ai_messages" (
   "created_at" timestamp with time zone NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "ai_messages_chat_idx" ON "ai_messages" ("chat_id", "created_at");
+CREATE INDEX "ai_messages_chat_idx" ON "ai_messages" ("chat_id", "created_at");

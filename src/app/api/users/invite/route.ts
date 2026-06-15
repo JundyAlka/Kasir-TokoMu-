@@ -5,6 +5,7 @@ import { db, pool } from "@/db/client";
 import { userRoles } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { getRequestUser } from "@/lib/server/app-service";
+import { logEvent } from "@/lib/server/audit";
 import { handleRouteError } from "@/lib/server/route-error";
 import { getUserRole, isRole, requireRole } from "@/lib/server/rbac";
 
@@ -20,7 +21,7 @@ function nameFromEmail(email: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    await getRequestUser();
+    const actor = await getRequestUser();
     const { workspaceOwnerId } = await requireRole(["pimpinan"]);
     const body = (await request.json()) as { email?: string; role?: unknown };
     const email = body.email?.trim().toLowerCase();
@@ -97,6 +98,13 @@ export async function POST(request: NextRequest) {
       .from(userRoles)
       .where(eq(userRoles.userId, user.id))
       .limit(1);
+
+    await logEvent(
+      { workspaceOwnerId, actorUserId: actor.userId },
+      "USER_INVITED",
+      { type: "user", id: user.id },
+      { email: user.email, role: roleEntry?.role ?? nextRole, createdNewUser: Boolean(tempPassword) }
+    );
 
     return NextResponse.json({
       user: {

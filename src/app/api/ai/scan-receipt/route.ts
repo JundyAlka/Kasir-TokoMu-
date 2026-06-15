@@ -33,6 +33,13 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as { imageDataUrl?: unknown };
     const imageDataUrl = validateImageDataUrl(body.imageDataUrl);
     const extractedItems = await extractReceiptItems(imageDataUrl);
+    if (extractedItems.length === 0) {
+      return NextResponse.json(
+        { error: "AI belum menemukan item dari struk. Coba foto ulang dengan pencahayaan lebih jelas." },
+        { status: 422 }
+      );
+    }
+
     const items = await matchToProducts(workspaceOwnerId, extractedItems);
 
     return NextResponse.json({ items });
@@ -47,8 +54,8 @@ export async function POST(request: NextRequest) {
 
     if (
       error instanceof Error &&
-      (error.message.includes("OpenRouter") ||
-        error.message.includes("OPENROUTER_API_KEY") ||
+      (error.message.includes("Gemini") ||
+        error.message.includes("GEMINI_API_KEY") ||
         error.message.includes("AI response"))
     ) {
       return NextResponse.json(

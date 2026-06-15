@@ -32,7 +32,7 @@ type Tone = "default" | "warn" | "success";
 
 type ToolResult = {
   ok: boolean;
-  kind: "data" | "suggestion" | "action" | "navigation" | "info";
+  kind: "data" | "suggestion" | "action" | "preview" | "navigation" | "info";
   title: string;
   summary?: string;
   rows?: Array<{ label: string; value: string; tone?: Tone }>;
@@ -68,6 +68,35 @@ const quickPrompts = [
   "Rekomendasi restok untuk untung",
 ];
 
+function friendlyErrorMessage(value: unknown, fallback = "Permintaan gagal.") {
+  const raw =
+    value instanceof Error
+      ? value.message
+      : typeof value === "string"
+        ? value
+        : fallback;
+
+  if (
+    raw.includes("Gemini API") ||
+    raw.includes("RESOURCE_EXHAUSTED") ||
+    raw.includes("Quota exceeded")
+  ) {
+    return "AI belum bisa dipakai saat ini karena kuota API habis atau belum aktif.";
+  }
+
+  if (raw.includes("IYH API") || raw.includes("model_not_allowed") || raw.includes("no models enabled")) {
+    return raw.includes("model_not_allowed") || raw.includes("no models enabled")
+      ? "IYH API key sudah terbaca, tetapi belum ada model yang aktif untuk key ini."
+      : raw;
+  }
+
+  if (raw.includes("GEMINI_API_KEY")) {
+    return "API key AI belum dikonfigurasi di server.";
+  }
+
+  return raw.length > 180 ? `${raw.slice(0, 177)}...` : raw;
+}
+
 async function api<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const res = await fetch(input, {
     ...init,
@@ -75,7 +104,9 @@ async function api<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   });
   const data = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
   if (!res.ok) {
-    throw new Error(data?.error ?? `Permintaan gagal (${res.status}).`);
+    const error = new Error(friendlyErrorMessage(data?.error, `Permintaan gagal (${res.status}).`));
+    error.name = `HTTP_${res.status}`;
+    throw error;
   }
   return data as T;
 }
@@ -259,6 +290,90 @@ function ActionMessageCard({
   );
 }
 
+function PreviewMessageCard({
+  message,
+  result,
+  onCommitted,
+}: {
+  message: ServerMessage;
+  result: ToolResult;
+  onCommitted: (messageId: string, result: ToolResult) => void;
+}) {
+  const data = result.data as
+    | { toolName?: string; payload?: unknown; signature?: string; pending?: boolean }
+    | null;
+  const [isCommitting, setIsCommitting] = useState(false);
+
+  async function handleCommit() {
+    if (!message.toolCallId || !data?.toolName || !data?.payload || !data?.signature) {
+      toast.error("Data konfirmasi AI tidak lengkap.");
+      return;
+    }
+
+    setIsCommitting(true);
+    try {
+      const response = await api<{ result: ToolResult }>("/api/ai/tools/commit", {
+        method: "POST",
+        body: JSON.stringify({
+          messageId: message.id,
+          toolCallId: message.toolCallId,
+          toolName: data.toolName,
+          payload: data.payload,
+          signature: data.signature,
+        }),
+      });
+      onCommitted(message.id, response.result);
+      toast.success("Aksi AI berhasil dijalankan.");
+    } catch (error) {
+      toast.error(friendlyErrorMessage(error, "Gagal menjalankan aksi AI."));
+    } finally {
+      setIsCommitting(false);
+    }
+  }
+
+  return (
+    <Card size="sm" className="border-amber-300/70 bg-amber-50/80 backdrop-blur">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <span className="flex size-7 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700">
+            <AlertTriangle className="size-4" />
+          </span>
+          <div className="flex-1">
+            <CardTitle>{result.title}</CardTitle>
+            {result.summary ? (
+              <CardDescription className="mt-0.5 text-xs">{result.summary}</CardDescription>
+            ) : null}
+          </div>
+          <Badge variant="secondary" className="bg-amber-200/70 text-amber-900">
+            Menunggu
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="rounded-xl bg-card/75 p-2.5 ring-1 ring-amber-200/70">
+          {(result.rows ?? []).map((row, i) => (
+            <div
+              key={`${row.label}-${i}`}
+              className="flex items-center justify-between gap-2 border-b border-dashed border-amber-200/80 py-1 text-sm last:border-0"
+            >
+              <span className="text-muted-foreground">{row.label}</span>
+              <span className="font-medium">{row.value}</span>
+            </div>
+          ))}
+        </div>
+        <Button
+          type="button"
+          className="w-full rounded-2xl"
+          onClick={() => void handleCommit()}
+          disabled={isCommitting}
+        >
+          {isCommitting ? "Menjalankan..." : "Konfirmasi & Jalankan"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function InfoMessageCard({ result }: { result: ToolResult }) {
   return (
     <Card size="sm" className="bg-card/85 backdrop-blur">
@@ -315,7 +430,13 @@ function NavigationMessageCard({ result }: { result: ToolResult }) {
   );
 }
 
-function ToolCard({ message }: { message: ServerMessage }) {
+function ToolCard({
+  message,
+  onCommitted,
+}: {
+  message: ServerMessage;
+  onCommitted: (messageId: string, result: ToolResult) => void;
+}) {
   const result = message.toolResult;
   if (!result) return null;
   switch (result.kind) {
@@ -325,6 +446,8 @@ function ToolCard({ message }: { message: ServerMessage }) {
       return <SuggestionMessageCard result={result} />;
     case "action":
       return <ActionMessageCard toolName={message.toolName} result={result} />;
+    case "preview":
+      return <PreviewMessageCard message={message} result={result} onCommitted={onCommitted} />;
     case "navigation":
       return <NavigationMessageCard result={result} />;
     case "info":
@@ -336,9 +459,11 @@ function ToolCard({ message }: { message: ServerMessage }) {
 export function AIAssistantPanel({
   open,
   onOpenChange,
+  width = 420,
 }: {
   open: boolean;
   onOpenChange: (next: boolean) => void;
+  width?: number;
 }) {
   const [chat, setChat] = useState<ChatRecord | null>(null);
   const [messages, setMessages] = useState<ServerMessage[]>([]);
@@ -365,12 +490,25 @@ export function AIAssistantPanel({
         active = created.chat;
       }
       setChat(active);
-      const detail = await api<{ messages: ServerMessage[] }>(
-        `/api/ai/chats/${active.id}/messages`
-      );
-      setMessages(detail.messages);
+      try {
+        const detail = await api<{ messages: ServerMessage[] }>(
+          `/api/ai/chats/${active.id}/messages`
+        );
+        setMessages(detail.messages);
+      } catch (err) {
+        if (err instanceof Error && err.name === "HTTP_404") {
+          const created = await api<{ chat: ChatRecord }>("/api/ai/chats", {
+            method: "POST",
+            body: JSON.stringify({ title: "Percakapan baru" }),
+          });
+          setChat(created.chat);
+          setMessages([]);
+          return;
+        }
+        throw err;
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat chat AI.");
+      setError(friendlyErrorMessage(err, "Gagal memuat chat AI."));
       hasBootstrappedRef.current = false;
     } finally {
       setIsLoading(false);
@@ -409,16 +547,35 @@ export function AIAssistantPanel({
     setError(null);
 
     try {
-      const res = await api<{ newMessages: ServerMessage[] }>(
-        `/api/ai/chats/${chat.id}/messages`,
-        { method: "POST", body: JSON.stringify({ text: trimmed }) }
-      );
+      let activeChat = chat;
+      let res: { newMessages: ServerMessage[] };
+      try {
+        res = await api<{ newMessages: ServerMessage[] }>(
+          `/api/ai/chats/${activeChat.id}/messages`,
+          { method: "POST", body: JSON.stringify({ text: trimmed }) }
+        );
+      } catch (err) {
+        if (!(err instanceof Error) || err.name !== "HTTP_404") {
+          throw err;
+        }
+
+        const created = await api<{ chat: ChatRecord }>("/api/ai/chats", {
+          method: "POST",
+          body: JSON.stringify({ title: trimmed.slice(0, 80) || "Percakapan baru" }),
+        });
+        activeChat = created.chat;
+        setChat(activeChat);
+        res = await api<{ newMessages: ServerMessage[] }>(
+          `/api/ai/chats/${activeChat.id}/messages`,
+          { method: "POST", body: JSON.stringify({ text: trimmed }) }
+        );
+      }
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== optimistic.id),
         ...res.newMessages,
       ]);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Gagal mengirim pesan.";
+      const message = friendlyErrorMessage(err, "Gagal mengirim pesan.");
       setError(message);
       toast.error(message);
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
@@ -438,10 +595,24 @@ export function AIAssistantPanel({
       setChat(created.chat);
       setMessages([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal membuat chat baru.");
+      setError(friendlyErrorMessage(err, "Gagal membuat chat baru."));
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function handleToolCommitted(messageId: string, result: ToolResult) {
+    setMessages((current) =>
+      current.map((message) =>
+        message.id === messageId
+          ? {
+              ...message,
+              content: JSON.stringify(result),
+              toolResult: result,
+            }
+          : message
+      )
+    );
   }
 
   const visibleMessages = messages.filter((m) => m.role !== "system");
@@ -450,8 +621,9 @@ export function AIAssistantPanel({
     <aside
       className={cn(
         "flex h-full shrink-0 flex-col overflow-hidden rounded-[28px] border border-white/60 bg-card/85 shadow-[0_38px_90px_-50px_rgba(68,39,20,0.7)] backdrop-blur-xl transition-[width] duration-200 ease-out",
-        open ? "w-[380px] xl:w-[420px]" : "w-[64px]"
+        open ? "" : "w-[64px]"
       )}
+      style={open ? { width } : undefined}
       aria-label="Asisten AI WarungOS"
     >
       {!open ? (
@@ -485,7 +657,7 @@ export function AIAssistantPanel({
                 {chat?.title ?? "WarungOS AI"}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                Asisten kontekstual · OpenRouter · Tool calling
+                Asisten kontekstual · IYH · Tool calling
               </p>
             </div>
             <Button
@@ -539,7 +711,7 @@ export function AIAssistantPanel({
                 if (m.role === "tool") {
                   return (
                     <MessageBubble key={m.id} role="assistant">
-                      <ToolCard message={m} />
+                      <ToolCard message={m} onCommitted={handleToolCommitted} />
                     </MessageBubble>
                   );
                 }
@@ -615,7 +787,7 @@ export function AIAssistantPanel({
               </Button>
             </div>
             <p className="mt-2 text-[10px] text-muted-foreground">
-              Aksi langsung tertulis ke database warung Anda.
+              Aksi AI yang mengubah data butuh konfirmasi sebelum disimpan.
             </p>
           </div>
         </>

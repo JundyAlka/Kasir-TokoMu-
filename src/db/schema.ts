@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { check, index, integer, jsonb, numeric, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { PaymentMethod } from "@/lib/types";
 
 export const storeProfiles = pgTable("store_profiles", {
@@ -80,11 +80,11 @@ export const investments = pgTable(
     workspaceOwnerId: text("workspace_owner_id").notNull(),
     type: text("type").notNull(),
     amount: integer("amount"),
-    profitSharePct: integer("profit_share_pct"),
+    profitSharePct: numeric("profit_share_pct", { mode: "number" }),
     productId: text("product_id"),
     unitCount: integer("unit_count"),
     unitCost: integer("unit_cost"),
-    profitSharePerUnitPct: integer("profit_share_per_unit_pct"),
+    profitSharePerUnitPct: numeric("profit_share_per_unit_pct", { mode: "number" }),
     startDate: timestamp("start_date", { withTimezone: true, mode: "string" }).notNull(),
     endDate: timestamp("end_date", { withTimezone: true, mode: "string" }),
     isActive: integer("is_active").notNull(),
@@ -112,7 +112,7 @@ export const investorPayouts = pgTable(
     periodStart: timestamp("period_start", { withTimezone: true, mode: "string" }).notNull(),
     periodEnd: timestamp("period_end", { withTimezone: true, mode: "string" }).notNull(),
     baseProfit: integer("base_profit").notNull(),
-    sharePct: integer("share_pct").notNull(),
+    sharePct: numeric("share_pct", { mode: "number" }).notNull(),
     amount: integer("amount").notNull(),
     status: text("status").notNull(),
     paidAt: timestamp("paid_at", { withTimezone: true, mode: "string" }),
@@ -242,3 +242,22 @@ export const aiMessages = pgTable("ai_messages", {
   toolResult: jsonb("tool_result").$type<unknown>(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
 });
+
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: text("id").primaryKey(),
+    workspaceOwnerId: text("workspace_owner_id").notNull(),
+    actorUserId: text("actor_user_id").notNull(),
+    eventType: text("event_type").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id"),
+    payload: jsonb("payload").$type<unknown>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
+  },
+  (table) => [
+    index("audit_logs_workspace_created_idx").on(table.workspaceOwnerId, table.createdAt),
+    index("audit_logs_event_idx").on(table.workspaceOwnerId, table.eventType),
+    index("audit_logs_actor_idx").on(table.workspaceOwnerId, table.actorUserId),
+  ]
+);

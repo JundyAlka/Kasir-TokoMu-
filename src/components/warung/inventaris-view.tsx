@@ -1,8 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { AlertTriangle, Camera, PackagePlus, PencilLine, Search, Warehouse } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  Camera,
+  PackagePlus,
+  PencilLine,
+  Search,
+  Trash2,
+  Warehouse,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useAppState } from "@/components/providers/app-state-provider";
 import { useCurrentRole } from "@/components/role-gate";
@@ -147,7 +155,14 @@ function ProductForm({
 
 export function InventarisView() {
   const currentRole = useCurrentRole();
-  const { products, addProduct, updateProduct, restockProduct, lowStockProducts } = useAppState();
+  const {
+    products,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    restockProduct,
+    lowStockProducts,
+  } = useAppState();
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
@@ -155,8 +170,20 @@ export function InventarisView() {
   const [editDraft, setEditDraft] = useState<ProductDraft>(emptyDraft);
   const [restockTarget, setRestockTarget] = useState<Product | null>(null);
   const [restockAmount, setRestockAmount] = useState(12);
+  const [pendingDeletedIds, setPendingDeletedIds] = useState<Set<string>>(() => new Set());
+  const deleteTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
-  const filteredProducts = products.filter((product) => {
+  useEffect(() => {
+    const timers = deleteTimersRef.current;
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
+    };
+  }, []);
+
+  const visibleProducts = products.filter((product) => !pendingDeletedIds.has(product.id));
+
+  const filteredProducts = visibleProducts.filter((product) => {
     const keyword = query.toLowerCase();
     return (
       product.name.toLowerCase().includes(keyword) ||
@@ -165,9 +192,12 @@ export function InventarisView() {
     );
   });
 
-  const totalInventoryValue = products.reduce(
+  const totalInventoryValue = visibleProducts.reduce(
     (sum, product) => sum + product.buyPrice * product.stock,
     0
+  );
+  const visibleLowStockProducts = lowStockProducts.filter(
+    (product) => !pendingDeletedIds.has(product.id)
   );
   const canMutateInventory = currentRole !== "kasir";
 
@@ -228,17 +258,79 @@ export function InventarisView() {
     }
   }
 
+  function handleDeleteProduct(product: Product) {
+    if (deleteTimersRef.current.has(product.id)) {
+      return;
+    }
+
+    setPendingDeletedIds((current) => {
+      const next = new Set(current);
+      next.add(product.id);
+      return next;
+    });
+
+    function undoDelete() {
+      const timer = deleteTimersRef.current.get(product.id);
+      if (timer) {
+        clearTimeout(timer);
+      }
+
+      deleteTimersRef.current.delete(product.id);
+      setPendingDeletedIds((current) => {
+        const next = new Set(current);
+        next.delete(product.id);
+        return next;
+      });
+      toast.dismiss(toastId);
+    }
+
+    const timer = setTimeout(() => {
+      deleteTimersRef.current.delete(product.id);
+      void deleteProduct(product.id)
+        .then(() => {
+          setPendingDeletedIds((current) => {
+            const next = new Set(current);
+            next.delete(product.id);
+            return next;
+          });
+        })
+        .catch((error) => {
+          setPendingDeletedIds((current) => {
+            const next = new Set(current);
+            next.delete(product.id);
+            return next;
+          });
+          toast.error(
+            error instanceof Error ? error.message : "Gagal menghapus produk.",
+            { position: "bottom-center" }
+          );
+        });
+    }, 3000);
+
+    deleteTimersRef.current.set(product.id, timer);
+
+    const toastId = toast(`${product.name} akan dihapus.`, {
+      description: "Klik Urungkan dalam 3 detik jika tidak jadi menghapus.",
+      duration: 3000,
+      position: "bottom-center",
+      action: {
+        label: "Urungkan",
+        onClick: undoDelete,
+      },
+    });
+  }
+
   return (
     <div className="space-y-4">
       <section className="grid gap-4 md:grid-cols-3">
         <StatCard
           title="Total SKU"
-          value={`${products.length} produk`}
+          value={`${visibleProducts.length} produk`}
           description="Produk siap jual yang sedang aktif di warung."
         />
         <StatCard
           title="Stok menipis"
-          value={`${lowStockProducts.length} item`}
+          value={`${visibleLowStockProducts.length} item`}
           description="Pantau dan restok sebelum pelanggan kehabisan pilihan."
           tone="warn"
         />
@@ -252,7 +344,7 @@ export function InventarisView() {
         ) : (
           <StatCard
             title="Produk aktif"
-            value={`${products.filter((product) => product.stock > 0).length} siap jual`}
+            value={`${visibleProducts.filter((product) => product.stock > 0).length} siap jual`}
             description="Produk yang masih bisa dipilih dari layar kasir."
             tone="accent"
           />
@@ -391,6 +483,15 @@ export function InventarisView() {
                           >
                             <Warehouse className="size-4" />
                             Restok
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            className="rounded-full"
+                            onClick={() => handleDeleteProduct(product)}
+                          >
+                            <Trash2 className="size-4" />
+                            Hapus
                           </Button>
                         </div>
                       </TableCell>

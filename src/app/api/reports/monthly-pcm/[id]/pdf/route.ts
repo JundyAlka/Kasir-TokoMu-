@@ -10,6 +10,7 @@ import {
 } from "@/lib/server/pdf-pcm";
 import { handleRouteError } from "@/lib/server/route-error";
 import { requireRole } from "@/lib/server/rbac";
+import { getJakartaMonthRange, JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
 
 export const runtime = "nodejs";
 
@@ -41,8 +42,10 @@ function legacyToReportData(
       ? legacy.periodLabel
       : new Intl.DateTimeFormat("id-ID", {
           month: "long",
+          timeZone: JAKARTA_TIME_ZONE,
           year: "numeric",
-        }).format(new Date(Date.UTC(fallback.periodYear, fallback.periodMonth - 1, 1)));
+        }).format(new Date(getJakartaMonthRange(fallback.periodYear, fallback.periodMonth).start));
+  const range = getJakartaMonthRange(fallback.periodYear, fallback.periodMonth);
 
   return {
     version: 1,
@@ -52,8 +55,8 @@ function legacyToReportData(
       year: fallback.periodYear,
       month: fallback.periodMonth,
       label,
-      start: new Date(Date.UTC(fallback.periodYear, fallback.periodMonth - 1, 1)).toISOString(),
-      end: new Date(Date.UTC(fallback.periodYear, fallback.periodMonth, 1)).toISOString(),
+      start: range.start,
+      end: range.end,
     },
     identity: {
       storeName: "TokoMu",

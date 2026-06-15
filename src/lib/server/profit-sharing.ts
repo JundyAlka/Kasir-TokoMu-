@@ -236,7 +236,8 @@ export async function calculatePayouts(
   for (const investment of investmentResult.rows) {
     if (investment.type === "uang") {
       const sharePct = investment.profitSharePct ?? 0;
-      const amount = roundCurrency(distributableNetProfit * (sharePct / 100));
+      const baseProfit = investment.amount ?? 0;
+      const amount = roundCurrency(baseProfit * (sharePct / 100));
 
       payouts.push({
         investmentId: investment.id,
@@ -245,8 +246,8 @@ export async function calculatePayouts(
         type: investment.type,
         amount,
         sharePct,
-        baseProfit: distributableNetProfit,
-        note: `Bagi hasil modal uang ${sharePct}% dari laba bersih periode.`,
+        baseProfit,
+        note: `Bagi hasil murabahah modal uang ${sharePct}% dari nominal modal.`,
       });
       continue;
     }

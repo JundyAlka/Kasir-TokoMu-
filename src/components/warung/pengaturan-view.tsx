@@ -299,30 +299,30 @@ export function PengaturanView() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-[24px] bg-foreground px-5 py-5 text-background">
+            <div className="rounded-[24px] border border-primary/20 bg-primary/10 px-5 py-5 text-foreground dark:border-primary/25 dark:bg-muted/55">
               <div className="flex items-center gap-2">
                 <Store className="size-4 text-primary" />
-                <p className="text-sm font-medium text-background/75">Warung aktif</p>
+                <p className="text-sm font-medium text-muted-foreground">Warung aktif</p>
               </div>
               <p className="mt-3 font-heading text-3xl font-semibold">{form.storeName || "Nama warung"}</p>
-              <p className="mt-2 text-sm text-background/75">
+              <p className="mt-2 text-sm text-muted-foreground">
                 {form.storeTagline || "Tagline warung akan muncul di sini"}
               </p>
-              <div className="mt-4 space-y-2 text-sm text-background/75">
+              <div className="mt-4 space-y-2 text-sm text-muted-foreground">
                 <p>{form.city || "Kota / area belum diisi"}</p>
                 <p>{form.storeAddress || "Alamat warung belum diisi"}</p>
                 <p>
-                  Pemilik: {form.ownerName || "-"} • {form.ownerWhatsapp || "-"}
+                  Pemilik: {form.ownerName || "-"} - {form.ownerWhatsapp || "-"}
                 </p>
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-[22px] border border-border/70 bg-card/85 p-4">
+              <div className="rounded-[22px] border border-border/70 bg-background/55 p-4 dark:bg-background/25">
                 <p className="text-sm text-muted-foreground">Produk aktif</p>
                 <p className="mt-2 font-heading text-3xl font-semibold">{products.length}</p>
               </div>
-              <div className="rounded-[22px] border border-border/70 bg-card/85 p-4">
+              <div className="rounded-[22px] border border-border/70 bg-background/55 p-4 dark:bg-background/25">
                 <p className="text-sm text-muted-foreground">Batas stok alert</p>
                 <p className="mt-2 font-heading text-3xl font-semibold">
                   {form.stockAlertThreshold || 0} pcs
@@ -330,14 +330,14 @@ export function PengaturanView() {
               </div>
             </div>
 
-            <div className="rounded-[24px] border border-border/70 bg-card/85 p-5">
+            <div className="rounded-[24px] border border-border/70 bg-background/55 p-5 dark:bg-background/25">
               <p className="text-sm text-muted-foreground">Catatan bisnis</p>
               <p className="mt-3 text-sm leading-6 text-foreground/80">
                 {form.businessNotes || "Belum ada catatan bisnis. Tambahkan info penting untuk operasional harian."}
               </p>
             </div>
 
-            <div className="rounded-[24px] border border-border/70 bg-card/85 p-5">
+            <div className="rounded-[24px] border border-border/70 bg-background/55 p-5 dark:bg-background/25">
               <p className="text-sm text-muted-foreground">Metode pembayaran aktif</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {form.enabledPayments.map((method) => (

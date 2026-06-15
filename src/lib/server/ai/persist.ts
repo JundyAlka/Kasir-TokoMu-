@@ -131,3 +131,42 @@ export async function appendMessage(input: {
     createdAt: row.createdAt,
   };
 }
+
+export async function getToolMessageForCommit(input: {
+  messageId: string;
+  userId: string;
+  toolCallId: string;
+}) {
+  const [message] = await db
+    .select()
+    .from(aiMessages)
+    .where(
+      and(
+        eq(aiMessages.id, input.messageId),
+        eq(aiMessages.userId, input.userId),
+        eq(aiMessages.role, "tool"),
+        eq(aiMessages.toolCallId, input.toolCallId)
+      )
+    )
+    .limit(1);
+
+  return message ?? null;
+}
+
+export async function updateToolMessageResult(input: {
+  messageId: string;
+  userId: string;
+  result: unknown;
+}) {
+  const content = JSON.stringify(input.result);
+  const [row] = await db
+    .update(aiMessages)
+    .set({
+      content,
+      toolResult: input.result,
+    })
+    .where(and(eq(aiMessages.id, input.messageId), eq(aiMessages.userId, input.userId)))
+    .returning();
+
+  return row ?? null;
+}

@@ -17,6 +17,14 @@ import {
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { getUserRole, Role } from "@/lib/server/rbac";
+import {
+  DebtCreateSchema,
+  ProductCreateSchema,
+  ProductUpdateSchema,
+  RestockBodySchema,
+  SettingsUpdateSchema,
+  TransactionCheckoutSchema,
+} from "@/lib/server/validation";
 import { AppState, DebtDraft, PaymentMethod, ProductDraft, Settings, Transaction } from "@/lib/types";
 
 let initializationPromise: Promise<void> | null = null;
@@ -46,265 +54,9 @@ function parseDueDate(value: string) {
   return new Date(`${value}T00:00:00.000Z`).toISOString();
 }
 
-async function ensureTables() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS store_profiles (
-      user_id text PRIMARY KEY,
-      store_name text NOT NULL,
-      store_tagline text NOT NULL,
-      store_address text NOT NULL,
-      pcm_name text NOT NULL DEFAULT '',
-      pcm_chairman_name text NOT NULL DEFAULT '',
-      pcm_address text NOT NULL DEFAULT '',
-      owner_name text NOT NULL,
-      owner_whatsapp text NOT NULL,
-      city text NOT NULL,
-      business_notes text NOT NULL,
-      stock_alert_threshold integer NOT NULL,
-      profit_share_pcm_pct integer NOT NULL DEFAULT 30,
-      profit_share_reserve_pct integer NOT NULL DEFAULT 20,
-      enabled_payments jsonb NOT NULL,
-      created_at timestamptz NOT NULL,
-      updated_at timestamptz NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS user_roles (
-      user_id text PRIMARY KEY,
-      role text NOT NULL,
-      workspace_owner_id text NOT NULL,
-      created_at timestamptz NOT NULL,
-      updated_at timestamptz NOT NULL,
-      CONSTRAINT user_roles_role_check
-        CHECK (role in ('pimpinan', 'pengelola_keuangan', 'kasir'))
-    );
-
-    CREATE INDEX IF NOT EXISTS user_roles_workspace_idx
-      ON user_roles(workspace_owner_id);
-
-    CREATE TABLE IF NOT EXISTS products (
-      id text PRIMARY KEY,
-      user_id text NOT NULL,
-      name text NOT NULL,
-      category text NOT NULL,
-      buy_price integer NOT NULL,
-      sell_price integer NOT NULL,
-      stock integer NOT NULL,
-      minimum_stock integer NOT NULL,
-      description text NOT NULL,
-      created_at timestamptz NOT NULL,
-      updated_at timestamptz NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS investors (
-      id text PRIMARY KEY,
-      workspace_owner_id text NOT NULL,
-      name text NOT NULL,
-      whatsapp text NOT NULL,
-      address text NOT NULL,
-      notes text NOT NULL,
-      is_active integer NOT NULL,
-      created_at timestamptz NOT NULL,
-      updated_at timestamptz NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS investors_workspace_idx
-      ON investors(workspace_owner_id);
-
-    CREATE TABLE IF NOT EXISTS investments (
-      id text PRIMARY KEY,
-      investor_id text NOT NULL,
-      workspace_owner_id text NOT NULL,
-      type text NOT NULL,
-      amount integer,
-      profit_share_pct integer,
-      product_id text,
-      unit_count integer,
-      unit_cost integer,
-      profit_share_per_unit_pct integer,
-      start_date timestamptz NOT NULL,
-      end_date timestamptz,
-      is_active integer NOT NULL,
-      created_at timestamptz NOT NULL,
-      updated_at timestamptz NOT NULL,
-      CONSTRAINT investments_type_check
-        CHECK (type in ('uang', 'barang_titip_jual'))
-    );
-
-    CREATE INDEX IF NOT EXISTS investments_workspace_idx
-      ON investments(workspace_owner_id);
-
-    CREATE INDEX IF NOT EXISTS investments_investor_idx
-      ON investments(investor_id);
-
-    CREATE INDEX IF NOT EXISTS investments_product_idx
-      ON investments(product_id);
-
-    CREATE TABLE IF NOT EXISTS investor_payouts (
-      id text PRIMARY KEY,
-      investment_id text NOT NULL,
-      investor_id text NOT NULL,
-      workspace_owner_id text NOT NULL,
-      period_start timestamptz NOT NULL,
-      period_end timestamptz NOT NULL,
-      base_profit integer NOT NULL,
-      share_pct integer NOT NULL,
-      amount integer NOT NULL,
-      status text NOT NULL,
-      paid_at timestamptz,
-      note text NOT NULL,
-      created_at timestamptz NOT NULL,
-      updated_at timestamptz NOT NULL,
-      CONSTRAINT investor_payouts_status_check
-        CHECK (status in ('draft', 'disetujui', 'dibayar'))
-    );
-
-    CREATE INDEX IF NOT EXISTS investor_payouts_workspace_idx
-      ON investor_payouts(workspace_owner_id);
-
-    CREATE INDEX IF NOT EXISTS investor_payouts_investment_idx
-      ON investor_payouts(investment_id);
-
-    CREATE INDEX IF NOT EXISTS investor_payouts_investor_idx
-      ON investor_payouts(investor_id);
-
-    CREATE INDEX IF NOT EXISTS investor_payouts_period_idx
-      ON investor_payouts(workspace_owner_id, period_start, period_end);
-
-    CREATE TABLE IF NOT EXISTS transactions (
-      id text PRIMARY KEY,
-      user_id text NOT NULL,
-      total integer NOT NULL,
-      payment_method text NOT NULL,
-      created_at timestamptz NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS transaction_items (
-      id text PRIMARY KEY,
-      transaction_id text NOT NULL,
-      product_id text NOT NULL,
-      product_name text NOT NULL,
-      quantity integer NOT NULL,
-      unit_price integer NOT NULL,
-      cost_price integer NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS debts (
-      id text PRIMARY KEY,
-      user_id text NOT NULL,
-      borrower_name text NOT NULL,
-      whatsapp text NOT NULL,
-      amount integer NOT NULL,
-      created_at timestamptz NOT NULL,
-      due_date timestamptz NOT NULL,
-      is_paid integer NOT NULL,
-      last_reminder_at timestamptz
-    );
-
-    CREATE TABLE IF NOT EXISTS expenses (
-      id text PRIMARY KEY,
-      user_id text NOT NULL,
-      title text NOT NULL,
-      amount integer NOT NULL,
-      created_at timestamptz NOT NULL,
-      category text NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS restock_logs (
-      id text PRIMARY KEY,
-      workspace_owner_id text NOT NULL,
-      product_id text NOT NULL,
-      performed_by_user_id text NOT NULL,
-      source text NOT NULL,
-      quantity integer NOT NULL,
-      unit_cost integer,
-      receipt_image_url text,
-      ocr_raw jsonb,
-      note text NOT NULL,
-      created_at timestamptz NOT NULL,
-      CONSTRAINT restock_logs_source_check
-        CHECK (source in ('manual', 'ai_chat', 'ai_ocr'))
-    );
-
-    CREATE INDEX IF NOT EXISTS restock_logs_workspace_idx
-      ON restock_logs(workspace_owner_id);
-
-    CREATE INDEX IF NOT EXISTS restock_logs_product_idx
-      ON restock_logs(product_id);
-
-    CREATE INDEX IF NOT EXISTS restock_logs_performed_by_idx
-      ON restock_logs(performed_by_user_id);
-
-    CREATE TABLE IF NOT EXISTS monthly_reports (
-      id text PRIMARY KEY,
-      workspace_owner_id text NOT NULL,
-      period_year integer NOT NULL,
-      period_month integer NOT NULL,
-      data jsonb NOT NULL,
-      pdf_url text,
-      status text NOT NULL,
-      finalized_at timestamptz,
-      created_at timestamptz NOT NULL,
-      updated_at timestamptz NOT NULL,
-      CONSTRAINT monthly_reports_status_check
-        CHECK (status in ('draft', 'final'))
-    );
-
-    CREATE INDEX IF NOT EXISTS monthly_reports_workspace_idx
-      ON monthly_reports(workspace_owner_id);
-
-    CREATE INDEX IF NOT EXISTS monthly_reports_period_idx
-      ON monthly_reports(workspace_owner_id, period_year, period_month);
-
-    ALTER TABLE store_profiles
-      ADD COLUMN IF NOT EXISTS store_tagline text NOT NULL DEFAULT '';
-
-    ALTER TABLE store_profiles
-      ADD COLUMN IF NOT EXISTS store_address text NOT NULL DEFAULT '';
-
-    ALTER TABLE store_profiles
-      ADD COLUMN IF NOT EXISTS pcm_name text NOT NULL DEFAULT '';
-
-    ALTER TABLE store_profiles
-      ADD COLUMN IF NOT EXISTS pcm_chairman_name text NOT NULL DEFAULT '';
-
-    ALTER TABLE store_profiles
-      ADD COLUMN IF NOT EXISTS pcm_address text NOT NULL DEFAULT '';
-
-    ALTER TABLE store_profiles
-      ADD COLUMN IF NOT EXISTS business_notes text NOT NULL DEFAULT '';
-
-    ALTER TABLE store_profiles
-      ADD COLUMN IF NOT EXISTS profit_share_pcm_pct integer NOT NULL DEFAULT 30;
-
-    ALTER TABLE store_profiles
-      ADD COLUMN IF NOT EXISTS profit_share_reserve_pct integer NOT NULL DEFAULT 20;
-
-    CREATE TABLE IF NOT EXISTS ai_chats (
-      id text PRIMARY KEY,
-      user_id text NOT NULL,
-      title text NOT NULL,
-      created_at timestamptz NOT NULL,
-      updated_at timestamptz NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS ai_chats_user_idx ON ai_chats(user_id, updated_at DESC);
-
-    CREATE TABLE IF NOT EXISTS ai_messages (
-      id text PRIMARY KEY,
-      chat_id text NOT NULL,
-      user_id text NOT NULL,
-      role text NOT NULL,
-      content text NOT NULL,
-      tool_name text,
-      tool_call_id text,
-      tool_calls jsonb,
-      tool_args jsonb,
-      tool_result jsonb,
-      created_at timestamptz NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS ai_messages_chat_idx ON ai_messages(chat_id, created_at);
-  `);
+async function ensureDatabaseReady() {
+  console.warn("schema must be migrated explicitly");
+  await pool.query("select 1");
 }
 
 async function ensureWorkspace(userId: string, session?: SessionHint) {
@@ -362,7 +114,7 @@ async function ensureWorkspace(userId: string, session?: SessionHint) {
 
 export async function ensureAppReady() {
   if (!initializationPromise) {
-    initializationPromise = ensureTables();
+    initializationPromise = ensureDatabaseReady();
   }
 
   await initializationPromise;
@@ -585,19 +337,20 @@ export async function getBootstrapState(userId: string): Promise<AppState> {
 }
 
 export async function createProduct(userId: string, draft: ProductDraft) {
+  const nextDraft = ProductCreateSchema.parse(draft);
   const timestamp = nowIso();
   const [product] = await db
     .insert(products)
     .values({
       id: createId("prd"),
       userId,
-      name: draft.name,
-      category: draft.category,
-      buyPrice: draft.buyPrice,
-      sellPrice: draft.sellPrice,
-      stock: draft.stock,
-      minimumStock: draft.minimumStock,
-      description: draft.description,
+      name: nextDraft.name,
+      category: nextDraft.category,
+      buyPrice: nextDraft.buyPrice,
+      sellPrice: nextDraft.sellPrice,
+      stock: nextDraft.stock,
+      minimumStock: nextDraft.minimumStock,
+      description: nextDraft.description,
       createdAt: timestamp,
       updatedAt: timestamp,
     })
@@ -616,16 +369,17 @@ export async function createProduct(userId: string, draft: ProductDraft) {
 }
 
 export async function updateProduct(userId: string, productId: string, draft: ProductDraft) {
+  const nextDraft = ProductUpdateSchema.parse(draft);
   const [updated] = await db
     .update(products)
     .set({
-      name: draft.name,
-      category: draft.category,
-      buyPrice: draft.buyPrice,
-      sellPrice: draft.sellPrice,
-      stock: draft.stock,
-      minimumStock: draft.minimumStock,
-      description: draft.description,
+      name: nextDraft.name,
+      category: nextDraft.category,
+      buyPrice: nextDraft.buyPrice,
+      sellPrice: nextDraft.sellPrice,
+      stock: nextDraft.stock,
+      minimumStock: nextDraft.minimumStock,
+      description: nextDraft.description,
       updatedAt: nowIso(),
     })
     .where(and(eq(products.id, productId), eq(products.userId, userId)))
@@ -647,7 +401,30 @@ export async function updateProduct(userId: string, productId: string, draft: Pr
   };
 }
 
+export async function deleteProduct(userId: string, productId: string) {
+  const [deleted] = await db
+    .delete(products)
+    .where(and(eq(products.id, productId), eq(products.userId, userId)))
+    .returning();
+
+  if (!deleted) {
+    throw new Error("Produk tidak ditemukan.");
+  }
+
+  return {
+    id: deleted.id,
+    name: deleted.name,
+    category: deleted.category as AppState["products"][number]["category"],
+    buyPrice: deleted.buyPrice,
+    sellPrice: deleted.sellPrice,
+    stock: deleted.stock,
+    minimumStock: deleted.minimumStock,
+    description: deleted.description,
+  };
+}
+
 export async function restockProduct(userId: string, productId: string, quantity: number) {
+  const { quantity: nextQuantity } = RestockBodySchema.parse({ quantity });
   const [existing] = await db
     .select()
     .from(products)
@@ -661,7 +438,7 @@ export async function restockProduct(userId: string, productId: string, quantity
   const [updated] = await db
     .update(products)
     .set({
-      stock: existing.stock + quantity,
+      stock: existing.stock + nextQuantity,
       updatedAt: nowIso(),
     })
     .where(and(eq(products.id, productId), eq(products.userId, userId)))
@@ -686,18 +463,20 @@ export async function createTransaction(
     items: Array<{ productId: string; quantity: number }>;
   }
 ) {
-  if (payload.items.length === 0) {
+  const nextPayload = TransactionCheckoutSchema.parse(payload);
+
+  if (nextPayload.items.length === 0) {
     throw new Error("Keranjang masih kosong.");
   }
 
-  const productIds = payload.items.map((item) => item.productId);
+  const productIds = nextPayload.items.map((item) => item.productId);
   const productRows = await db
     .select()
     .from(products)
     .where(and(eq(products.userId, userId), inArray(products.id, productIds)));
 
   const productMap = new Map(productRows.map((product) => [product.id, product]));
-  const lineItems = payload.items.map((item) => {
+  const lineItems = nextPayload.items.map((item) => {
     const product = productMap.get(item.productId);
     if (!product) {
       throw new Error("Salah satu produk tidak ditemukan.");
@@ -722,7 +501,7 @@ export async function createTransaction(
       id: transactionId,
       userId,
       total,
-      paymentMethod: payload.paymentMethod,
+      paymentMethod: nextPayload.paymentMethod,
       createdAt,
     });
 
@@ -763,16 +542,17 @@ export async function createTransaction(
 }
 
 export async function createDebt(userId: string, draft: DebtDraft) {
+  const nextDraft = DebtCreateSchema.parse(draft);
   const [debt] = await db
     .insert(debts)
     .values({
       id: createId("debt"),
       userId,
-      borrowerName: draft.borrowerName,
-      whatsapp: draft.whatsapp,
-      amount: draft.amount,
+      borrowerName: nextDraft.borrowerName,
+      whatsapp: nextDraft.whatsapp,
+      amount: nextDraft.amount,
       createdAt: nowIso(),
-      dueDate: parseDueDate(draft.dueDate),
+      dueDate: parseDueDate(nextDraft.dueDate),
       isPaid: 0,
       lastReminderAt: null,
     })
@@ -866,7 +646,7 @@ export async function createExpense(
 }
 
 export async function updateStoreSettings(userId: string, settings: Settings) {
-  const nextSettings = normalizeSettings(settings);
+  const nextSettings = normalizeSettings(SettingsUpdateSchema.parse(settings));
 
   if (
     nextSettings.storeName.length === 0 ||

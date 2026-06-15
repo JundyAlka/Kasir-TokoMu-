@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db, pool } from "@/db/client";
 import { debts, products, storeProfiles } from "@/db/schema";
@@ -9,12 +10,13 @@ import {
   markDebtPaid,
   restockProduct,
 } from "@/lib/server/app-service";
-import type { OpenRouterToolDef } from "./openrouter";
+import type { GeminiToolDef } from "./gemini";
 
 export type ToolKind =
   | "data"
   | "suggestion"
   | "action"
+  | "preview"
   | "navigation"
   | "info";
 
@@ -28,6 +30,51 @@ export type ToolResult = {
   message?: string;
   error?: string;
 };
+
+const writeTools = new Set([
+  "create_product",
+  "restock_product",
+  "record_sale",
+  "create_debt",
+  "mark_debt_paid",
+  "record_expense",
+]);
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
+function commitSecret() {
+  return process.env.BETTER_AUTH_SECRET ?? "warungos-dev-secret-please-change-this-in-production";
+}
+
+export function signToolCommit(workspaceOwnerId: string, toolName: string, payload: unknown) {
+  return createHmac("sha256", commitSecret())
+    .update(`${workspaceOwnerId}:${toolName}:${stableStringify(payload)}`)
+    .digest("hex");
+}
+
+export function verifyToolCommitSignature(
+  workspaceOwnerId: string,
+  toolName: string,
+  payload: unknown,
+  signature: string
+) {
+  const expected = Buffer.from(signToolCommit(workspaceOwnerId, toolName, payload));
+  const provided = Buffer.from(signature);
+  return expected.length === provided.length && timingSafeEqual(expected, provided);
+}
 
 function rupiah(value: number) {
   return `Rp${Math.round(value).toLocaleString("id-ID")}`;
@@ -48,7 +95,7 @@ function periodRange(period: "today" | "week" | "month") {
   return { start: start.toISOString(), end: now.toISOString() };
 }
 
-export const toolDefinitions: OpenRouterToolDef[] = [
+export const toolDefinitions: GeminiToolDef[] = [
   {
     type: "function",
     function: {
@@ -344,6 +391,39 @@ async function execCreateProduct(
   };
 }
 
+function previewTool(
+  userId: string,
+  toolName: string,
+  args: Record<string, unknown>
+): ToolResult {
+  const signature = signToolCommit(userId, toolName, args);
+
+  const rows: ToolResult["rows"] =
+    toolName === "record_sale" && Array.isArray(args.items)
+      ? [
+          { label: "Metode bayar", value: String(args.paymentMethod ?? "-") },
+          { label: "Jumlah item", value: `${args.items.length} baris` },
+        ]
+      : Object.entries(args)
+          .filter(([, value]) => typeof value !== "object")
+          .slice(0, 6)
+          .map(([label, value]) => ({ label, value: String(value) }));
+
+  return {
+    ok: true,
+    kind: "preview",
+    title: "Konfirmasi aksi AI",
+    summary: `AI ingin menjalankan ${toolName.replaceAll("_", " ")}.`,
+    rows,
+    data: {
+      toolName,
+      payload: args,
+      signature,
+      pending: true,
+    },
+  };
+}
+
 async function execRestockProduct(
   userId: string,
   args: { productId: string; quantity: number }
@@ -613,7 +693,8 @@ async function execGetProfitRecommendations(userId: string): Promise<ToolResult>
 export async function executeTool(
   userId: string,
   name: string,
-  argsJson: string
+  argsJson: string,
+  options: { commit?: boolean } = {}
 ): Promise<ToolResult> {
   let args: Record<string, unknown> = {};
   try {
@@ -623,6 +704,10 @@ export async function executeTool(
   }
 
   try {
+    if (writeTools.has(name) && !options.commit) {
+      return previewTool(userId, name, args);
+    }
+
     switch (name) {
       case "get_inventory_overview":
         return await execGetInventoryOverview(userId);
@@ -657,6 +742,14 @@ export async function executeTool(
       error: error instanceof Error ? error.message : "Tool execution failed.",
     };
   }
+}
+
+export async function executeCommittedTool(
+  userId: string,
+  name: string,
+  payload: Record<string, unknown>
+) {
+  return executeTool(userId, name, JSON.stringify(payload), { commit: true });
 }
 
 export async function buildSystemContext(userId: string): Promise<string> {
