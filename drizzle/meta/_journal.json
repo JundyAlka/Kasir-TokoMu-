@@ -50,6 +50,48 @@
       "when": 1781133600000,
       "tag": "0006_audit_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781137200000,
+      "tag": "0007_audit_log_enhancements",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781568000000,
+      "tag": "0006_invitations",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781654400000,
+      "tag": "0007_akad_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781740800000,
+      "tag": "0008_debt_items_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781827200000,
+      "tag": "0009_product_sku",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781913600000,
+      "tag": "0009_shifts",
+      "breakpoints": true
     }
   ]
 }

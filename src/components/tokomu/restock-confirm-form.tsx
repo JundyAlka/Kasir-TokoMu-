@@ -55,6 +55,7 @@ type CommitResult = {
 };
 
 const UNIT_STORAGE_KEY = "tokomu.restock.units.v1";
+const CREATE_PRODUCT_SELECT_VALUE = "__tokomu_create_product__";
 const DEFAULT_UNIT_OPTIONS = [
   "Pcs",
   "Unit",
@@ -595,6 +596,8 @@ function ConfirmRow({
   const isNewProduct = row.createProduct;
   const needsWarning = !row.createProduct && !row.productId;
   const displayLineTotal = row.unitPrice ? row.quantity * row.unitPrice : row.lineTotal;
+  const selectValue = isNewProduct ? CREATE_PRODUCT_SELECT_VALUE : row.productId;
+  const newProductName = row.rawName.trim() || "produk baru";
 
   return (
     <tr className={cn("transition-colors", needsWarning && row.included && "bg-primary/6", !row.included && "opacity-50")}>
@@ -620,7 +623,7 @@ function ConfirmRow({
           />
           <p className="text-xs text-muted-foreground">
             {formatQuantityUnit(row.quantity, row.unit)}
-            {row.unitPrice ? ` × ${formatCurrency(row.unitPrice)}` : ""}
+            {row.unitPrice ? ` x ${formatCurrency(row.unitPrice)}` : ""}
             {displayLineTotal ? ` = ${formatCurrency(displayLineTotal)}` : ""}
           </p>
           {needsWarning && row.included ? (
@@ -632,19 +635,24 @@ function ConfirmRow({
         </div>
       </td>
 
-      {/* Product selector — unified with built-in search */}
+      {/* Product selector with built-in search */}
       <td className="px-3 py-3 align-top">
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5">
             <Select
-              value={row.productId || undefined}
-              onValueChange={(value) =>
+              value={selectValue}
+              onValueChange={(value) => {
+                if (value === CREATE_PRODUCT_SELECT_VALUE) {
+                  onChange({ productId: "", createProduct: true, included: true });
+                  return;
+                }
+
                 onChange({
                   productId: value ?? "",
                   createProduct: false,
                   included: Boolean(value) || row.included,
-                })
-              }
+                });
+              }}
             >
               <SelectTrigger className="h-9 w-full rounded-xl bg-card text-sm">
                 <span
@@ -654,7 +662,7 @@ function ConfirmRow({
                     isNewProduct && "text-primary font-medium"
                   )}
                 >
-                  {isNewProduct ? `[Baru] ${row.rawName}` : selectedProduct?.name ?? "Pilih produk..."}
+                  {isNewProduct ? `[Baru] ${newProductName}` : selectedProduct?.name ?? "Pilih produk..."}
                 </span>
               </SelectTrigger>
               <SelectContent>
@@ -672,18 +680,15 @@ function ConfirmRow({
                       onKeyDown={(e) => e.stopPropagation()}
                     />
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-2 w-full justify-start text-xs text-primary hover:text-primary"
-                    onClick={() => {
-                      onChange({ productId: "", createProduct: true, included: true });
-                    }}
+                  <SelectItem
+                    value={CREATE_PRODUCT_SELECT_VALUE}
+                    className="mt-2 text-xs text-primary focus:text-primary"
                   >
-                    <Plus className="mr-1 size-3" />
-                    Buat &quot;{row.rawName}&quot; sebagai produk baru
-                  </Button>
+                    <div className="flex items-center gap-1.5">
+                      <Plus className="size-3" />
+                      <span>Buat &quot;{newProductName}&quot; sebagai produk baru</span>
+                    </div>
+                  </SelectItem>
                 </div>
 
                 {selectProducts.alternatives.length > 0 ? (
@@ -694,7 +699,7 @@ function ConfirmRow({
                         <div className="flex flex-col">
                           <span>{product.name}</span>
                           <span className="text-xs text-muted-foreground">
-                            Stok: {product.stock} · {formatCurrency(product.buyPrice)}
+                            Stok: {product.stock} - {formatCurrency(product.buyPrice)}
                           </span>
                         </div>
                       </SelectItem>
@@ -714,7 +719,7 @@ function ConfirmRow({
                         <div className="flex flex-col">
                           <span>{product.name}</span>
                           <span className="text-xs text-muted-foreground">
-                            Stok: {product.stock} · {formatCurrency(product.buyPrice)}
+                            Stok: {product.stock} - {formatCurrency(product.buyPrice)}
                           </span>
                         </div>
                       </SelectItem>
@@ -743,7 +748,7 @@ function ConfirmRow({
           ) : selectedProduct ? (
             <p className="text-xs text-muted-foreground">
               Stok saat ini: <span className="font-medium">{selectedProduct.stock}</span>
-              {" · "}Harga beli: <span className="font-medium">{formatCurrency(selectedProduct.buyPrice)}</span>
+              {" - "}Harga beli: <span className="font-medium">{formatCurrency(selectedProduct.buyPrice)}</span>
             </p>
           ) : null}
         </div>

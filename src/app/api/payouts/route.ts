@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/db/client";
 import { getRequestUser } from "@/lib/server/app-service";
+import { logEvent } from "@/lib/server/audit";
 import { saveDraftPayouts } from "@/lib/server/profit-sharing";
 import { getPeriodRange } from "@/lib/server/reporting";
 import { handleRouteError } from "@/lib/server/route-error";
@@ -13,13 +14,25 @@ function parseBodyPeriod(body: unknown) {
     throw new Error("Periode wajib diisi.");
   }
 
-  const payload = body as { periodYear?: unknown; periodMonth?: unknown };
-  return getPeriodRange(Number(payload.periodYear), Number(payload.periodMonth));
+  const payload = body as {
+    year?: unknown;
+    month?: unknown;
+    periodYear?: unknown;
+    periodMonth?: unknown;
+  };
+  return {
+    year: Number(payload.year ?? payload.periodYear),
+    month: Number(payload.month ?? payload.periodMonth),
+  };
 }
 
 function parseSearchPeriod(request: NextRequest) {
-  const periodYear = Number(request.nextUrl.searchParams.get("periodYear"));
-  const periodMonth = Number(request.nextUrl.searchParams.get("periodMonth"));
+  const periodYear = Number(
+    request.nextUrl.searchParams.get("year") ?? request.nextUrl.searchParams.get("periodYear")
+  );
+  const periodMonth = Number(
+    request.nextUrl.searchParams.get("month") ?? request.nextUrl.searchParams.get("periodMonth")
+  );
   return getPeriodRange(periodYear, periodMonth);
 }
 
@@ -35,11 +48,11 @@ export async function GET(request: NextRequest) {
           p.investment_id as "investmentId",
           p.investor_id as "investorId",
           inv.name as "investorName",
-          i.type,
+          coalesce(i.akad_type, case when i.type = 'barang_titip_jual' then 'barang_titip_jual' else 'murabahah_bil_wakalah' end) as "akadType",
           p.period_start as "periodStart",
           p.period_end as "periodEnd",
-          p.base_profit as "baseProfit",
-          p.share_pct as "sharePct",
+          p.base_profit as "baseAmount",
+          p.share_pct as "ratePct",
           p.amount,
           p.status,
           p.paid_at as "paidAt",
@@ -74,9 +87,22 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await requireRole(["pimpinan", "pengelola_keuangan"]);
-    const { workspaceOwnerId } = await getRequestUser();
-    const range = parseBodyPeriod(await request.json());
-    const calculation = await saveDraftPayouts(workspaceOwnerId, range.start, range.end);
+    const { userId, workspaceOwnerId } = await getRequestUser();
+    const period = parseBodyPeriod(await request.json());
+    const calculation = await saveDraftPayouts(workspaceOwnerId, period.year, period.month);
+
+    await logEvent({ workspaceOwnerId, actorUserId: userId }, {
+      eventType: "PAYOUT_DRAFTED",
+      entityType: "payout_period",
+      entityId: `${period.year}-${String(period.month).padStart(2, "0")}`,
+      category: "finance",
+      payload: {
+        periodYear: period.year,
+        periodMonth: period.month,
+        totalInvestorPayout: calculation.totalInvestorPayout,
+        payoutCount: calculation.payouts.length,
+      },
+    });
 
     return NextResponse.json({ calculation });
   } catch (error) {

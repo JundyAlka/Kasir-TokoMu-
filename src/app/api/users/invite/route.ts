@@ -1,15 +1,36 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { z } from "zod";
 import { db, pool } from "@/db/client";
-import { userRoles } from "@/db/schema";
+import { invitations } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { getRequestUser } from "@/lib/server/app-service";
 import { logEvent } from "@/lib/server/audit";
 import { handleRouteError } from "@/lib/server/route-error";
-import { getUserRole, isRole, requireRole } from "@/lib/server/rbac";
+import {
+  assignRole,
+  getUserRoleAssignment,
+  requireRole,
+} from "@/lib/server/rbac";
 
 export const runtime = "nodejs";
+
+const InviteUserSchema = z
+  .object({
+    email: z.string().trim().email("Email tidak valid.").transform((email) => email.toLowerCase()),
+    role: z.enum(["pengelola_keuangan", "kasir"], {
+      error: "Role hanya boleh pengelola_keuangan atau kasir.",
+    }),
+  })
+  .strict();
+
+function createInvitationId() {
+  return `inv_${randomUUID().slice(0, 12)}`;
+}
+
+function createInvitationToken() {
+  return randomBytes(32).toString("base64url");
+}
 
 function createTemporaryPassword() {
   return `Tmp-${randomBytes(12).toString("base64url")}1`;
@@ -23,38 +44,54 @@ export async function POST(request: NextRequest) {
   try {
     const actor = await getRequestUser();
     const { workspaceOwnerId } = await requireRole(["pimpinan"]);
-    const body = (await request.json()) as { email?: string; role?: unknown };
-    const email = body.email?.trim().toLowerCase();
-
-    if (!email || !email.includes("@")) {
-      return NextResponse.json({ error: "Email tidak valid." }, { status: 400 });
-    }
-
-    if (!isRole(body.role)) {
-      return NextResponse.json({ error: "Role tidak valid." }, { status: 400 });
-    }
+    const body = InviteUserSchema.parse(await request.json());
 
     const existingUser = await pool.query<{ id: string; email: string; name: string }>(
       `select id, email, name from "user" where lower(email) = $1 limit 1`,
-      [email]
+      [body.email]
     );
 
     let user = existingUser.rows[0] ?? null;
     let tempPassword: string | null = null;
 
+    if (user?.id === workspaceOwnerId) {
+      return NextResponse.json(
+        { error: "Email pimpinan tidak perlu diundang." },
+        { status: 409 }
+      );
+    }
+
+    if (user) {
+      const existingRole = await getUserRoleAssignment(user.id);
+
+      if (existingRole?.workspaceOwnerId === workspaceOwnerId && existingRole.isActive === 1) {
+        return NextResponse.json(
+          { error: "Email sudah terdaftar di workspace ini." },
+          { status: 409 }
+        );
+      }
+
+      if (existingRole && existingRole.workspaceOwnerId !== workspaceOwnerId) {
+        return NextResponse.json(
+          { error: "User sudah terdaftar di workspace lain." },
+          { status: 409 }
+        );
+      }
+    }
+
     if (!user) {
       tempPassword = createTemporaryPassword();
       await auth.api.signUpEmail({
         body: {
-          email,
-          name: nameFromEmail(email),
+          email: body.email,
+          name: nameFromEmail(body.email),
           password: tempPassword,
         },
       });
 
       const created = await pool.query<{ id: string; email: string; name: string }>(
         `select id, email, name from "user" where lower(email) = $1 limit 1`,
-        [email]
+        [body.email]
       );
       user = created.rows[0] ?? null;
     }
@@ -63,57 +100,55 @@ export async function POST(request: NextRequest) {
       throw new Error("User gagal dibuat.");
     }
 
-    const existingRole = await getUserRole(user.id);
-
-    if (existingRole && existingRole.workspaceOwnerId !== workspaceOwnerId) {
-      return NextResponse.json(
-        { error: "User sudah terdaftar di workspace lain." },
-        { status: 409 }
-      );
-    }
-
-    const nextRole = user.id === workspaceOwnerId ? "pimpinan" : body.role;
     const timestamp = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const assignedRole = await assignRole(user.id, body.role, workspaceOwnerId);
 
-    await db
-      .insert(userRoles)
+    const [invitation] = await db
+      .insert(invitations)
       .values({
-        userId: user.id,
-        role: nextRole,
+        id: createInvitationId(),
         workspaceOwnerId,
+        email: user.email.toLowerCase(),
+        role: body.role,
+        token: createInvitationToken(),
+        status: "accepted",
+        invitedByUserId: actor.userId,
+        expiresAt,
         createdAt: timestamp,
-        updatedAt: timestamp,
+        acceptedAt: timestamp,
       })
-      .onConflictDoUpdate({
-        target: userRoles.userId,
-        set: {
-          role: nextRole,
-          workspaceOwnerId,
-          updatedAt: timestamp,
-        },
-      });
+      .returning();
 
-    const [roleEntry] = await db
-      .select()
-      .from(userRoles)
-      .where(eq(userRoles.userId, user.id))
-      .limit(1);
-
-    await logEvent(
-      { workspaceOwnerId, actorUserId: actor.userId },
-      "USER_INVITED",
-      { type: "user", id: user.id },
-      { email: user.email, role: roleEntry?.role ?? nextRole, createdNewUser: Boolean(tempPassword) }
-    );
+    await logEvent({ workspaceOwnerId, actorUserId: actor.userId }, {
+      eventType: "USER_INVITED",
+      entityType: "user",
+      entityId: user.id,
+      category: "auth",
+      payload: {
+        email: user.email,
+        role: assignedRole.role,
+        invitationId: invitation.id,
+        createdNewUser: Boolean(tempPassword),
+        reactivatedUser: !tempPassword && assignedRole.isActive === 1,
+      },
+    });
 
     return NextResponse.json({
+      email: user.email,
+      temporaryPassword: tempPassword,
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: roleEntry?.role ?? nextRole,
+        role: assignedRole.role,
+        isActive: assignedRole.isActive === 1,
       },
-      tempPassword,
+      invitation: {
+        id: invitation.id,
+        status: invitation.status,
+        expiresAt: invitation.expiresAt,
+      },
     });
   } catch (error) {
     return handleRouteError(error, "Gagal mengundang user.");

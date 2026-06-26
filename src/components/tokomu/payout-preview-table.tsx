@@ -17,8 +17,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/format";
+import type { AkadType } from "@/lib/server/profit-sharing";
 
-type PayoutType = "uang" | "barang_titip_jual";
 type PayoutStatus = "draft" | "disetujui" | "dibayar";
 
 type PayoutRow = {
@@ -26,9 +26,9 @@ type PayoutRow = {
   investmentId: string;
   investorId: string;
   investorName?: string;
-  type: PayoutType;
-  baseProfit: number;
-  sharePct: number;
+  akadType: AkadType;
+  baseAmount: number;
+  ratePct: number;
   amount: number;
   status?: PayoutStatus;
   paidAt?: string | null;
@@ -40,14 +40,22 @@ type PayoutCalculation = {
   periodEnd: string;
   revenue: number;
   cogs: number;
-  grossProfit: number;
-  expenseTotal: number;
-  netProfit: number;
+  expenses: number;
+  baseProfit: number;
   totalInvestorPayout: number;
+  remaining: number;
   pcmShare: number;
-  reserveShare: number;
   storeShare: number;
   payouts: PayoutRow[];
+};
+
+const akadLabels: Record<AkadType, string> = {
+  murabahah_bil_wakalah: "Murabahah",
+  mudharabah: "Mudharabah",
+  musyarakah: "Musyarakah",
+  barang_titip_jual: "Barang titip jual",
+  sales_titipan: "Sales titipan",
+  pinjaman_qardh: "Qardh",
 };
 
 function currentMonthValue() {
@@ -61,7 +69,7 @@ function parseMonthValue(value: string) {
     throw new Error("Periode bulan tidak valid.");
   }
 
-  return { periodYear: year, periodMonth: month };
+  return { year, month };
 }
 
 async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
@@ -91,13 +99,13 @@ export function PayoutPreviewTable({
   onPaid?: (id: string) => void;
 }>) {
   return (
-    <Table className="min-w-[920px]">
+    <Table className="min-w-[980px]">
       <TableHeader>
         <TableRow>
           <TableHead>Investor</TableHead>
-          <TableHead>Tipe</TableHead>
+          <TableHead>Tipe akad</TableHead>
           <TableHead>Base profit</TableHead>
-          <TableHead>Share</TableHead>
+          <TableHead>Share/Rate</TableHead>
           <TableHead>Payout</TableHead>
           <TableHead>Catatan</TableHead>
           {mode === "saved" ? <TableHead className="text-right">Status</TableHead> : null}
@@ -108,15 +116,15 @@ export function PayoutPreviewTable({
           <TableRow key={row.id ?? row.investmentId}>
             <TableCell className="font-medium">{row.investorName ?? row.investorId}</TableCell>
             <TableCell>
-              <Badge variant="outline">{row.type === "uang" ? "Uang" : "Barang titip jual"}</Badge>
+              <Badge variant="outline">{akadLabels[row.akadType]}</Badge>
             </TableCell>
-            <TableCell>{formatCurrency(row.baseProfit)}</TableCell>
-            <TableCell>{row.sharePct}%</TableCell>
+            <TableCell>{formatCurrency(row.baseAmount)}</TableCell>
+            <TableCell>{row.ratePct}%</TableCell>
             <TableCell className="font-medium">{formatCurrency(row.amount)}</TableCell>
             <TableCell className="max-w-sm whitespace-normal text-muted-foreground">{row.note}</TableCell>
             {mode === "saved" ? (
               <TableCell className="text-right">
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Badge variant={row.status === "dibayar" ? "default" : "secondary"}>
                     {row.status ?? "draft"}
                   </Badge>
@@ -156,11 +164,11 @@ export function BagiHasilClient() {
 
   const periodPayload = useMemo(() => parseMonthValue(period), [period]);
   const hasSavedDraft = savedRows.length > 0;
-  const summary = calculation;
+  const visibleRows = hasSavedDraft ? savedRows : calculation?.payouts ?? [];
 
   async function loadSavedRows() {
     const data = await requestJson<{ payouts: PayoutRow[] }>(
-      `/api/payouts?periodYear=${periodPayload.periodYear}&periodMonth=${periodPayload.periodMonth}`
+      `/api/payouts?year=${periodPayload.year}&month=${periodPayload.month}`
     );
     setSavedRows(data.payouts);
     return data.payouts;
@@ -224,7 +232,7 @@ export function BagiHasilClient() {
           <div>
             <CardTitle className="font-heading text-2xl">Distribusi bagi hasil periode</CardTitle>
             <CardDescription>
-              Hitung investor, PCM, cadangan, dan bagian toko dari laba periode.
+              Hitung preview, simpan draft, setujui, lalu tandai payout sebagai dibayar.
             </CardDescription>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -250,13 +258,32 @@ export function BagiHasilClient() {
         </CardHeader>
       </Card>
 
-      {summary ? (
-        <section className="grid gap-3 md:grid-cols-5">
-          <Card><CardHeader><CardDescription>Laba bersih bulan</CardDescription><CardTitle>{formatCurrency(summary.netProfit)}</CardTitle></CardHeader></Card>
-          <Card><CardHeader><CardDescription>Total investor</CardDescription><CardTitle>{formatCurrency(summary.totalInvestorPayout)}</CardTitle></CardHeader></Card>
-          <Card><CardHeader><CardDescription>Bagian PCM</CardDescription><CardTitle>{formatCurrency(summary.pcmShare)}</CardTitle></CardHeader></Card>
-          <Card><CardHeader><CardDescription>Cadangan</CardDescription><CardTitle>{formatCurrency(summary.reserveShare)}</CardTitle></CardHeader></Card>
-          <Card><CardHeader><CardDescription>Bagian toko</CardDescription><CardTitle>{formatCurrency(summary.storeShare)}</CardTitle></CardHeader></Card>
+      {calculation ? (
+        <section className="grid gap-3 md:grid-cols-4">
+          <Card>
+            <CardHeader>
+              <CardDescription>Laba bersih</CardDescription>
+              <CardTitle>{formatCurrency(calculation.baseProfit)}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardDescription>Total bagi hasil investor</CardDescription>
+              <CardTitle>{formatCurrency(calculation.totalInvestorPayout)}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardDescription>Bagian PCM (30%)</CardDescription>
+              <CardTitle>{formatCurrency(calculation.pcmShare)}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardDescription>Bagian toko (70%)</CardDescription>
+              <CardTitle>{formatCurrency(calculation.storeShare)}</CardTitle>
+            </CardHeader>
+          </Card>
         </section>
       ) : null}
 
@@ -282,7 +309,7 @@ export function BagiHasilClient() {
         </CardHeader>
         <CardContent>
           <PayoutPreviewTable
-            rows={hasSavedDraft ? savedRows : calculation?.payouts ?? []}
+            rows={visibleRows}
             mode={hasSavedDraft ? "saved" : "preview"}
             onApprove={(id) => void updateStatus(id, "disetujui")}
             onPaid={(id) => void updateStatus(id, "dibayar")}

@@ -11,7 +11,6 @@ import {
   Gauge,
   Landmark,
   ListChecks,
-  Menu,
   Package2,
   ScrollText,
   Settings2,
@@ -20,21 +19,12 @@ import {
   UserCog,
   Wallet,
 } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 import { AccountPanel } from "@/components/auth/account-panel";
 import { AIAssistantPanel } from "@/components/warung/ai-assistant-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { RoleProvider } from "@/components/role-gate";
 import { cn } from "@/lib/utils";
-import { useAppState } from "@/components/providers/app-state-provider";
 import type { Role } from "@/lib/server/rbac";
 
 const navigation = [
@@ -51,64 +41,6 @@ const navigation = [
   { href: "/pengaturan/audit-log", label: "Audit Log", icon: ListChecks, roles: ["pimpinan"] },
 ] satisfies Array<{ href: string; label: string; icon: typeof Gauge; roles: Role[] }>;
 
-const pageTitles: Record<string, { title: string; subtitle: string }> = {
-  "/dashboard": {
-    title: "Dashboard operasional warung",
-    subtitle:
-      "Lihat angka penting, stok menipis, dan aktivitas terbaru tanpa mengganggu layar kasir.",
-  },
-  "/kasir": {
-    title: "Kasir cepat untuk jam sibuk",
-    subtitle:
-      "Layar ini khusus untuk jualan cepat: pilih produk, atur jumlah, dan selesaikan transaksi.",
-  },
-  "/inventaris": {
-    title: "Kontrol stok tanpa buku catatan",
-    subtitle:
-      "Pantau produk aktif, restok cepat, dan sorot barang yang mulai menipis.",
-  },
-  "/inventaris/restok-ai": {
-    title: "Restok via scan struk",
-    subtitle:
-      "Upload foto struk, cek hasil AI, lalu konfirmasi item sebelum stok bertambah.",
-  },
-  "/buku-hutang": {
-    title: "Catatan kasbon yang rapi",
-    subtitle:
-      "Simpan pelanggan berhutang, kirim pengingat, dan tandai pelunasan dengan satu klik.",
-  },
-  "/laporan": {
-    title: "Laporan untung yang gampang dipahami",
-    subtitle:
-      "Lihat omzet, pengeluaran, dan preview PDF untuk kebutuhan pinjaman atau evaluasi usaha.",
-  },
-  "/investor": {
-    title: "Investor warung",
-    subtitle: "Kelola penyertaan modal dan barang titip jual dari investor.",
-  },
-  "/bagi-hasil": {
-    title: "Bagi hasil investor",
-    subtitle: "Susun periode hitung, persetujuan, dan pembayaran bagi hasil.",
-  },
-  "/laporan-pcm": {
-    title: "Laporan PCM",
-    subtitle: "Siapkan laporan bulanan untuk pimpinan dan alokasi cadangan.",
-  },
-  "/pengaturan": {
-    title: "Pengaturan warung",
-    subtitle:
-      "Atur profil warung, notifikasi stok menipis, dan metode bayar yang ingin ditampilkan.",
-  },
-  "/pengaturan/karyawan": {
-    title: "Kelola karyawan",
-    subtitle: "Undang user baru dan tentukan akses role di workspace warung.",
-  },
-  "/pengaturan/audit-log": {
-    title: "Audit log",
-    subtitle: "Pantau aksi sensitif, perubahan status, dan eksekusi AI di workspace.",
-  },
-};
-
 const layoutStorageKey = "warungos.shell.layout.v1";
 const defaultSidebarWidth = 272;
 const defaultAiWidth = 400;
@@ -121,88 +53,6 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function NavigationSheet({
-  activePageTitle,
-  exactActiveHref,
-  pathname,
-  settings,
-  visibleNavigation,
-}: Readonly<{
-  activePageTitle: string;
-  exactActiveHref?: string;
-  pathname: string;
-  settings: { storeName: string };
-  visibleNavigation: typeof navigation;
-}>) {
-  return (
-    <Sheet>
-      <SheetTrigger
-        render={
-          <Button
-            variant="outline"
-            size="icon-lg"
-            aria-label="Buka menu sidebar"
-            title="Buka menu sidebar"
-            className="rounded-2xl bg-card/85 shadow-[0_18px_40px_-28px_rgba(68,39,20,0.75)] backdrop-blur"
-          />
-        }
-      >
-        <Menu className="size-5" />
-      </SheetTrigger>
-      <SheetContent
-        side="left"
-        className="!top-2 !bottom-2 !left-2 !h-[calc(100dvh-1rem)] w-[320px] rounded-[28px] border border-sidebar-border bg-sidebar/95 text-sidebar-foreground shadow-[0_28px_80px_-42px_rgba(0,0,0,0.7)] backdrop-blur-xl"
-      >
-        <SheetHeader className="px-6 pt-6">
-          <SheetTitle className="text-sidebar-foreground">
-            {settings.storeName}
-          </SheetTitle>
-          <SheetDescription className="text-sidebar-foreground/70">
-            {activePageTitle}
-          </SheetDescription>
-        </SheetHeader>
-        <div className="space-y-2 px-4 pb-6">
-          {visibleNavigation.map((item) => {
-            const Icon = item.icon;
-            const isActive = exactActiveHref
-              ? pathname === item.href
-              : pathname.startsWith(`${item.href}/`);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  buttonVariants({
-                    variant: isActive ? "secondary" : "ghost",
-                    size: "lg",
-                  }),
-                  "w-full justify-start rounded-2xl",
-                  isActive
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                )}
-              >
-                <Icon className="size-4" />
-                {item.label}
-              </Link>
-            );
-          })}
-          <Link
-            href="/auth"
-            className={cn(
-              buttonVariants({ size: "lg" }),
-              "mt-4 h-11 w-full rounded-2xl",
-            )}
-          >
-            Akun
-          </Link>
-          <ThemeToggle className="mt-4" />
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
 export function AppShell({
   children,
   role,
@@ -211,8 +61,6 @@ export function AppShell({
   role: Role;
 }>) {
   const pathname = usePathname();
-  const { settings } = useAppState();
-  const activePage = pageTitles[pathname] ?? pageTitles["/kasir"];
   const visibleNavigation = navigation.filter((item) => item.roles.includes(role));
   const exactActiveHref = visibleNavigation.find((item) => pathname === item.href)?.href;
   const [aiOpen, setAiOpen] = useState(false);
@@ -296,7 +144,7 @@ export function AppShell({
 
   return (
     <div className={cn("h-screen overflow-hidden bg-background", isResizing && "select-none cursor-col-resize")}>
-      <div className="mx-auto flex h-full w-[calc(100vw-24px)] max-w-none gap-2 p-2 sm:w-[calc(100vw-28px)] sm:p-3 lg:w-[calc(100vw-36px)] lg:p-4 2xl:gap-3">
+      <div className="mx-auto flex h-full w-[calc(100vw-24px)] max-w-none gap-1 p-2 sm:w-[calc(100vw-28px)] sm:p-3 lg:w-[calc(100vw-36px)] lg:gap-2 lg:p-4">
         <aside
           className={cn(
             "glass-panel hidden h-full shrink-0 flex-col overflow-hidden rounded-[30px] border border-border/60 shadow-[0_32px_80px_-50px_rgba(68,39,20,0.65)] transition-[width] duration-200 ease-out md:flex",
@@ -323,15 +171,6 @@ export function AppShell({
                 "2xl:hidden"
               )}
             >
-              {!tabletSidebarExpanded ? (
-                <NavigationSheet
-                  activePageTitle={activePage.title}
-                  exactActiveHref={exactActiveHref}
-                  pathname={pathname}
-                  settings={settings}
-                  visibleNavigation={visibleNavigation}
-                />
-              ) : null}
               <Button
                 type="button"
                 variant="ghost"
@@ -362,7 +201,7 @@ export function AppShell({
                   <Store className="size-4" />
                 </div>
                 <p className="truncate text-sm font-medium">
-                  {settings.storeName}
+                  TokoMu
                 </p>
               </div>
               <ThemeToggle className="mt-3" />
@@ -444,26 +283,14 @@ export function AppShell({
             aria-label="Atur lebar sidebar"
             title="Tarik untuk mengatur lebar sidebar"
             onPointerDown={handleSidebarResizeStart}
-            className="group hidden w-3 shrink-0 touch-none cursor-col-resize items-center justify-center rounded-full 2xl:flex"
+            className="group -mx-2 hidden w-5 shrink-0 touch-none cursor-col-resize items-center justify-center rounded-full 2xl:flex"
           >
-            <span className="h-16 w-1 rounded-full bg-border transition-colors group-hover:bg-primary/70" />
+            <span className="h-14 w-0.5 rounded-full bg-border transition-colors group-hover:w-1 group-hover:bg-primary/70 group-active:w-1 group-active:bg-primary" />
           </button>
         ) : null}
 
-        <div className="pointer-events-none fixed top-3 left-3 z-40 md:hidden">
-          <div className="pointer-events-auto">
-            <NavigationSheet
-              activePageTitle={activePage.title}
-              exactActiveHref={exactActiveHref}
-              pathname={pathname}
-              settings={settings}
-              visibleNavigation={visibleNavigation}
-            />
-          </div>
-        </div>
-
         <RoleProvider role={role}>
-          <main className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto pt-14 md:pt-0 2xl:min-w-[680px]">
+          <main className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto 2xl:min-w-[680px]">
             {children}
           </main>
         </RoleProvider>
@@ -474,9 +301,9 @@ export function AppShell({
             aria-label="Atur lebar asisten AI"
             title="Tarik untuk mengatur lebar asisten AI"
             onPointerDown={handleAiResizeStart}
-            className="group hidden w-4 shrink-0 touch-none cursor-col-resize items-center justify-center rounded-full md:flex"
+            className="group -mx-2 hidden w-5 shrink-0 touch-none cursor-col-resize items-center justify-center rounded-full md:flex"
           >
-            <span className="h-20 w-1.5 rounded-full bg-border transition-colors group-hover:bg-primary/70 group-active:bg-primary" />
+            <span className="h-16 w-0.5 rounded-full bg-border transition-colors group-hover:w-1 group-hover:bg-primary/70 group-active:w-1 group-active:bg-primary" />
           </button>
         ) : null}
 

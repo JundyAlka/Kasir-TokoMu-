@@ -1,78 +1,88 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, MessageSquareShare, Search, WalletCards } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { Info, Search, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 import { useAppState } from "@/components/providers/app-state-provider";
 import { StatCard } from "@/components/stat-card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DebtDetailDialog } from "@/components/tokomu/debt-detail-dialog";
+import { DebtFormDialog } from "@/components/tokomu/debt-form-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  DebtSummaryDetailDialog,
+  DebtSummaryMetric,
+} from "@/components/tokomu/debt-summary-detail-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
-import { DebtDraft } from "@/lib/types";
+import type { Debt } from "@/lib/types";
 
-const emptyDraft: DebtDraft = {
-  borrowerName: "",
-  whatsapp: "",
-  amount: 0,
-  dueDate: new Date().toISOString().slice(0, 10),
-};
+type DebtFilter = "semua" | "aktif" | "lewat_tempo" | "lunas";
+
+function statusClassName(status: Debt["status"]) {
+  if (status === "lunas") {
+    return "rounded-full bg-accent text-accent-foreground";
+  }
+
+  if (status === "lewat_tempo") {
+    return "rounded-full bg-destructive text-destructive-foreground";
+  }
+
+  return "rounded-full bg-primary text-primary-foreground";
+}
+
+function statusLabel(status: Debt["status"]) {
+  if (status === "lunas") {
+    return "Lunas";
+  }
+
+  if (status === "lewat_tempo") {
+    return "Lewat tempo";
+  }
+
+  return "Aktif";
+}
 
 export function BukuHutangView() {
-  const { debts, addDebt, markDebtPaid, sendDebtReminder } = useAppState();
+  const { debts, products, addDebt } = useAppState();
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<"semua" | "belum" | "lunas">("semua");
-  const [createOpen, setCreateOpen] = useState(false);
-  const [draft, setDraft] = useState<DebtDraft>(emptyDraft);
+  const [status, setStatus] = useState<DebtFilter>("semua");
+  const [selectedDebtId, setSelectedDebtId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [debtOverrides, setDebtOverrides] = useState<Record<string, Debt>>({});
+  const [activeSummaryMetric, setActiveSummaryMetric] = useState<DebtSummaryMetric | null>(null);
 
-  const filteredDebts = debts.filter((debt) => {
+  const visibleDebts = useMemo(
+    () => debts.map((debt) => debtOverrides[debt.id] ?? debt),
+    [debtOverrides, debts]
+  );
+
+  const filteredDebts = visibleDebts.filter((debt) => {
     const keyword = query.toLowerCase();
     const matchesKeyword =
       debt.borrowerName.toLowerCase().includes(keyword) ||
       debt.whatsapp.includes(keyword);
-    const matchesStatus =
-      status === "semua" ||
-      (status === "belum" && !debt.isPaid) ||
-      (status === "lunas" && debt.isPaid);
+    const matchesStatus = status === "semua" || debt.status === status;
     return matchesKeyword && matchesStatus;
   });
 
-  const outstandingTotal = debts
-    .filter((debt) => !debt.isPaid)
-    .reduce((sum, debt) => sum + debt.amount, 0);
-  const paidCount = debts.filter((debt) => debt.isPaid).length;
-  const reminderCount = debts.filter((debt) => debt.lastReminderAt).length;
+  const outstandingTotal = visibleDebts
+    .filter((debt) => debt.status !== "lunas")
+    .reduce((sum, debt) => sum + debt.remainingAmount, 0);
+  const paidCount = visibleDebts.filter((debt) => debt.status === "lunas").length;
+  const overdueCount = visibleDebts.filter((debt) => debt.status === "lewat_tempo").length;
 
-  async function handleCreateDebt() {
-    try {
-      if (
-        draft.borrowerName.trim().length === 0 ||
-        draft.whatsapp.trim().length < 10 ||
-        draft.amount <= 0
-      ) {
-        toast.error("Lengkapi nama, nomor WA, dan nominal hutang.");
-        return;
-      }
+  const handleDebtUpdated = useCallback((debt: Debt) => {
+    setDebtOverrides((current) => ({
+      ...current,
+      [debt.id]: debt,
+    }));
+  }, []);
 
-      await addDebt(draft);
-      setCreateOpen(false);
-      setDraft(emptyDraft);
-      toast.success("Kasbon berhasil disimpan.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal menyimpan kasbon.");
-    }
+  function openDetail(debtId: string) {
+    setSelectedDebtId(debtId);
+    setDetailOpen(true);
   }
 
   return (
@@ -81,19 +91,22 @@ export function BukuHutangView() {
         <StatCard
           title="Kasbon aktif"
           value={formatCurrency(outstandingTotal)}
-          description="Total piutang yang masih perlu ditagih."
+          description="Total sisa piutang yang masih perlu ditagih."
+          onClick={() => setActiveSummaryMetric("aktif")}
         />
         <StatCard
           title="Sudah lunas"
           value={`${paidCount} pelanggan`}
           description="Pelanggan yang sudah menyelesaikan pembayaran."
           tone="accent"
+          onClick={() => setActiveSummaryMetric("lunas")}
         />
         <StatCard
-          title="Pengingat terkirim"
-          value={`${reminderCount} kali`}
-          description="Simulasi notifikasi WA yang sudah dipicu dari frontend."
+          title="Lewat tempo"
+          value={`${overdueCount} kasbon`}
+          description="Kasbon belum lunas yang melewati jatuh tempo hari ini."
           tone="warn"
+          onClick={() => setActiveSummaryMetric("lewat_tempo")}
         />
       </section>
 
@@ -102,7 +115,7 @@ export function BukuHutangView() {
           <div>
             <CardTitle className="font-heading text-2xl">Buku hutang pelanggan</CardTitle>
             <CardDescription>
-              Rapi untuk warung, gampang dilihat lagi saat butuh menagih atau memeriksa langganan.
+              Kelola kasbon, cicilan, dan rincian barang pelanggan dari satu halaman.
             </CardDescription>
           </div>
 
@@ -117,81 +130,26 @@ export function BukuHutangView() {
               />
             </div>
 
-            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-              <DialogTrigger
-                render={<Button size="lg" className="h-11 rounded-2xl" />}
-              >
-                <WalletCards className="size-4" />
-                Tambah kasbon
-              </DialogTrigger>
-              <DialogContent className="max-w-xl rounded-[28px] p-0">
-                <DialogHeader className="p-6 pb-0">
-                  <DialogTitle className="font-heading text-2xl">Catat hutang baru</DialogTitle>
-                  <DialogDescription>
-                    Simpan nama pelanggan, nomor WhatsApp, nominal, dan tanggal jatuh tempo.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 p-6 pt-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="borrower-name">Nama peminjam</Label>
-                    <Input
-                      id="borrower-name"
-                      value={draft.borrowerName}
-                      onChange={(event) => setDraft({ ...draft, borrowerName: event.target.value })}
-                      className="h-11 rounded-2xl"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="borrower-wa">Nomor WhatsApp</Label>
-                    <Input
-                      id="borrower-wa"
-                      value={draft.whatsapp}
-                      onChange={(event) => setDraft({ ...draft, whatsapp: event.target.value })}
-                      placeholder="08xxxxxxxxxx"
-                      className="h-11 rounded-2xl"
-                    />
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="borrower-amount">Nominal hutang</Label>
-                      <Input
-                        id="borrower-amount"
-                        type="number"
-                        min={0}
-                        value={draft.amount}
-                        onChange={(event) => setDraft({ ...draft, amount: Number(event.target.value) })}
-                        className="h-11 rounded-2xl"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="borrower-due-date">Jatuh tempo</Label>
-                      <Input
-                        id="borrower-due-date"
-                        type="date"
-                        value={draft.dueDate}
-                        onChange={(event) => setDraft({ ...draft, dueDate: event.target.value })}
-                        className="h-11 rounded-2xl"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter className="rounded-b-[28px]" showCloseButton>
-                  <Button type="button" onClick={() => void handleCreateDebt()}>
-                    Simpan kasbon
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <DebtFormDialog
+              products={products}
+              onSubmit={async (draft) => {
+                await addDebt(draft);
+                toast.success("Kasbon berhasil disimpan.");
+              }}
+            />
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          <Tabs value={status} onValueChange={(value) => setStatus(value as typeof status)}>
+          <Tabs value={status} onValueChange={(value) => setStatus(value as DebtFilter)}>
             <TabsList className="rounded-full p-1">
               <TabsTrigger value="semua" className="rounded-full px-4">
                 Semua
               </TabsTrigger>
-              <TabsTrigger value="belum" className="rounded-full px-4">
-                Belum lunas
+              <TabsTrigger value="aktif" className="rounded-full px-4">
+                Aktif
+              </TabsTrigger>
+              <TabsTrigger value="lewat_tempo" className="rounded-full px-4">
+                Lewat tempo
               </TabsTrigger>
               <TabsTrigger value="lunas" className="rounded-full px-4">
                 Lunas
@@ -199,90 +157,82 @@ export function BukuHutangView() {
             </TabsList>
           </Tabs>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            {filteredDebts.map((debt) => (
-              <Card key={debt.id} className="rounded-[26px] border border-border/70 bg-card/78">
-                <CardContent className="space-y-4 p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-heading text-xl font-semibold">{debt.borrowerName}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">{debt.whatsapp}</p>
-                    </div>
-                    <Badge
-                      className={
-                        debt.isPaid
-                          ? "rounded-full bg-accent text-accent-foreground"
-                          : "rounded-full bg-primary text-primary-foreground"
-                      }
-                    >
-                      {debt.isPaid ? "Lunas" : "Belum lunas"}
-                    </Badge>
-                  </div>
+          {filteredDebts.length > 0 ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {filteredDebts.map((debt) => (
+                <button
+                  key={debt.id}
+                  type="button"
+                  onClick={() => openDetail(debt.id)}
+                  className="text-left"
+                >
+                  <Card className="h-full rounded-[26px] border border-border/70 bg-card/78 transition hover:border-primary/60 hover:bg-card">
+                    <CardContent className="space-y-4 p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="font-heading text-xl font-semibold">{debt.borrowerName}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{debt.whatsapp}</p>
+                        </div>
+                        <Badge className={statusClassName(debt.status)}>
+                          {statusLabel(debt.status)}
+                        </Badge>
+                      </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-[20px] bg-muted/55 p-4">
-                      <p className="text-sm text-muted-foreground">Nominal</p>
-                      <p className="mt-2 text-xl font-semibold">{formatCurrency(debt.amount)}</p>
-                    </div>
-                    <div className="rounded-[20px] bg-muted/55 p-4">
-                      <p className="text-sm text-muted-foreground">Jatuh tempo</p>
-                      <p className="mt-2 text-xl font-semibold">{formatDate(debt.dueDate)}</p>
-                    </div>
-                  </div>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-[20px] bg-muted/55 p-4">
+                          <p className="text-sm text-muted-foreground">Total</p>
+                          <p className="mt-2 text-lg font-semibold">{formatCurrency(debt.amount)}</p>
+                        </div>
+                        <div className="rounded-[20px] bg-muted/55 p-4">
+                          <p className="text-sm text-muted-foreground">Sisa</p>
+                          <p className="mt-2 text-lg font-semibold">{formatCurrency(debt.remainingAmount)}</p>
+                        </div>
+                        <div className="rounded-[20px] bg-muted/55 p-4">
+                          <p className="text-sm text-muted-foreground">Tempo</p>
+                          <p className="mt-2 text-lg font-semibold">{formatDate(debt.dueDate)}</p>
+                        </div>
+                      </div>
 
-                  <div className="rounded-[20px] border border-border/70 bg-card/75 p-4 text-sm text-muted-foreground">
-                    <p>Dicatat: {formatDateTime(debt.createdAt)}</p>
-                    <p className="mt-1">
-                      Pengingat terakhir:{" "}
-                      {debt.lastReminderAt ? formatDateTime(debt.lastReminderAt) : "Belum pernah dikirim"}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="rounded-full"
-                      onClick={async () => {
-                        try {
-                          const reminded = await sendDebtReminder(debt.id);
-                          if (reminded) {
-                            toast.success("Simulasi pengingat WhatsApp terkirim.", {
-                              description: `Pesan sopan untuk ${reminded.borrowerName} dipicu dari frontend.`,
-                            });
-                          }
-                        } catch (error) {
-                          toast.error(error instanceof Error ? error.message : "Gagal mengirim pengingat.");
-                        }
-                      }}
-                    >
-                      <MessageSquareShare className="size-4" />
-                      Kirim pengingat
-                    </Button>
-                    {!debt.isPaid ? (
-                      <Button
-                        type="button"
-                        className="rounded-full"
-                        onClick={async () => {
-                          try {
-                            await markDebtPaid(debt.id);
-                            toast.success(`${debt.borrowerName} ditandai lunas.`);
-                          } catch (error) {
-                            toast.error(error instanceof Error ? error.message : "Gagal memperbarui status hutang.");
-                          }
-                        }}
-                      >
-                        <CheckCircle2 className="size-4" />
-                        Tandai lunas
-                      </Button>
-                    ) : null}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                      <div className="flex items-center justify-between gap-3 rounded-[20px] border border-border/70 bg-card/75 p-4 text-sm text-muted-foreground">
+                        <div>
+                          <p>Dicatat: {formatDateTime(debt.createdAt)}</p>
+                          <p className="mt-1">
+                            Pengingat: {debt.lastReminderAt ? formatDateTime(debt.lastReminderAt) : "Belum dikirim"}
+                          </p>
+                        </div>
+                        <span className="inline-flex h-8 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm font-medium text-foreground">
+                          <Info className="size-4" />
+                          Detail
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex min-h-48 flex-col items-center justify-center rounded-[26px] border border-dashed border-border/80 bg-muted/35 p-6 text-center">
+              <WalletCards className="size-8 text-muted-foreground" />
+              <p className="mt-3 font-medium">Belum ada kasbon yang cocok.</p>
+              <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                Ubah filter atau catat kasbon baru untuk mulai melacak piutang pelanggan.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <DebtDetailDialog
+        debtId={selectedDebtId}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        onDebtUpdated={handleDebtUpdated}
+      />
+      <DebtSummaryDetailDialog
+        debts={visibleDebts}
+        metric={activeSummaryMetric}
+        onClose={() => setActiveSummaryMetric(null)}
+      />
     </div>
   );
 }

@@ -1,5 +1,14 @@
+import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 import { setupTestDb, WORKSPACE_ID } from "../setup";
+
+function jsonRequest(url: string, body: unknown, method = "POST") {
+  return new NextRequest(url, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
 
 describe("profit-loss report", () => {
   it("calculates revenue 10m - cogs 7m - expenses 1m = net profit 2m", async () => {
@@ -112,5 +121,68 @@ describe("profit-loss report", () => {
       "2026-07-01T00:00:00.000Z"
     );
     expect(topProducts[0]).toMatchObject({ productId: "prd_roti", sold: 2, revenue: 10000 });
+  });
+});
+
+describe("monthly PCM report", () => {
+  it("reopens a final report as draft and allows finalizing it again", async () => {
+    const { pool } = await setupTestDb();
+    const timestamp = "2026-06-18T00:00:00.000Z";
+
+    await pool.query(
+      `insert into monthly_reports (
+        id, workspace_owner_id, period_year, period_month, data, status,
+        finalized_at, created_at, updated_at
+      ) values ($1, $2, 2026, 6, $3::jsonb, 'final', $4, $4, $4)`,
+      [
+        "mrp_reopen",
+        WORKSPACE_ID,
+        JSON.stringify({ version: 1, note: "Catatan awal" }),
+        timestamp,
+      ]
+    );
+
+    const reportRoute = await import("@/app/api/reports/monthly-pcm/route");
+    const reopenedResponse = await reportRoute.PATCH(
+      jsonRequest(
+        "http://localhost/api/reports/monthly-pcm",
+        { id: "mrp_reopen", status: "draft" },
+        "PATCH"
+      )
+    );
+    const reopenedBody = await reopenedResponse.json();
+
+    expect(reopenedResponse.status).toBe(200);
+    expect(reopenedBody.report).toMatchObject({
+      id: "mrp_reopen",
+      status: "draft",
+      finalizedAt: null,
+    });
+
+    const finalizedResponse = await reportRoute.PATCH(
+      jsonRequest(
+        "http://localhost/api/reports/monthly-pcm",
+        { id: "mrp_reopen", status: "final" },
+        "PATCH"
+      )
+    );
+    const finalizedBody = await finalizedResponse.json();
+
+    expect(finalizedResponse.status).toBe(200);
+    expect(finalizedBody.report.status).toBe("final");
+    expect(finalizedBody.report.finalizedAt).toEqual(expect.any(String));
+
+    const auditEvents = await pool.query(
+      `select event_type from audit_logs
+       where workspace_owner_id = $1 and entity_id = 'mrp_reopen'
+       order by created_at asc`,
+      [WORKSPACE_ID]
+    );
+    expect(
+      (auditEvents.rows as Array<{ event_type: string }>).map((row) => row.event_type)
+    ).toEqual([
+      "REPORT_REOPENED",
+      "REPORT_FINALIZED",
+    ]);
   });
 });

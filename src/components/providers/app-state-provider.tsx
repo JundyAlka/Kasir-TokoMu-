@@ -20,7 +20,7 @@ type AppStateContextValue = AppState & {
   updateCartQuantity: (productId: string, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
-  checkout: () => Promise<Transaction | null>;
+  checkout: (paidAmount?: number) => Promise<Transaction | null>;
   addProduct: (draft: ProductDraft) => Promise<void>;
   updateProduct: (productId: string, draft: ProductDraft) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
@@ -188,7 +188,7 @@ export function AppStateProvider({
     }));
   }
 
-  async function checkout() {
+  async function checkout(paidAmount?: number) {
     if (state.cart.length === 0) {
       return null;
     }
@@ -200,6 +200,7 @@ export function AppStateProvider({
       method: "POST",
       body: JSON.stringify({
         paymentMethod: state.paymentMethod,
+        paidAmount,
         items: state.cart.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,

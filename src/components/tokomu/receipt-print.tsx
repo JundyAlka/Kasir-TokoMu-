@@ -113,6 +113,15 @@ function buildReceiptHtml(transaction: Transaction, settings: Settings) {
         <span>Total</span>
         <span>${escapeHtml(formatCurrency(transaction.total))}</span>
       </section>
+      ${
+        transaction.paymentMethod === "Tunai"
+          ? `
+      <section>
+        <div class="row"><span>Diterima</span><span>${escapeHtml(formatCurrency(transaction.paidAmount))}</span></div>
+        <div class="row"><span>Kembalian</span><span>${escapeHtml(formatCurrency(transaction.changeAmount))}</span></div>
+      </section>`
+          : ""
+      }
 
       <section class="center thanks">
         Terima kasih sudah berbelanja
@@ -179,6 +188,18 @@ export function ReceiptPrintDialog({
               <span className="text-muted-foreground">Metode</span>
               <span>{transaction.paymentMethod}</span>
             </div>
+            {transaction.paymentMethod === "Tunai" ? (
+              <>
+                <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">Diterima</span>
+                  <span>{formatCurrency(transaction.paidAmount)}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">Kembalian</span>
+                  <span className="font-medium">{formatCurrency(transaction.changeAmount)}</span>
+                </div>
+              </>
+            ) : null}
             <div className="mt-2 flex items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground">Item</span>
               <span>{transaction.items.length} produk</span>

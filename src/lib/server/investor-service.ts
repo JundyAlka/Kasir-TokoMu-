@@ -9,6 +9,7 @@ import {
   restockLogs,
 } from "@/db/schema";
 import { getJakartaMonthRange, JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
+import type { AkadType } from "@/lib/server/profit-sharing";
 
 type InvestmentType = "uang" | "barang_titip_jual";
 
@@ -22,7 +23,9 @@ type InvestorDraft = {
 type InvestmentDraft = {
   investorId?: string;
   type?: unknown;
+  akadType?: unknown;
   amount?: unknown;
+  monthlyReturnRatePct?: unknown;
   profitSharePct?: unknown;
   productId?: unknown;
   unitCount?: unknown;
@@ -135,6 +138,25 @@ function parseInvestmentType(value: unknown): InvestmentType {
   return value;
 }
 
+function parseAkadType(value: unknown, fallback: AkadType): AkadType {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  if (
+    value === "murabahah_bil_wakalah" ||
+    value === "mudharabah" ||
+    value === "musyarakah" ||
+    value === "barang_titip_jual" ||
+    value === "sales_titipan" ||
+    value === "pinjaman_qardh"
+  ) {
+    return value;
+  }
+
+  throw new Error("Tipe akad tidak valid.");
+}
+
 async function findInvestor(workspaceOwnerId: string, id: string) {
   const [investor] = await db
     .select()
@@ -184,10 +206,19 @@ function normalizeCreateInvestmentDraft(draft: InvestmentDraft) {
   const endDate = parseNullableDate(draft.endDate, "Tanggal selesai") ?? null;
 
   if (type === "uang") {
+    const akadType = parseAkadType(draft.akadType, "murabahah_bil_wakalah");
     return {
       type,
+      akadType,
       amount: parsePositiveNumber(draft.amount, "Nominal modal"),
-      profitSharePct: parsePercentage(draft.profitSharePct, "Persentase bagi hasil"),
+      monthlyReturnRatePct:
+        akadType === "murabahah_bil_wakalah"
+          ? parsePercentage(draft.monthlyReturnRatePct ?? draft.profitSharePct ?? 2.5, "Return tetap bulanan")
+          : 2.5,
+      profitSharePct:
+        akadType === "mudharabah" || akadType === "musyarakah"
+          ? parsePercentage(draft.profitSharePct, "Persentase bagi hasil")
+          : null,
       productId: null,
       unitCount: null,
       unitCost: null,
@@ -199,7 +230,9 @@ function normalizeCreateInvestmentDraft(draft: InvestmentDraft) {
 
   return {
     type,
+    akadType: parseAkadType(draft.akadType, "barang_titip_jual"),
     amount: null,
+    monthlyReturnRatePct: 2.5,
     profitSharePct: null,
     productId: parseText(draft.productId, "Produk titipan", true),
     unitCount: parsePositiveNumber(draft.unitCount, "Jumlah unit"),
@@ -225,14 +258,23 @@ function normalizeUpdateInvestmentDraft(
       : parseNullableDate(draft.endDate, "Tanggal selesai") ?? null;
 
   if (type === "uang") {
+    const currentAkadType = (current.akadType ?? "murabahah_bil_wakalah") as AkadType;
+    const akadType = parseAkadType(draft.akadType, currentAkadType);
     return {
       type,
+      akadType,
       amount:
         draft.amount === undefined
           ? current.amount ?? 0
           : parsePositiveNumber(draft.amount, "Nominal modal"),
+      monthlyReturnRatePct:
+        draft.monthlyReturnRatePct === undefined && draft.profitSharePct === undefined
+          ? current.monthlyReturnRatePct ?? 2.5
+          : parsePercentage(draft.monthlyReturnRatePct ?? draft.profitSharePct, "Return tetap bulanan"),
       profitSharePct:
-        draft.profitSharePct === undefined
+        akadType !== "mudharabah" && akadType !== "musyarakah"
+          ? null
+          : draft.profitSharePct === undefined
           ? current.profitSharePct ?? 0
           : parsePercentage(draft.profitSharePct, "Persentase bagi hasil"),
       productId: null,
@@ -246,7 +288,9 @@ function normalizeUpdateInvestmentDraft(
 
   return {
     type,
+    akadType: parseAkadType(draft.akadType, (current.akadType ?? "barang_titip_jual") as AkadType),
     amount: null,
+    monthlyReturnRatePct: 2.5,
     profitSharePct: null,
     productId:
       draft.productId === undefined
@@ -464,7 +508,9 @@ export async function listInvestments(workspaceOwnerId: string, investorId?: str
       investorName: investors.name,
       workspaceOwnerId: investments.workspaceOwnerId,
       type: investments.type,
+      akadType: investments.akadType,
       amount: investments.amount,
+      monthlyReturnRatePct: investments.monthlyReturnRatePct,
       profitSharePct: investments.profitSharePct,
       productId: investments.productId,
       productName: products.name,

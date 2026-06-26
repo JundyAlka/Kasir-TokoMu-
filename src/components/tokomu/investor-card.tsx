@@ -51,8 +51,9 @@ export function InvestorCard({ investor }: Readonly<{ investor: InvestorSummary 
               Payout bulan ini
             </div>
             <p className="mt-2 font-heading text-2xl font-semibold">
-              {investor.payoutCountThisMonth}
+              {formatCurrency(investor.payoutAmountThisMonth)}
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">{investor.payoutCountThisMonth} payout</p>
           </div>
         </div>
         <div className="text-sm text-muted-foreground">

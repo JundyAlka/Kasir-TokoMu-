@@ -15,6 +15,11 @@ import { toast } from "sonner";
 import { useAppState } from "@/components/providers/app-state-provider";
 import { useCurrentRole } from "@/components/role-gate";
 import { StatCard } from "@/components/stat-card";
+import { InfoHint } from "@/components/tokomu/info-hint";
+import {
+  InventorySummaryDetailDialog,
+  type InventorySummaryMetric,
+} from "@/components/tokomu/inventory-summary-detail-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,19 +34,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ProductForm } from "@/components/warung/product-form";
+import { FIELD_HELP } from "@/lib/field-help";
 import { formatCurrency } from "@/lib/format";
-import { Product, ProductCategory, ProductDraft } from "@/lib/types";
+import { generateSku } from "@/lib/sku";
+import { Product, ProductDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const emptyDraft: ProductDraft = {
+  sku: "",
   name: "",
   category: "Makanan",
   buyPrice: 0,
@@ -50,108 +52,6 @@ const emptyDraft: ProductDraft = {
   minimumStock: 0,
   description: "",
 };
-
-function ProductForm({
-  draft,
-  onChange,
-}: {
-  draft: ProductDraft;
-  onChange: (draft: ProductDraft) => void;
-}) {
-  return (
-    <div className="grid gap-4">
-      <div className="grid gap-2">
-        <Label htmlFor="product-name">Nama barang</Label>
-        <Input
-          id="product-name"
-          value={draft.name}
-          onChange={(event) => onChange({ ...draft, name: event.target.value })}
-          placeholder="Contoh: Mi Instan Goreng"
-          className="h-11 rounded-2xl"
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-2">
-          <Label>Kategori</Label>
-          <Select
-            value={draft.category}
-            onValueChange={(value) => onChange({ ...draft, category: value as ProductCategory })}
-          >
-            <SelectTrigger className="h-11 w-full rounded-2xl bg-card">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Makanan">Makanan</SelectItem>
-              <SelectItem value="Minuman">Minuman</SelectItem>
-              <SelectItem value="Sembako">Sembako</SelectItem>
-              <SelectItem value="Kebutuhan Harian">Kebutuhan Harian</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="product-stock">Stok awal</Label>
-          <Input
-            id="product-stock"
-            type="number"
-            min={0}
-            value={draft.stock}
-            onChange={(event) => onChange({ ...draft, stock: Number(event.target.value) })}
-            className="h-11 rounded-2xl"
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-2">
-          <Label htmlFor="product-buy-price">Harga beli</Label>
-          <Input
-            id="product-buy-price"
-            type="number"
-            min={0}
-            value={draft.buyPrice}
-            onChange={(event) => onChange({ ...draft, buyPrice: Number(event.target.value) })}
-            className="h-11 rounded-2xl"
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="product-sell-price">Harga jual</Label>
-          <Input
-            id="product-sell-price"
-            type="number"
-            min={0}
-            value={draft.sellPrice}
-            onChange={(event) => onChange({ ...draft, sellPrice: Number(event.target.value) })}
-            className="h-11 rounded-2xl"
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-2">
-        <Label htmlFor="product-minimum-stock">Stok minimum</Label>
-        <Input
-          id="product-minimum-stock"
-          type="number"
-          min={0}
-          value={draft.minimumStock}
-          onChange={(event) => onChange({ ...draft, minimumStock: Number(event.target.value) })}
-          className="h-11 rounded-2xl"
-        />
-      </div>
-
-      <div className="grid gap-2">
-        <Label htmlFor="product-description">Catatan singkat</Label>
-        <Input
-          id="product-description"
-          value={draft.description}
-          onChange={(event) => onChange({ ...draft, description: event.target.value })}
-          placeholder="Penempatan rak, paket laris, atau info kasir"
-          className="h-11 rounded-2xl"
-        />
-      </div>
-    </div>
-  );
-}
 
 export function InventarisView() {
   const currentRole = useCurrentRole();
@@ -170,6 +70,8 @@ export function InventarisView() {
   const [editDraft, setEditDraft] = useState<ProductDraft>(emptyDraft);
   const [restockTarget, setRestockTarget] = useState<Product | null>(null);
   const [restockAmount, setRestockAmount] = useState(12);
+  const [activeSummaryMetric, setActiveSummaryMetric] =
+    useState<InventorySummaryMetric | null>(null);
   const [pendingDeletedIds, setPendingDeletedIds] = useState<Set<string>>(() => new Set());
   const deleteTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
@@ -187,6 +89,7 @@ export function InventarisView() {
     const keyword = query.toLowerCase();
     return (
       product.name.toLowerCase().includes(keyword) ||
+      (product.sku ?? "").toLowerCase().includes(keyword) ||
       product.category.toLowerCase().includes(keyword) ||
       product.description.toLowerCase().includes(keyword)
     );
@@ -196,6 +99,7 @@ export function InventarisView() {
     (sum, product) => sum + product.buyPrice * product.stock,
     0
   );
+  const existingSkus = visibleProducts.map((product) => product.sku);
   const visibleLowStockProducts = lowStockProducts.filter(
     (product) => !pendingDeletedIds.has(product.id)
   );
@@ -327,12 +231,14 @@ export function InventarisView() {
           title="Total SKU"
           value={`${visibleProducts.length} produk`}
           description="Produk siap jual yang sedang aktif di warung."
+          onClick={() => setActiveSummaryMetric("total_sku")}
         />
         <StatCard
           title="Stok menipis"
           value={`${visibleLowStockProducts.length} item`}
           description="Pantau dan restok sebelum pelanggan kehabisan pilihan."
           tone="warn"
+          onClick={() => setActiveSummaryMetric("stok_menipis")}
         />
         {canMutateInventory ? (
           <StatCard
@@ -340,6 +246,7 @@ export function InventarisView() {
             value={formatCurrency(totalInventoryValue)}
             description="Perkiraan modal yang sedang tersimpan di inventaris."
             tone="accent"
+            onClick={() => setActiveSummaryMetric("nilai_stok")}
           />
         ) : (
           <StatCard
@@ -347,6 +254,7 @@ export function InventarisView() {
             value={`${visibleProducts.filter((product) => product.stock > 0).length} siap jual`}
             description="Produk yang masih bisa dipilih dari layar kasir."
             tone="accent"
+            onClick={() => setActiveSummaryMetric("produk_aktif")}
           />
         )}
       </section>
@@ -397,7 +305,7 @@ export function InventarisView() {
                       </DialogDescription>
                     </DialogHeader>
                     <div className="p-6 pt-4">
-                      <ProductForm draft={draft} onChange={setDraft} />
+                      <ProductForm draft={draft} onChange={setDraft} existingSkus={existingSkus} />
                     </div>
                     <DialogFooter className="rounded-b-[28px]" showCloseButton>
                       <Button type="button" onClick={() => void handleCreateProduct()}>
@@ -414,21 +322,53 @@ export function InventarisView() {
           <Table className="min-w-[760px]">
             <TableHeader>
               <TableRow>
+                <TableHead>
+                  <span className="inline-flex items-center gap-2">
+                    SKU
+                    <InfoHint text={FIELD_HELP.sku} label="Penjelasan SKU" side="top" />
+                  </span>
+                </TableHead>
                 <TableHead>Produk</TableHead>
                 <TableHead>Kategori</TableHead>
-                {canMutateInventory ? <TableHead>Harga beli</TableHead> : null}
+                {canMutateInventory ? (
+                  <TableHead>
+                    <span className="inline-flex items-center gap-2">
+                      Harga beli
+                      <InfoHint text={FIELD_HELP.costPrice} label="Penjelasan harga beli" side="top" />
+                    </span>
+                  </TableHead>
+                ) : null}
                 <TableHead>Harga jual</TableHead>
+                {canMutateInventory ? (
+                  <TableHead>
+                    <span className="inline-flex items-center gap-2">
+                      Margin
+                      <InfoHint text={FIELD_HELP.margin} label="Penjelasan margin" side="top" />
+                    </span>
+                  </TableHead>
+                ) : null}
                 <TableHead>Stok</TableHead>
-                <TableHead>Minimum</TableHead>
+                <TableHead>
+                  <span className="inline-flex items-center gap-2">
+                    Stok min
+                    <InfoHint text={FIELD_HELP.reorderPoint} label="Penjelasan stok minimum" side="top" />
+                  </span>
+                </TableHead>
                 {canMutateInventory ? <TableHead className="text-right">Aksi</TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredProducts.map((product) => {
                 const lowStock = product.stock <= product.minimumStock;
+                const sku = product.sku || generateSku(product.name, product.category);
+                const margin = Math.max(0, product.sellPrice - product.buyPrice);
+                const marginPct = product.sellPrice > 0 ? Math.round((margin / product.sellPrice) * 100) : 0;
 
                 return (
                   <TableRow key={product.id} className={cn(lowStock && "bg-primary/6")}>
+                    <TableCell className="font-mono text-xs font-medium text-muted-foreground">
+                      {sku}
+                    </TableCell>
                     <TableCell className="min-w-[220px]">
                       <div>
                         <p className="font-medium">{product.name}</p>
@@ -438,6 +378,12 @@ export function InventarisView() {
                     <TableCell>{product.category}</TableCell>
                     {canMutateInventory ? <TableCell>{formatCurrency(product.buyPrice)}</TableCell> : null}
                     <TableCell>{formatCurrency(product.sellPrice)}</TableCell>
+                    {canMutateInventory ? (
+                      <TableCell>
+                        <span className="font-medium">{formatCurrency(margin)}</span>
+                        <span className="ml-1 text-xs text-muted-foreground">({marginPct}%)</span>
+                      </TableCell>
+                    ) : null}
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Badge
@@ -462,6 +408,7 @@ export function InventarisView() {
                             onClick={() => {
                               setEditingProduct(product);
                               setEditDraft({
+                                sku: product.sku ?? "",
                                 name: product.name,
                                 category: product.category,
                                 buyPrice: product.buyPrice,
@@ -511,7 +458,11 @@ export function InventarisView() {
             <DialogDescription>Perbarui stok, harga, atau posisi minimum sebelum notifikasi muncul.</DialogDescription>
           </DialogHeader>
           <div className="p-6 pt-4">
-            <ProductForm draft={editDraft} onChange={setEditDraft} />
+            <ProductForm
+              draft={editDraft}
+              onChange={setEditDraft}
+              existingSkus={existingSkus.filter((sku) => sku !== editingProduct?.sku)}
+            />
           </div>
           <DialogFooter className="rounded-b-[28px]" showCloseButton>
             <Button type="button" onClick={() => void handleUpdateProduct()}>
@@ -555,6 +506,14 @@ export function InventarisView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <InventorySummaryDetailDialog
+        canViewInventoryValue={canMutateInventory}
+        lowStockProducts={visibleLowStockProducts}
+        metric={activeSummaryMetric}
+        onClose={() => setActiveSummaryMetric(null)}
+        products={visibleProducts}
+      />
     </div>
   );
 }

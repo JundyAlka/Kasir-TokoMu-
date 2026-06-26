@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthErrorMessage } from "@/lib/server/auth-error";
 
 export const runtime = "nodejs";
 
@@ -88,14 +89,14 @@ export async function POST(
     });
 
     const authResult = (await authResponse.json().catch(() => null)) as
-      | { message?: string; url?: string | null }
+      | { code?: string; message?: string; url?: string | null }
       | null;
 
     if (!authResponse.ok) {
       return redirectToAuth(
         request,
         config.mode,
-        authResult?.message ?? config.defaultError
+        getAuthErrorMessage(authResult, config.defaultError)
       );
     }
 

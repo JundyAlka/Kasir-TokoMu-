@@ -1,13 +1,42 @@
 "use client";
 
-import { useState } from "react";
-import { BanknoteArrowDown, Coffee, CreditCard, Minus, PackageSearch, Plus, ReceiptText, Search, ShoppingBasket, Sparkles, Wheat, X } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
+import QRCode from "qrcode";
+import {
+  BanknoteArrowDown,
+  Building2,
+  CheckCircle2,
+  Coffee,
+  Copy,
+  CreditCard,
+  Minus,
+  PackageSearch,
+  Plus,
+  QrCode,
+  ReceiptText,
+  Search,
+  ShoppingBasket,
+  Smartphone,
+  Sparkles,
+  UserRoundCheck,
+  Wheat,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useAppState } from "@/components/providers/app-state-provider";
 import { ReceiptPrintDialog } from "@/components/tokomu/receipt-print";
+import { ShiftChangeBanner } from "@/components/tokomu/shift-change-banner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/format";
@@ -27,6 +56,35 @@ const categoryLabels: Array<{ value: "Semua" | ProductCategory; label: string }>
   { value: "Sembako", label: "Sembako" },
   { value: "Kebutuhan Harian", label: "Harian" },
 ];
+
+const dummyPaymentAccounts = {
+  qrisMerchantId: "NMID-DUMMY-TOKOMU-0001",
+  dana: {
+    label: "DANA",
+    accountName: "TokoMu Dummy",
+    accountNumber: "0812 3456 7890",
+  },
+  bri: {
+    label: "BRI",
+    accountName: "TokoMu Warung",
+    accountNumber: "1234 0101 9988 550",
+  },
+} as const;
+
+type RecordedByInfo = {
+  userId: string;
+  name: string;
+  shiftSessionId: string | null;
+};
+
+async function requestJson<T>(input: RequestInfo): Promise<T> {
+  const response = await fetch(input);
+  const data = (await response.json().catch(() => null)) as T & { error?: string } | null;
+  if (!response.ok) {
+    throw new Error(typeof data?.error === "string" ? data.error : "Permintaan gagal.");
+  }
+  return data as T;
+}
 
 function ProductCategoryIcon({ category }: { category: ProductCategory }) {
   if (category === "Minuman") {
@@ -97,6 +155,227 @@ function ProductCard({
   );
 }
 
+type QrisPreviewLine = {
+  lineTotal: number;
+  product: Pick<Product, "id" | "name" | "sellPrice">;
+  quantity: number;
+};
+
+function createQrisReference(total: number, items: QrisPreviewLine[]) {
+  const lineKey = items
+    .map((item) => `${item.product.id.slice(-6)}${item.quantity}`)
+    .join("-");
+
+  return `TOKOMU-${total}-${lineKey || "EMPTY"}`.toUpperCase();
+}
+
+function createQrisPayload(total: number, items: QrisPreviewLine[]) {
+  return JSON.stringify({
+    type: "TOKOMU_QRIS_PAYMENT",
+    merchantId: dummyPaymentAccounts.qrisMerchantId,
+    reference: createQrisReference(total, items),
+    amount: total,
+    currency: "IDR",
+    items: items.map((item) => ({
+      productId: item.product.id,
+      name: item.product.name,
+      quantity: item.quantity,
+      unitPrice: item.product.sellPrice,
+      lineTotal: item.lineTotal,
+    })),
+  });
+}
+
+function QrisPaymentPreview({
+  items,
+  total,
+}: Readonly<{
+  items: QrisPreviewLine[];
+  total: number;
+}>) {
+  const [qrResult, setQrResult] = useState<{ dataUrl: string; payload: string } | null>(null);
+  const reference = createQrisReference(total, items);
+  const payload = createQrisPayload(total, items);
+  const qrDataUrl = qrResult?.payload === payload ? qrResult.dataUrl : null;
+
+  useEffect(() => {
+    if (total <= 0 || items.length === 0) {
+      return;
+    }
+
+    let active = true;
+    void QRCode.toDataURL(payload, {
+      color: {
+        dark: "#1f1713",
+        light: "#ffffff",
+      },
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 220,
+    })
+      .then((dataUrl) => {
+        if (active) {
+          setQrResult({ dataUrl, payload });
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setQrResult(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [items, payload, total]);
+
+  return (
+    <div className="mt-4 rounded-[22px] border border-primary/25 bg-primary/8 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <QrCode className="size-4 text-primary" />
+            QRIS pembayaran
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Ref: <span className="font-mono">{reference}</span>
+          </p>
+        </div>
+        <div className="rounded-full bg-card px-3 py-1 text-sm font-semibold">
+          {formatCurrency(total)}
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-col items-center gap-3">
+        <div className="flex size-48 items-center justify-center rounded-[26px] border border-border/70 bg-white p-3 shadow-inner">
+          {qrDataUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={qrDataUrl}
+              alt={`QRIS pembayaran ${formatCurrency(total)}`}
+              className="size-full"
+            />
+          ) : (
+            <QrCode className="size-10 text-muted-foreground" />
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-xs font-medium text-primary">
+          <CheckCircle2 className="size-4" />
+          Menunggu pembayaran
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CopyButton({ text }: Readonly<{ text: string }>) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-9 rounded-xl"
+      onClick={() => {
+        void navigator.clipboard
+          ?.writeText(text)
+          .then(() => toast.success("Nomor pembayaran disalin."))
+          .catch(() => toast.error("Gagal menyalin nomor pembayaran."));
+      }}
+    >
+      <Copy className="size-3.5" />
+      Salin
+    </Button>
+  );
+}
+
+function TransferAccountCard({
+  account,
+  icon,
+}: Readonly<{
+  account: { label: string; accountName: string; accountNumber: string };
+  icon: ReactNode;
+}>) {
+  return (
+    <div className="rounded-[22px] border border-border/70 bg-card/70 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-primary">
+            {icon}
+          </div>
+          <div>
+            <p className="font-medium">{account.label}</p>
+            <p className="text-xs text-muted-foreground">a.n. {account.accountName}</p>
+          </div>
+        </div>
+        <CopyButton text={account.accountNumber.replace(/\s/g, "")} />
+      </div>
+      <p className="mt-4 rounded-2xl bg-muted/40 px-3 py-2 font-mono text-lg font-semibold tracking-wide">
+        {account.accountNumber}
+      </p>
+    </div>
+  );
+}
+
+function PaymentInstructionDialog({
+  method,
+  onOpenChange,
+  open,
+  total,
+}: Readonly<{
+  method: PaymentMethod;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  total: number;
+}>) {
+  const isTransfer = method === "Transfer";
+
+  if (!isTransfer) {
+    return null;
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md rounded-[28px] p-0">
+        <DialogHeader className="border-b border-border/70 p-6 pb-4">
+          <div className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-primary/14 text-primary">
+            <CreditCard className="size-5" />
+          </div>
+          <DialogTitle className="font-heading text-2xl">Pembayaran Transfer</DialogTitle>
+          <DialogDescription>
+            Gunakan nomor dummy DANA atau BRI berikut untuk simulasi pembayaran.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 p-6">
+          <div className="rounded-[22px] border border-primary/20 bg-primary/8 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">Total tagihan</span>
+              <span className="font-heading text-2xl font-semibold">{formatCurrency(total)}</span>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <TransferAccountCard
+              account={dummyPaymentAccounts.dana}
+              icon={<Smartphone className="size-4" />}
+            />
+            <TransferAccountCard
+              account={dummyPaymentAccounts.bri}
+              icon={<Building2 className="size-4" />}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="rounded-b-[28px]" showCloseButton>
+          <Button type="button" onClick={() => onOpenChange(false)}>
+            Sudah paham
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function KasirView() {
   const {
     products,
@@ -114,6 +393,32 @@ export function KasirView() {
   const [category, setCategory] = useState<"Semua" | ProductCategory>("Semua");
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<Transaction | null>(null);
+  const [recordedBy, setRecordedBy] = useState<RecordedByInfo | null>(null);
+  const [lastRecordedByKey, setLastRecordedByKey] = useState<string | null>(null);
+  const [shiftBannerName, setShiftBannerName] = useState<string | null>(null);
+  const [paidAmountInput, setPaidAmountInput] = useState("");
+  const [paymentInfoOpen, setPaymentInfoOpen] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void requestJson<{ recordedBy: RecordedByInfo }>("/api/shift-sessions")
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+        setRecordedBy(response.recordedBy);
+        setLastRecordedByKey(`${response.recordedBy.userId}:${response.recordedBy.shiftSessionId ?? "auto"}`);
+      })
+      .catch(() => {
+        if (active) {
+          setRecordedBy(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filteredProducts = products.filter((product) => {
     const queryMatch =
@@ -123,6 +428,15 @@ export function KasirView() {
     const categoryMatch = category === "Semua" || product.category === category;
     return queryMatch && categoryMatch;
   });
+  const totalItems = cartLines.reduce((sum, line) => sum + line.quantity, 0);
+  const paidAmount = Math.max(0, Math.round(Number(paidAmountInput) || 0));
+  const isCashPayment = paymentMethod === "Tunai";
+  const showQrisPreview = paymentMethod === "QRIS" && cartLines.length > 0;
+  const needsPaymentInfo = paymentMethod === "Transfer";
+  const cashShortfall = Math.max(0, cartTotal - paidAmount);
+  const changeAmount = isCashPayment ? Math.max(0, paidAmount - cartTotal) : 0;
+  const canCheckout =
+    cartLines.length > 0 && (!isCashPayment || (paidAmountInput.trim() !== "" && cashShortfall === 0));
 
   async function handleCheckout() {
     try {
@@ -134,7 +448,14 @@ export function KasirView() {
         return;
       }
 
-      const transaction = await checkout();
+      if (isCashPayment && (paidAmountInput.trim() === "" || paidAmount < cartTotal)) {
+        toast.error("Uang dibayarkan belum cukup.", {
+          description: `Kurang ${formatCurrency(cashShortfall)} dari total tagihan.`,
+        });
+        return;
+      }
+
+      const transaction = await checkout(isCashPayment ? paidAmount : undefined);
       if (!transaction) {
         toast.error("Keranjang masih kosong.");
         return;
@@ -156,8 +477,23 @@ export function KasirView() {
       toast.success("Transaksi berhasil disimpan.", {
         description: `${transaction.items.length} produk masuk ke penjualan ${paymentLabels[transaction.paymentMethod]}.`,
       });
+      const transactionRecordedBy = {
+        userId: transaction.recordedByUserId ?? "",
+        name: transaction.recordedByName || "Kasir",
+        shiftSessionId: transaction.shiftSessionId ?? null,
+      };
+      const nextRecordedByKey = `${transactionRecordedBy.userId}:${transactionRecordedBy.shiftSessionId ?? "auto"}`;
+      if (nextRecordedByKey && lastRecordedByKey && nextRecordedByKey !== lastRecordedByKey) {
+        setShiftBannerName(transactionRecordedBy.name);
+      }
+      if (!lastRecordedByKey && nextRecordedByKey) {
+        setShiftBannerName(transactionRecordedBy.name);
+      }
+      setRecordedBy(transactionRecordedBy);
+      setLastRecordedByKey(nextRecordedByKey);
       setLastTransaction(transaction);
       setReceiptOpen(true);
+      setPaidAmountInput("");
 
       if (lowProducts.length > 0) {
         toast.warning("Ada produk yang mendekati stok minimum.", {
@@ -171,11 +507,20 @@ export function KasirView() {
 
   return (
     <div className="grid gap-4 xl:grid-cols-[1.7fr_0.95fr]">
+      {shiftBannerName ? (
+        <ShiftChangeBanner cashierName={shiftBannerName} onDone={() => setShiftBannerName(null)} />
+      ) : null}
       <ReceiptPrintDialog
         open={receiptOpen}
         onOpenChange={setReceiptOpen}
         settings={settings}
         transaction={lastTransaction}
+      />
+      <PaymentInstructionDialog
+        open={paymentInfoOpen}
+        onOpenChange={setPaymentInfoOpen}
+        method={paymentMethod}
+        total={cartTotal}
       />
       <div>
         <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
@@ -185,6 +530,10 @@ export function KasirView() {
               <CardDescription>
                 Semua fokus kasir ada di sini: cari produk, tap item, lalu lanjut ke keranjang.
               </CardDescription>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/85 px-3 py-1.5 text-sm text-muted-foreground">
+                <UserRoundCheck className="size-4 text-primary" />
+                Dicatat oleh: <span className="font-medium text-foreground">{recordedBy?.name ?? "Mengikuti shift aktif"}</span>
+              </div>
             </div>
 
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -345,7 +694,12 @@ export function KasirView() {
                       "h-12 rounded-2xl",
                       paymentMethod === method && "shadow-[0_20px_40px_-22px_rgba(186,92,35,0.75)]"
                     )}
-                    onClick={() => setPaymentMethod(method)}
+                    onClick={() => {
+                      setPaymentMethod(method);
+                      if (method === "Transfer") {
+                        setPaymentInfoOpen(true);
+                      }
+                    }}
                   >
                     {method === "Tunai" ? <BanknoteArrowDown className="size-4" /> : <CreditCard className="size-4" />}
                     {paymentLabels[method]}
@@ -354,18 +708,98 @@ export function KasirView() {
               </div>
             </div>
 
+            {needsPaymentInfo ? (
+              <div className="rounded-[22px] border border-border/70 bg-card/55 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <CreditCard className="size-4 text-primary" />
+                      Transfer DANA / BRI
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Tampilkan nomor dummy untuk DANA atau BRI.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 shrink-0 rounded-xl"
+                    onClick={() => setPaymentInfoOpen(true)}
+                  >
+                    Lihat nomor
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {isCashPayment ? (
+              <div className="space-y-3 rounded-[22px] border border-border/70 bg-card/55 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <label htmlFor="paid-amount" className="text-sm font-medium text-muted-foreground">
+                    Uang dibayarkan
+                  </label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 rounded-xl px-3"
+                    disabled={cartTotal <= 0}
+                    onClick={() => setPaidAmountInput(String(cartTotal))}
+                  >
+                    Uang pas
+                  </Button>
+                </div>
+                <Input
+                  id="paid-amount"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={paidAmountInput}
+                  onChange={(event) => setPaidAmountInput(event.target.value)}
+                  placeholder="Masukkan nominal diterima"
+                  className="h-12 rounded-2xl border-border/80 bg-card text-lg font-semibold tabular-nums"
+                />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-2xl bg-muted/40 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Diterima</p>
+                    <p className="mt-1 font-semibold tabular-nums">
+                      {paidAmountInput ? formatCurrency(paidAmount) : "-"}
+                    </p>
+                  </div>
+                  <div
+                    className={cn(
+                      "rounded-2xl px-3 py-2",
+                      cashShortfall > 0
+                        ? "bg-destructive/10 text-destructive"
+                        : "bg-accent/15 text-accent-foreground"
+                    )}
+                  >
+                    <p className="text-xs opacity-75">
+                      {cashShortfall > 0 ? "Kurang" : "Kembalian"}
+                    </p>
+                    <p className="mt-1 font-semibold tabular-nums">
+                      {formatCurrency(cashShortfall > 0 ? cashShortfall : changeAmount)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="rounded-[24px] border border-border/70 bg-card/70 px-4 py-4 text-card-foreground shadow-inner dark:bg-muted/45">
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>Total tagihan</span>
-                <span>{cartLines.reduce((sum, line) => sum + line.quantity, 0)} pcs</span>
+                <span>{totalItems} pcs</span>
               </div>
               <p className="mt-3 font-heading text-4xl font-semibold tracking-tight">
                 {formatCurrency(cartTotal)}
               </p>
+              {showQrisPreview ? <QrisPaymentPreview items={cartLines} total={cartTotal} /> : null}
               <Button
                 type="button"
                 size="lg"
                 className="mt-4 h-13 w-full rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90"
+                disabled={!canCheckout}
                 onClick={() => void handleCheckout()}
               >
                 Selesaikan transaksi

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -105,7 +105,18 @@ export function InvestorForm() {
             />
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              size="lg"
+              variant="outline"
+              className="rounded-2xl"
+              disabled={isSubmitting}
+              onClick={() => router.push("/investor")}
+            >
+              <X className="size-4" />
+              Batal
+            </Button>
             <Button type="submit" size="lg" className="rounded-2xl" disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
               Simpan investor

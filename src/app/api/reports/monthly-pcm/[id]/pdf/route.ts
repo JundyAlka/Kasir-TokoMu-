@@ -120,6 +120,7 @@ export async function GET(_request: Request, context: RouteContext) {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="${filename}"`,
+        "Cache-Control": "private, no-store, max-age=0",
       },
     });
   } catch (error) {

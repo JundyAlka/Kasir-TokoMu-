@@ -8,6 +8,7 @@ export type ProductCategory =
 
 export interface Product {
   id: string;
+  sku?: string;
   name: string;
   category: ProductCategory;
   buyPrice: number;
@@ -34,7 +35,12 @@ export interface Transaction {
   id: string;
   paymentMethod: PaymentMethod;
   total: number;
+  paidAmount: number;
+  changeAmount: number;
   createdAt: string;
+  recordedByUserId?: string;
+  recordedByName?: string;
+  shiftSessionId?: string | null;
   items: TransactionItem[];
 }
 
@@ -43,10 +49,37 @@ export interface Debt {
   borrowerName: string;
   whatsapp: string;
   amount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  status: "aktif" | "lunas" | "lewat_tempo";
   createdAt: string;
   dueDate: string;
   isPaid: boolean;
   lastReminderAt?: string;
+}
+
+export interface DebtItem {
+  id: string;
+  debtId: string;
+  productId?: string | null;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface DebtPayment {
+  id: string;
+  debtId: string;
+  amount: number;
+  paidAt: string;
+  note: string;
+  recordedByUserId: string;
+}
+
+export interface DebtDetail extends Debt {
+  items: DebtItem[];
+  payments: DebtPayment[];
 }
 
 export interface Expense {
@@ -85,6 +118,7 @@ export interface AppState {
 }
 
 export interface ProductDraft {
+  sku?: string;
   name: string;
   category: ProductCategory;
   buyPrice: number;
@@ -97,6 +131,13 @@ export interface ProductDraft {
 export interface DebtDraft {
   borrowerName: string;
   whatsapp: string;
-  amount: number;
+  amount?: number;
   dueDate: string;
+  items?: Array<{
+    productId?: string | null;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal?: number;
+  }>;
 }

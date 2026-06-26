@@ -31,12 +31,22 @@ export async function PATCH(
       status,
       body.paidAt
     );
-    await logEvent(
-      { workspaceOwnerId, actorUserId: userId },
-      status === "dibayar" ? "PAYOUT_PAID" : "PAYOUT_APPROVED",
-      { type: "payout", id: payout.id },
-      { status, amount: payout.amount, investorId: payout.investorId, paidAt: payout.paidAt }
-    );
+    await logEvent({ workspaceOwnerId, actorUserId: userId }, {
+      eventType: status === "dibayar" ? "PAYOUT_PAID" : "PAYOUT_APPROVED",
+      entityType: "payout",
+      entityId: payout.id,
+      category: "finance",
+      after: {
+        status,
+        paidAt: payout.paidAt,
+      },
+      payload: {
+        status,
+        amount: payout.amount,
+        investorId: payout.investorId,
+        paidAt: payout.paidAt,
+      },
+    });
 
     return NextResponse.json({ payout });
   } catch (error) {

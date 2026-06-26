@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/server/app-service";
 import { calculatePayouts } from "@/lib/server/profit-sharing";
-import { getPeriodRange } from "@/lib/server/reporting";
 import { handleRouteError } from "@/lib/server/route-error";
 import { requireRole } from "@/lib/server/rbac";
 
@@ -12,16 +11,24 @@ function parseBodyPeriod(body: unknown) {
     throw new Error("Periode wajib diisi.");
   }
 
-  const payload = body as { periodYear?: unknown; periodMonth?: unknown };
-  return getPeriodRange(Number(payload.periodYear), Number(payload.periodMonth));
+  const payload = body as {
+    year?: unknown;
+    month?: unknown;
+    periodYear?: unknown;
+    periodMonth?: unknown;
+  };
+  return {
+    year: Number(payload.year ?? payload.periodYear),
+    month: Number(payload.month ?? payload.periodMonth),
+  };
 }
 
 export async function POST(request: NextRequest) {
   try {
     await requireRole(["pimpinan", "pengelola_keuangan"]);
     const { workspaceOwnerId } = await getRequestUser();
-    const range = parseBodyPeriod(await request.json());
-    const calculation = await calculatePayouts(workspaceOwnerId, range.start, range.end);
+    const period = parseBodyPeriod(await request.json());
+    const calculation = await calculatePayouts(workspaceOwnerId, period.year, period.month);
 
     return NextResponse.json({ calculation });
   } catch (error) {

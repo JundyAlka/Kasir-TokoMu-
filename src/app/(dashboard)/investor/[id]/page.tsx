@@ -20,6 +20,37 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { getRequestUser } from "@/lib/server/app-service";
 import { getInvestor, listInvestments } from "@/lib/server/investor-service";
 import { requireRole } from "@/lib/server/rbac";
+import type { AkadType } from "@/lib/server/profit-sharing";
+
+const akadLabels: Record<AkadType, string> = {
+  murabahah_bil_wakalah: "Murabahah",
+  mudharabah: "Mudharabah",
+  musyarakah: "Musyarakah",
+  barang_titip_jual: "Barang titip jual",
+  sales_titipan: "Sales titipan",
+  pinjaman_qardh: "Qardh",
+};
+
+function investmentRateLabel(investment: {
+  akadType: string;
+  monthlyReturnRatePct: number;
+  profitSharePct: number | null;
+  profitSharePerUnitPct: number | null;
+}) {
+  if (investment.akadType === "murabahah_bil_wakalah") {
+    return `${investment.monthlyReturnRatePct ?? 2.5}% / bulan`;
+  }
+
+  if (investment.akadType === "mudharabah" || investment.akadType === "musyarakah") {
+    return `${investment.profitSharePct ?? 0}% laba`;
+  }
+
+  if (investment.akadType === "pinjaman_qardh") {
+    return "Tanpa bagi hasil";
+  }
+
+  return `${investment.profitSharePerUnitPct ?? 0}% margin`;
+}
 
 export default async function InvestorDetailPage({
   params,
@@ -71,7 +102,7 @@ export default async function InvestorDetailPage({
             <div>
               <CardTitle className="font-heading text-3xl">{investor.name}</CardTitle>
               <CardDescription className="mt-2">
-                {investor.whatsapp || "WA belum diisi"} · {investor.address || "Alamat belum diisi"}
+                {investor.whatsapp || "WA belum diisi"} - {investor.address || "Alamat belum diisi"}
               </CardDescription>
             </div>
             <Badge variant={investor.isActive === 1 ? "default" : "secondary"}>
@@ -146,9 +177,9 @@ export default async function InvestorDetailPage({
               <Table className="min-w-[820px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Tipe</TableHead>
+                    <TableHead>Tipe akad</TableHead>
                     <TableHead>Nilai</TableHead>
-                    <TableHead>Bagi hasil</TableHead>
+                    <TableHead>Share/Rate</TableHead>
                     <TableHead>Produk</TableHead>
                     <TableHead>Mulai</TableHead>
                     <TableHead>Status</TableHead>
@@ -162,12 +193,12 @@ export default async function InvestorDetailPage({
                           {investment.type === "uang" ? (
                             <>
                               <WalletCards className="size-3" />
-                              Uang
+                              {akadLabels[investment.akadType as AkadType] ?? investment.akadType}
                             </>
                           ) : (
                             <>
                               <PackageOpen className="size-3" />
-                              Barang titip jual
+                              {akadLabels[investment.akadType as AkadType] ?? investment.akadType}
                             </>
                           )}
                         </Badge>
@@ -175,13 +206,9 @@ export default async function InvestorDetailPage({
                       <TableCell>
                         {investment.type === "uang"
                           ? formatCurrency(investment.amount ?? 0)
-                          : `${investment.unitCount ?? 0} unit · ${formatCurrency(investment.unitCost ?? 0)}/unit`}
+                          : `${investment.unitCount ?? 0} unit - ${formatCurrency(investment.unitCost ?? 0)}/unit`}
                       </TableCell>
-                      <TableCell>
-                        {investment.type === "uang"
-                          ? `${investment.profitSharePct ?? 0}%`
-                          : `${investment.profitSharePerUnitPct ?? 0}% per unit`}
-                      </TableCell>
+                      <TableCell>{investmentRateLabel(investment)}</TableCell>
                       <TableCell>{investment.productName ?? "-"}</TableCell>
                       <TableCell>{formatDate(investment.startDate)}</TableCell>
                       <TableCell>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Camera,
   CheckCircle2,
   FileImage,
   Loader2,
+  RefreshCw,
   ScanSearch,
   Sparkles,
   UploadCloud,
@@ -20,6 +21,7 @@ import type { Product } from "@/lib/types";
 
 const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/*";
 const SUPPORTED_IMAGE_EXTENSIONS = /\.(png|jpe?g|webp)$/i;
+type VideoFacingMode = "environment" | "user";
 
 export type ReceiptScanConfidence = "high" | "medium" | "low" | "none";
 
@@ -93,10 +95,26 @@ async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T
 }
 
 const SCAN_PHASES = [
-  { label: "Mengunggah gambar struk…", detail: "Mengkompresi dan mempersiapkan gambar untuk AI", icon: UploadCloud },
-  { label: "Membaca teks struk…", detail: "AI sedang mengenali tulisan dan angka pada struk", icon: ScanSearch },
-  { label: "Menganalisis item belanja…", detail: "Mencocokkan setiap baris item dengan format yang benar", icon: Sparkles },
-  { label: "Mencocokkan dengan produk toko…", detail: "Mencari kecocokan produk di inventaris Anda", icon: Zap },
+  {
+    label: "Mengunggah gambar struk...",
+    detail: "Mengkompresi dan mempersiapkan gambar untuk AI",
+    icon: UploadCloud,
+  },
+  {
+    label: "Membaca teks struk...",
+    detail: "AI sedang mengenali tulisan dan angka pada struk",
+    icon: ScanSearch,
+  },
+  {
+    label: "Menganalisis item belanja...",
+    detail: "Mencocokkan setiap baris item dengan format yang benar",
+    icon: Sparkles,
+  },
+  {
+    label: "Mencocokkan dengan produk toko...",
+    detail: "Mencari kecocokan produk di inventaris Anda",
+    icon: Zap,
+  },
 ] as const;
 
 function ScanProgressOverlay({ phase }: Readonly<{ phase: number }>) {
@@ -166,7 +184,7 @@ function ScanProgressOverlay({ phase }: Readonly<{ phase: number }>) {
       </div>
 
       <p className="text-center text-sm text-muted-foreground">
-        Proses analisis biasanya memerlukan 5–15 detik
+        Proses analisis biasanya memerlukan 5-15 detik
       </p>
     </div>
   );
@@ -179,10 +197,119 @@ export function ReceiptScanner({
 }>) {
   const uploadRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [imageDataUrl, setImageDataUrl] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [scanPhase, setScanPhase] = useState(0);
+  const [cameraMode, setCameraMode] = useState<VideoFacingMode>("environment");
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isCameraStarting, setIsCameraStarting] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
+  const stopCameraStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, []);
+
+  const closeCamera = useCallback(() => {
+    stopCameraStream();
+    setIsCameraOpen(false);
+    setIsCameraStarting(false);
+    setCameraError(null);
+  }, [stopCameraStream]);
+
+  const openNativeCameraFallback = useCallback((message?: string) => {
+    if (message) {
+      toast.error(message);
+    }
+    cameraRef.current?.click();
+  }, []);
+
+  const startCamera = useCallback(
+    async (facing: VideoFacingMode) => {
+      if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+        openNativeCameraFallback(
+          "Browser belum mendukung preview kamera langsung. Membuka kamera bawaan perangkat."
+        );
+        return;
+      }
+
+      setCameraMode(facing);
+      setCameraError(null);
+      setIsCameraOpen(true);
+      setIsCameraStarting(true);
+      stopCameraStream();
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: facing },
+            height: { ideal: 1280 },
+            width: { ideal: 960 },
+          },
+        });
+
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => undefined);
+        }
+      } catch (error) {
+        const message =
+          error instanceof DOMException && error.name === "NotAllowedError"
+            ? "Izin kamera ditolak. Izinkan akses kamera di browser, atau pilih foto dari galeri."
+            : "Kamera tidak bisa dibuka. Membuka kamera bawaan perangkat sebagai fallback.";
+        setCameraError(message);
+        setIsCameraOpen(false);
+        openNativeCameraFallback(message);
+      } finally {
+        setIsCameraStarting(false);
+      }
+    },
+    [openNativeCameraFallback, stopCameraStream]
+  );
+
+  const switchCamera = useCallback(() => {
+    const nextMode = cameraMode === "environment" ? "user" : "environment";
+    void startCamera(nextMode);
+  }, [cameraMode, startCamera]);
+
+  const captureCameraPhoto = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || video.readyState < 2) {
+      toast.error("Kamera belum siap. Tunggu preview muncul dulu.");
+      return;
+    }
+
+    const width = video.videoWidth || 960;
+    const height = video.videoHeight || 1280;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      toast.error("Gagal mengambil gambar dari kamera.");
+      return;
+    }
+
+    context.drawImage(video, 0, 0, width, height);
+    setImageDataUrl(canvas.toDataURL("image/jpeg", 0.86));
+    closeCamera();
+    toast.success("Foto struk berhasil diambil dari kamera.");
+  }, [closeCamera]);
+
+  useEffect(() => {
+    return () => {
+      stopCameraStream();
+    };
+  }, [stopCameraStream]);
 
   useEffect(() => {
     if (!isAnalyzing) {
@@ -190,7 +317,6 @@ export function ReceiptScanner({
       return;
     }
 
-    // Simulate phase progression while waiting for API
     const timers = [
       setTimeout(() => setScanPhase(1), 1200),
       setTimeout(() => setScanPhase(2), 3500),
@@ -210,6 +336,7 @@ export function ReceiptScanner({
     try {
       const nextImage = await downsizeImage(file);
       setImageDataUrl(nextImage);
+      closeCamera();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal membaca gambar.");
     }
@@ -246,7 +373,7 @@ export function ReceiptScanner({
       <CardHeader>
         <CardTitle className="font-heading text-2xl">Scan struk restok</CardTitle>
         <CardDescription>
-          Upload foto struk atau ambil gambar dari kamera belakang, lalu analisis dengan AI.
+          Upload foto struk atau buka kamera depan/belakang, lalu analisis dengan AI.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -265,7 +392,7 @@ export function ReceiptScanner({
           ref={cameraRef}
           type="file"
           accept={IMAGE_ACCEPT}
-          capture="environment"
+          capture={cameraMode}
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -277,6 +404,51 @@ export function ReceiptScanner({
         {isAnalyzing ? (
           <div className="rounded-[28px] border border-primary/20 bg-card/55 p-6">
             <ScanProgressOverlay phase={scanPhase} />
+          </div>
+        ) : isCameraOpen ? (
+          <div className="space-y-4 rounded-[28px] border border-primary/20 bg-card/60 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium">
+                  Kamera {cameraMode === "environment" ? "belakang" : "depan"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Posisikan struk di tengah frame, pastikan tulisan cukup terang.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-2xl"
+                onClick={switchCamera}
+                disabled={isCameraStarting}
+              >
+                <RefreshCw className="size-4" />
+                {cameraMode === "environment" ? "Pakai Kamera Depan" : "Pakai Kamera Belakang"}
+              </Button>
+            </div>
+
+            <div className="relative overflow-hidden rounded-[24px] border border-border bg-black">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                className="h-[360px] w-full bg-black object-contain"
+              />
+              {isCameraStarting ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 text-white">
+                  <Loader2 className="size-7 animate-spin" />
+                  <p className="text-sm">Membuka kamera...</p>
+                </div>
+              ) : null}
+            </div>
+
+            {cameraError ? (
+              <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-muted-foreground">
+                {cameraError}
+              </div>
+            ) : null}
           </div>
         ) : (
           <button
@@ -323,25 +495,51 @@ export function ReceiptScanner({
 
         {!isAnalyzing && (
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 rounded-2xl"
-              onClick={() => uploadRef.current?.click()}
-            >
-              <FileImage className="size-4" />
-              Upload Foto
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 rounded-2xl"
-              onClick={() => cameraRef.current?.click()}
-            >
-              <Camera className="size-4" />
-              Ambil Foto Kamera
-            </Button>
-            {imageDataUrl ? (
+            {!isCameraOpen ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 rounded-2xl"
+                  onClick={() => uploadRef.current?.click()}
+                >
+                  <FileImage className="size-4" />
+                  Upload Foto
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 rounded-2xl"
+                  onClick={() => void startCamera(cameraMode)}
+                >
+                  <Camera className="size-4" />
+                  Ambil Foto Kamera
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  className="h-11 rounded-2xl"
+                  onClick={captureCameraPhoto}
+                  disabled={isCameraStarting}
+                >
+                  <Camera className="size-4" />
+                  Ambil Foto
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-11 rounded-2xl"
+                  onClick={closeCamera}
+                >
+                  <X className="size-4" />
+                  Tutup Kamera
+                </Button>
+              </>
+            )}
+
+            {imageDataUrl && !isCameraOpen ? (
               <Button
                 type="button"
                 variant="ghost"
@@ -355,7 +553,7 @@ export function ReceiptScanner({
             <Button
               type="button"
               className="h-11 rounded-2xl sm:ml-auto"
-              disabled={!imageDataUrl || isAnalyzing}
+              disabled={!imageDataUrl || isAnalyzing || isCameraOpen}
               onClick={() => void handleAnalyze()}
             >
               <ScanSearch className="size-4" />

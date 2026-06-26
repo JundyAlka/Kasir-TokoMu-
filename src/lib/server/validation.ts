@@ -25,6 +25,7 @@ const isoDateLike = (field: string) =>
 
 export const ProductCreateSchema = z
   .object({
+    sku: z.string().trim().max(32, "SKU maksimal 32 karakter.").default(""),
     name: requiredText("Nama barang"),
     category: z.enum(productCategories),
     buyPrice: nonNegativeInteger("Harga beli"),
@@ -46,6 +47,7 @@ export const RestockBodySchema = z
 export const TransactionCheckoutSchema = z
   .object({
     paymentMethod: z.enum(paymentMethods),
+    paidAmount: nonNegativeInteger("Uang dibayarkan").optional(),
     items: z
       .array(
         z
@@ -63,16 +65,52 @@ export const DebtCreateSchema = z
   .object({
     borrowerName: requiredText("Nama peminjam"),
     whatsapp: requiredText("Nomor WhatsApp").min(10, "Nomor WhatsApp minimal 10 karakter."),
-    amount: positiveInteger("Nominal hutang"),
+    amount: positiveInteger("Nominal hutang").optional(),
     dueDate: isoDateLike("Tanggal jatuh tempo"),
+    items: z
+      .array(
+        z
+          .object({
+            productId: z.string().trim().min(1).nullable().optional(),
+            name: requiredText("Nama barang"),
+            quantity: positiveInteger("Jumlah barang"),
+            unitPrice: positiveInteger("Harga barang"),
+            lineTotal: positiveInteger("Subtotal").optional(),
+          })
+          .strict()
+      )
+      .optional()
+      .default([]),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.items.length === 0 && (!value.amount || value.amount <= 0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["amount"],
+        message: "Nominal hutang harus lebih dari 0.",
+      });
+    }
+  });
 
 export const DebtUpdateSchema = z
   .object({
-    isPaid: z.literal(true, {
-      error: "Hanya perubahan status lunas yang didukung.",
-    }),
+    borrowerName: requiredText("Nama peminjam").optional(),
+    whatsapp: requiredText("Nomor WhatsApp").min(10, "Nomor WhatsApp minimal 10 karakter.").optional(),
+    dueDate: isoDateLike("Tanggal jatuh tempo").optional(),
+    status: z.enum(["aktif", "lunas", "lewat_tempo"]).optional(),
+    isPaid: z.literal(true).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "Tidak ada perubahan yang dikirim.",
+  });
+
+export const DebtPaymentCreateSchema = z
+  .object({
+    amount: positiveInteger("Nominal pembayaran"),
+    paidAt: isoDateLike("Tanggal pembayaran").optional(),
+    note: z.string().trim().default(""),
   })
   .strict();
 
@@ -104,6 +142,7 @@ export type RestockBodyInput = z.infer<typeof RestockBodySchema>;
 export type TransactionCheckoutInput = z.infer<typeof TransactionCheckoutSchema>;
 export type DebtCreateInput = z.infer<typeof DebtCreateSchema>;
 export type DebtUpdateInput = z.infer<typeof DebtUpdateSchema>;
+export type DebtPaymentCreateInput = z.infer<typeof DebtPaymentCreateSchema>;
 export type SettingsUpdateInput = z.infer<typeof SettingsUpdateSchema>;
 
 export function formatValidationIssues(error: ZodError) {

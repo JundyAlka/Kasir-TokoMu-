@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { BadgeCheck, Bell, MapPin, RotateCcw, Store, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 import { useAppState } from "@/components/providers/app-state-provider";
+import { ShiftSettings } from "@/components/tokomu/shift-settings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/format";
 import { PaymentMethod, Settings } from "@/lib/types";
@@ -83,7 +85,18 @@ export function PengaturanView() {
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
+    <Tabs defaultValue="profil" className="space-y-4">
+      <TabsList className="h-11 rounded-full p-1">
+        <TabsTrigger value="profil" className="rounded-full px-4">
+          Profil Warung
+        </TabsTrigger>
+        <TabsTrigger value="shift" className="rounded-full px-4">
+          Shift Kasir
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="profil">
+        <div className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
       <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -373,6 +386,12 @@ export function PengaturanView() {
           </CardContent>
         </Card>
       </div>
-    </div>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="shift">
+        <ShiftSettings />
+      </TabsContent>
+    </Tabs>
   );
 }

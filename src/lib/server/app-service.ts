@@ -4,28 +4,34 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, pool } from "@/db/client";
 import {
   debts,
+  debtItems,
+  debtPayments,
   expenses,
   investments,
   investors,
   monthlyReports,
   products,
   restockLogs,
+  shiftSessions,
+  shifts,
   storeProfiles,
   transactionItems,
   transactions,
   userRoles,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
-import { getUserRole, Role } from "@/lib/server/rbac";
+import { getUserRole, getUserRoleAssignment, Role } from "@/lib/server/rbac";
 import {
   DebtCreateSchema,
+  DebtPaymentCreateSchema,
   ProductCreateSchema,
   ProductUpdateSchema,
   RestockBodySchema,
   SettingsUpdateSchema,
   TransactionCheckoutSchema,
 } from "@/lib/server/validation";
-import { AppState, DebtDraft, PaymentMethod, ProductDraft, Settings, Transaction } from "@/lib/types";
+import { AppState, Debt, DebtDetail, DebtDraft, PaymentMethod, ProductDraft, Settings, Transaction } from "@/lib/types";
+import { getJakartaDayRange } from "@/lib/server/timezone";
 
 let initializationPromise: Promise<void> | null = null;
 const supportedPaymentMethods: PaymentMethod[] = ["Tunai", "QRIS", "Transfer"];
@@ -54,15 +60,52 @@ function parseDueDate(value: string) {
   return new Date(`${value}T00:00:00.000Z`).toISOString();
 }
 
+function effectiveDebtStatus(debt: Pick<typeof debts.$inferSelect, "amount" | "paidAmount" | "dueDate" | "isPaid" | "status">) {
+  if (debt.isPaid === 1 || debt.status === "lunas" || debt.paidAmount >= debt.amount) {
+    return "lunas" as const;
+  }
+
+  if (new Date(debt.dueDate).getTime() < new Date(getJakartaDayRange().start).getTime()) {
+    return "lewat_tempo" as const;
+  }
+
+  return "aktif" as const;
+}
+
+function mapDebt(debt: typeof debts.$inferSelect): Debt {
+  const paidAmount = Math.min(debt.amount, Math.max(0, debt.paidAmount ?? (debt.isPaid === 1 ? debt.amount : 0)));
+  const status = effectiveDebtStatus({ ...debt, paidAmount });
+
+  return {
+    id: debt.id,
+    borrowerName: debt.borrowerName,
+    whatsapp: debt.whatsapp,
+    amount: debt.amount,
+    paidAmount,
+    remainingAmount: Math.max(0, debt.amount - paidAmount),
+    status,
+    createdAt: debt.createdAt,
+    dueDate: debt.dueDate,
+    isPaid: status === "lunas",
+    lastReminderAt: debt.lastReminderAt ?? undefined,
+  };
+}
+
 async function ensureDatabaseReady() {
-  console.warn("schema must be migrated explicitly");
   await pool.query("select 1");
 }
 
 async function ensureWorkspace(userId: string, session?: SessionHint) {
-  const existingRole = await getUserRole(userId);
+  const existingRole = await getUserRoleAssignment(userId);
   if (existingRole) {
-    return existingRole;
+    if (existingRole.isActive !== 1) {
+      throw new Error("FORBIDDEN");
+    }
+
+    return {
+      role: existingRole.role,
+      workspaceOwnerId: existingRole.workspaceOwnerId,
+    };
   }
 
   const existing = await db
@@ -103,6 +146,7 @@ async function ensureWorkspace(userId: string, session?: SessionHint) {
         userId,
         role: role.role,
         workspaceOwnerId: role.workspaceOwnerId,
+        isActive: 1,
         createdAt: timestamp,
         updatedAt: timestamp,
       })
@@ -298,6 +342,7 @@ export async function getBootstrapState(userId: string): Promise<AppState> {
   return {
     products: productRows.map((product) => ({
       id: product.id,
+      sku: product.sku,
       name: product.name,
       category: product.category as AppState["products"][number]["category"],
       buyPrice: product.buyPrice,
@@ -312,19 +357,15 @@ export async function getBootstrapState(userId: string): Promise<AppState> {
       id: transaction.id,
       paymentMethod: transaction.paymentMethod as PaymentMethod,
       total: transaction.total,
+      paidAmount: transaction.paidAmount,
+      changeAmount: transaction.changeAmount,
       createdAt: transaction.createdAt,
+      recordedByUserId: transaction.recordedByUserId || transaction.userId,
+      recordedByName: transaction.recordedByName || "",
+      shiftSessionId: transaction.shiftSessionId,
       items: itemsByTransaction.get(transaction.id) ?? [],
     })),
-    debts: debtRows.map((debt) => ({
-      id: debt.id,
-      borrowerName: debt.borrowerName,
-      whatsapp: debt.whatsapp,
-      amount: debt.amount,
-      createdAt: debt.createdAt,
-      dueDate: debt.dueDate,
-      isPaid: debt.isPaid === 1,
-      lastReminderAt: debt.lastReminderAt ?? undefined,
-    })),
+    debts: debtRows.map(mapDebt),
     expenses: expenseRows.map((expense) => ({
       id: expense.id,
       title: expense.title,
@@ -344,6 +385,7 @@ export async function createProduct(userId: string, draft: ProductDraft) {
     .values({
       id: createId("prd"),
       userId,
+      sku: nextDraft.sku,
       name: nextDraft.name,
       category: nextDraft.category,
       buyPrice: nextDraft.buyPrice,
@@ -358,6 +400,7 @@ export async function createProduct(userId: string, draft: ProductDraft) {
 
   return {
     id: product.id,
+    sku: product.sku,
     name: product.name,
     category: product.category as AppState["products"][number]["category"],
     buyPrice: product.buyPrice,
@@ -374,6 +417,7 @@ export async function updateProduct(userId: string, productId: string, draft: Pr
     .update(products)
     .set({
       name: nextDraft.name,
+      sku: nextDraft.sku,
       category: nextDraft.category,
       buyPrice: nextDraft.buyPrice,
       sellPrice: nextDraft.sellPrice,
@@ -391,6 +435,7 @@ export async function updateProduct(userId: string, productId: string, draft: Pr
 
   return {
     id: updated.id,
+    sku: updated.sku,
     name: updated.name,
     category: updated.category as AppState["products"][number]["category"],
     buyPrice: updated.buyPrice,
@@ -413,6 +458,7 @@ export async function deleteProduct(userId: string, productId: string) {
 
   return {
     id: deleted.id,
+    sku: deleted.sku,
     name: deleted.name,
     category: deleted.category as AppState["products"][number]["category"],
     buyPrice: deleted.buyPrice,
@@ -446,6 +492,7 @@ export async function restockProduct(userId: string, productId: string, quantity
 
   return {
     id: updated.id,
+    sku: updated.sku,
     name: updated.name,
     category: updated.category as AppState["products"][number]["category"],
     buyPrice: updated.buyPrice,
@@ -460,10 +507,18 @@ export async function createTransaction(
   userId: string,
   payload: {
     paymentMethod: PaymentMethod;
+    paidAmount?: number;
     items: Array<{ productId: string; quantity: number }>;
+    recordedByUserId?: string;
+    recordedByName?: string;
+    shiftSessionId?: string | null;
   }
 ) {
-  const nextPayload = TransactionCheckoutSchema.parse(payload);
+  const nextPayload = TransactionCheckoutSchema.parse({
+    paymentMethod: payload.paymentMethod,
+    paidAmount: payload.paidAmount,
+    items: payload.items,
+  });
 
   if (nextPayload.items.length === 0) {
     throw new Error("Keranjang masih kosong.");
@@ -495,13 +550,25 @@ export async function createTransaction(
     (sum, item) => sum + item.product.sellPrice * item.quantity,
     0
   );
+  const paidAmount =
+    nextPayload.paymentMethod === "Tunai" ? nextPayload.paidAmount ?? total : total;
+  const changeAmount = nextPayload.paymentMethod === "Tunai" ? paidAmount - total : 0;
+
+  if (nextPayload.paymentMethod === "Tunai" && paidAmount < total) {
+    throw new Error("Uang dibayarkan kurang dari total tagihan.");
+  }
 
   await db.transaction(async (tx) => {
     await tx.insert(transactions).values({
       id: transactionId,
       userId,
       total,
+      paidAmount,
+      changeAmount,
       paymentMethod: nextPayload.paymentMethod,
+      recordedByUserId: payload.recordedByUserId ?? userId,
+      recordedByName: payload.recordedByName ?? "",
+      shiftSessionId: payload.shiftSessionId ?? null,
       createdAt,
     });
 
@@ -543,56 +610,248 @@ export async function createTransaction(
 
 export async function createDebt(userId: string, draft: DebtDraft) {
   const nextDraft = DebtCreateSchema.parse(draft);
+  const timestamp = nowIso();
+  const itemDrafts = nextDraft.items.map((item) => ({
+    ...item,
+    lineTotal: item.quantity * item.unitPrice,
+  }));
+  const amount =
+    itemDrafts.length > 0
+      ? itemDrafts.reduce((sum, item) => sum + item.lineTotal, 0)
+      : nextDraft.amount ?? 0;
+
+  const debtId = createId("debt");
+  let createdDebt: typeof debts.$inferSelect | null = null;
+
+  await db.transaction(async (tx) => {
+    const [debt] = await tx
+      .insert(debts)
+      .values({
+        id: debtId,
+        userId,
+        borrowerName: nextDraft.borrowerName,
+        whatsapp: nextDraft.whatsapp,
+        amount,
+        paidAmount: 0,
+        status: "aktif",
+        createdAt: timestamp,
+        dueDate: parseDueDate(nextDraft.dueDate),
+        isPaid: 0,
+        lastReminderAt: null,
+      })
+      .returning();
+
+    createdDebt = debt;
+
+    if (itemDrafts.length > 0) {
+      await tx.insert(debtItems).values(
+        itemDrafts.map((item) => ({
+          id: createId("ditm"),
+          debtId,
+          productId: item.productId ?? null,
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          lineTotal: item.lineTotal,
+        }))
+      );
+    }
+  });
+
+  if (!createdDebt) {
+    throw new Error("Kasbon gagal dibuat.");
+  }
+
+  return mapDebt(createdDebt);
+}
+
+export async function getDebtDetail(userId: string, debtId: string): Promise<DebtDetail> {
   const [debt] = await db
-    .insert(debts)
-    .values({
-      id: createId("debt"),
-      userId,
-      borrowerName: nextDraft.borrowerName,
-      whatsapp: nextDraft.whatsapp,
-      amount: nextDraft.amount,
-      createdAt: nowIso(),
-      dueDate: parseDueDate(nextDraft.dueDate),
-      isPaid: 0,
-      lastReminderAt: null,
-    })
-    .returning();
+    .select()
+    .from(debts)
+    .where(and(eq(debts.id, debtId), eq(debts.userId, userId)))
+    .limit(1);
+
+  if (!debt) {
+    throw new Error("Data hutang tidak ditemukan.");
+  }
+
+  const [items, payments] = await Promise.all([
+    db.select().from(debtItems).where(eq(debtItems.debtId, debtId)),
+    db.select().from(debtPayments).where(eq(debtPayments.debtId, debtId)).orderBy(desc(debtPayments.paidAt)),
+  ]);
 
   return {
-    id: debt.id,
-    borrowerName: debt.borrowerName,
-    whatsapp: debt.whatsapp,
-    amount: debt.amount,
-    createdAt: debt.createdAt,
-    dueDate: debt.dueDate,
-    isPaid: false,
-    lastReminderAt: undefined,
+    ...mapDebt(debt),
+    items: items.map((item) => ({
+      id: item.id,
+      debtId: item.debtId,
+      productId: item.productId,
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      lineTotal: item.lineTotal,
+    })),
+    payments: payments.map((payment) => ({
+      id: payment.id,
+      debtId: payment.debtId,
+      amount: payment.amount,
+      paidAt: payment.paidAt,
+      note: payment.note,
+      recordedByUserId: payment.recordedByUserId,
+    })),
   };
 }
 
-export async function markDebtPaid(userId: string, debtId: string) {
+export async function updateDebt(
+  userId: string,
+  debtId: string,
+  draft: {
+    borrowerName?: string;
+    whatsapp?: string;
+    dueDate?: string;
+    status?: "aktif" | "lunas" | "lewat_tempo";
+    isPaid?: true;
+  }
+) {
+  if (draft.isPaid || draft.status === "lunas") {
+    return markDebtPaid(userId, debtId);
+  }
+
+  const [existing] = await db
+    .select()
+    .from(debts)
+    .where(and(eq(debts.id, debtId), eq(debts.userId, userId)))
+    .limit(1);
+
+  if (!existing) {
+    throw new Error("Data hutang tidak ditemukan.");
+  }
+
   const [updated] = await db
     .update(debts)
     .set({
-      isPaid: 1,
+      borrowerName: draft.borrowerName ?? existing.borrowerName,
+      whatsapp: draft.whatsapp ?? existing.whatsapp,
+      dueDate: draft.dueDate ? parseDueDate(draft.dueDate) : existing.dueDate,
+      status: draft.status ?? effectiveDebtStatus(existing),
     })
     .where(and(eq(debts.id, debtId), eq(debts.userId, userId)))
     .returning();
 
-  if (!updated) {
-    throw new Error("Data hutang tidak ditemukan.");
+  return mapDebt(updated);
+}
+
+export async function recordDebtPayment(
+  userId: string,
+  debtId: string,
+  draft: { amount: number; paidAt?: string; note?: string },
+  recordedByUserId = userId
+) {
+  const nextDraft = DebtPaymentCreateSchema.parse({
+    ...draft,
+    note: draft.note ?? "",
+  });
+  let updatedDebt: typeof debts.$inferSelect | null = null;
+  let paymentResult: {
+    id: string;
+    debtId: string;
+    amount: number;
+    paidAt: string;
+    note: string;
+    recordedByUserId: string;
+  } | null = null;
+
+  await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(debts)
+      .where(and(eq(debts.id, debtId), eq(debts.userId, userId)))
+      .limit(1);
+
+    if (!existing) {
+      throw new Error("Data hutang tidak ditemukan.");
+    }
+
+    if (effectiveDebtStatus(existing) === "lunas") {
+      throw new Error("Kasbon sudah lunas.");
+    }
+
+    const remaining = Math.max(0, existing.amount - existing.paidAmount);
+    const paymentAmount = Math.min(nextDraft.amount, remaining);
+    const nextPaidAmount = Math.min(existing.amount, existing.paidAmount + paymentAmount);
+    const isFullyPaid = nextPaidAmount >= existing.amount;
+
+    const [payment] = await tx
+      .insert(debtPayments)
+      .values({
+        id: createId("dpay"),
+        debtId,
+        amount: paymentAmount,
+        paidAt: nextDraft.paidAt ? parseDueDate(nextDraft.paidAt) : nowIso(),
+        note: nextDraft.note,
+        recordedByUserId,
+      })
+      .returning();
+
+    const [updated] = await tx
+      .update(debts)
+      .set({
+        paidAmount: nextPaidAmount,
+        status: isFullyPaid ? "lunas" : effectiveDebtStatus({ ...existing, paidAmount: nextPaidAmount }),
+        isPaid: isFullyPaid ? 1 : 0,
+      })
+      .where(and(eq(debts.id, debtId), eq(debts.userId, userId)))
+      .returning();
+
+    paymentResult = {
+      id: payment.id,
+      debtId: payment.debtId,
+      amount: payment.amount,
+      paidAt: payment.paidAt,
+      note: payment.note,
+      recordedByUserId: payment.recordedByUserId,
+    };
+    updatedDebt = updated;
+  });
+
+  if (!updatedDebt || !paymentResult) {
+    throw new Error("Pembayaran gagal dicatat.");
   }
 
   return {
-    id: updated.id,
-    borrowerName: updated.borrowerName,
-    whatsapp: updated.whatsapp,
-    amount: updated.amount,
-    createdAt: updated.createdAt,
-    dueDate: updated.dueDate,
-    isPaid: true,
-    lastReminderAt: updated.lastReminderAt ?? undefined,
+    debt: mapDebt(updatedDebt),
+    payment: paymentResult,
   };
+}
+
+export async function markDebtPaid(userId: string, debtId: string, recordedByUserId = userId) {
+  const [existing] = await db
+    .select()
+    .from(debts)
+    .where(and(eq(debts.id, debtId), eq(debts.userId, userId)))
+    .limit(1);
+
+  if (!existing) {
+    throw new Error("Data hutang tidak ditemukan.");
+  }
+
+  if (effectiveDebtStatus(existing) === "lunas") {
+    return mapDebt(existing);
+  }
+
+  const remaining = Math.max(0, existing.amount - existing.paidAmount);
+  const result = await recordDebtPayment(
+    userId,
+    debtId,
+    {
+      amount: remaining,
+      note: "Ditandai lunas",
+    },
+    recordedByUserId
+  );
+
+  return result.debt;
 }
 
 export async function remindDebt(userId: string, debtId: string) {
@@ -608,16 +867,7 @@ export async function remindDebt(userId: string, debtId: string) {
     throw new Error("Data hutang tidak ditemukan.");
   }
 
-  return {
-    id: updated.id,
-    borrowerName: updated.borrowerName,
-    whatsapp: updated.whatsapp,
-    amount: updated.amount,
-    createdAt: updated.createdAt,
-    dueDate: updated.dueDate,
-    isPaid: updated.isPaid === 1,
-    lastReminderAt: updated.lastReminderAt ?? undefined,
-  };
+  return mapDebt(updated);
 }
 
 export async function createExpense(
@@ -706,7 +956,21 @@ export async function resetWorkspace(userId: string) {
       .where(inArray(transactionItems.transactionId, transactionIds));
   }
 
+  const debtIds = (
+    await db
+      .select({ id: debts.id })
+      .from(debts)
+      .where(eq(debts.userId, userId))
+  ).map((debt) => debt.id);
+
+  if (debtIds.length > 0) {
+    await db.delete(debtPayments).where(inArray(debtPayments.debtId, debtIds));
+    await db.delete(debtItems).where(inArray(debtItems.debtId, debtIds));
+  }
+
   await db.delete(transactions).where(eq(transactions.userId, userId));
+  await db.delete(shiftSessions).where(eq(shiftSessions.workspaceOwnerId, userId));
+  await db.delete(shifts).where(eq(shifts.workspaceOwnerId, userId));
   await db.delete(debts).where(eq(debts.userId, userId));
   await db.delete(expenses).where(eq(expenses.userId, userId));
   await db.delete(restockLogs).where(eq(restockLogs.workspaceOwnerId, userId));

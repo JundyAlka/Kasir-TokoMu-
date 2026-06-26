@@ -19,8 +19,19 @@ function sqlFromMigration(fileName: string) {
 }
 
 function applySchema(mem: TestDb) {
-  for (const statement of sqlFromMigration("0005_explicit_schema.sql")) {
-    mem.public.none(statement);
+  for (const fileName of [
+    "0005_explicit_schema.sql",
+    "0007_audit_log_enhancements.sql",
+    "0006_invitations.sql",
+    "0007_akad_fields.sql",
+    "0008_debt_items_payments.sql",
+    "0009_product_sku.sql",
+    "0009_shifts.sql",
+    "0010_transaction_cash_change.sql",
+  ]) {
+    for (const statement of sqlFromMigration(fileName)) {
+      mem.public.none(statement);
+    }
   }
 }
 
@@ -40,10 +51,10 @@ async function seedBase(pool: InstanceType<ReturnType<TestDb["adapters"]["create
   );
 
   await pool.query(
-    `insert into user_roles (user_id, role, workspace_owner_id, created_at, updated_at)
+    `insert into user_roles (user_id, role, workspace_owner_id, is_active, created_at, updated_at)
      values
-       ($1, 'pimpinan', $1, $3, $3),
-       ($2, 'kasir', $1, $3, $3)`,
+       ($1, 'pimpinan', $1, 1, $3, $3),
+       ($2, 'kasir', $1, 1, $3, $3)`,
     [WORKSPACE_ID, CASHIER_ID, timestamp]
   );
 
@@ -112,6 +123,34 @@ export async function setupTestDb(options: { role?: Role } = {}) {
             email: options.role === "kasir" ? "kasir@tokomu.test" : "pimpinan@tokomu.test",
           },
         })),
+        signUpEmail: vi.fn(
+          async ({
+            body,
+          }: {
+            body: {
+              email: string;
+              name: string;
+              password: string;
+            };
+          }) => {
+            const userId = `usr_${body.email.split("@")[0]?.replace(/[^a-z0-9]+/gi, "_")}`;
+            const timestamp = nowIso();
+
+            await pool.query(
+              `insert into "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+               values ($1, $2, $3, false, $4, $4)`,
+              [userId, body.name, body.email, timestamp]
+            );
+
+            return {
+              user: {
+                id: userId,
+                name: body.name,
+                email: body.email,
+              },
+            };
+          }
+        ),
       },
     },
   }));

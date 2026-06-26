@@ -621,7 +621,7 @@ export function AIAssistantPanel({
     <aside
       className={cn(
         "flex h-full shrink-0 flex-col overflow-hidden rounded-[28px] border border-white/60 bg-card/85 shadow-[0_38px_90px_-50px_rgba(68,39,20,0.7)] backdrop-blur-xl transition-[width] duration-200 ease-out",
-        open ? "" : "w-[64px]"
+        open ? "" : "w-[52px]"
       )}
       style={open ? { width } : undefined}
       aria-label="Asisten AI WarungOS"
@@ -630,14 +630,14 @@ export function AIAssistantPanel({
         <button
           type="button"
           onClick={() => onOpenChange(true)}
-          className="group/rail flex h-full w-full flex-col items-center justify-center gap-3 px-2 py-4 text-foreground/80 transition-colors hover:bg-primary/5"
+          className="group/rail flex h-full w-full flex-col items-center justify-center gap-3 px-1.5 py-4 text-foreground/80 transition-colors hover:bg-primary/5"
           aria-label="Buka asisten AI"
         >
-          <span className="flex size-9 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[0_18px_38px_-22px_rgba(186,92,35,0.85)] transition-transform group-hover/rail:scale-105">
+          <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_18px_38px_-22px_rgba(186,92,35,0.85)] transition-transform group-hover/rail:scale-105">
             <Sparkles className="size-4" />
           </span>
           <span
-            className="text-[11px] font-medium tracking-wide text-foreground/70"
+            className="text-[10px] font-medium tracking-wide text-foreground/70"
             style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
           >
             Asisten AI

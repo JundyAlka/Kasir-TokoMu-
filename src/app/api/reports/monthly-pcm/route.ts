@@ -245,16 +245,17 @@ export async function PATCH(request: NextRequest) {
       throw new Error("ID laporan wajib diisi.");
     }
 
-    if (body.status !== "final") {
+    if (body.status !== "final" && body.status !== "draft") {
       throw new Error("Status laporan tidak valid.");
     }
 
     const timestamp = nowIso();
+    const isFinalizing = body.status === "final";
     const [report] = await db
       .update(monthlyReports)
       .set({
-        status: "final",
-        finalizedAt: timestamp,
+        status: body.status,
+        finalizedAt: isFinalizing ? timestamp : null,
         updatedAt: timestamp,
       })
       .where(
@@ -271,9 +272,14 @@ export async function PATCH(request: NextRequest) {
 
     await logEvent(
       { workspaceOwnerId, actorUserId: userId },
-      "REPORT_FINALIZED",
+      isFinalizing ? "REPORT_FINALIZED" : "REPORT_REOPENED",
       { type: "monthly_report", id: report.id },
-      { periodYear: report.periodYear, periodMonth: report.periodMonth, finalizedAt: report.finalizedAt }
+      {
+        periodYear: report.periodYear,
+        periodMonth: report.periodMonth,
+        status: report.status,
+        finalizedAt: report.finalizedAt,
+      }
     );
 
     return NextResponse.json({ report });

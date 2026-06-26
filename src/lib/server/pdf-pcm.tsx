@@ -153,7 +153,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9fafb",
   },
   signatures: {
-    marginTop: 22,
+    marginTop: "auto",
+    paddingTop: 22,
     flexDirection: "row",
     justifyContent: "space-between",
   },
@@ -367,7 +368,7 @@ export function PcmMonthlyReportDocument({
           <Text style={styles.note}>{data.note || "Tidak ada catatan tambahan."}</Text>
         </View>
 
-        <View style={styles.signatures}>
+        <View style={styles.signatures} wrap={false}>
           <View style={styles.signatureBox}>
             <Text>{city}, {formatDate(generatedAt)}</Text>
             <Text>Pimpinan TokoMu</Text>
