@@ -495,6 +495,36 @@ export async function deleteInvestor(workspaceOwnerId: string, id: string) {
   return investor;
 }
 
+export async function purgeInactiveInvestor(workspaceOwnerId: string, id: string) {
+  const existing = await findInvestor(workspaceOwnerId, id);
+  if (!existing) {
+    throw new Error("Investor tidak ditemukan.");
+  }
+
+  if (existing.isActive === 1) {
+    throw new Error("Investor aktif harus dinonaktifkan sebelum dihapus permanen.");
+  }
+
+  await db
+    .delete(investorPayouts)
+    .where(and(eq(investorPayouts.workspaceOwnerId, workspaceOwnerId), eq(investorPayouts.investorId, id)));
+
+  await db
+    .delete(investments)
+    .where(and(eq(investments.workspaceOwnerId, workspaceOwnerId), eq(investments.investorId, id)));
+
+  const [investor] = await db
+    .delete(investors)
+    .where(and(eq(investors.workspaceOwnerId, workspaceOwnerId), eq(investors.id, id), eq(investors.isActive, 0)))
+    .returning();
+
+  if (!investor) {
+    throw new Error("Investor nonaktif tidak ditemukan.");
+  }
+
+  return investor;
+}
+
 export async function listInvestments(workspaceOwnerId: string, investorId?: string) {
   const filters = [eq(investments.workspaceOwnerId, workspaceOwnerId)];
   if (investorId) {

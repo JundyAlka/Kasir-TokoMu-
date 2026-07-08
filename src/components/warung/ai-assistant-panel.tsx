@@ -134,10 +134,75 @@ function MessageBubble({
   );
 }
 
+function parseMarkdown(text: string): React.ReactNode {
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+  let inList = false;
+  let listItems: React.ReactNode[] = [];
+
+  const parseInline = (str: string): React.ReactNode[] => {
+    const parts = str.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return <strong key={index} className="font-bold text-primary">{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
+  lines.forEach((line, lineIndex) => {
+    const trimmed = line.trim();
+    const isBullet = trimmed.startsWith("- ") || trimmed.startsWith("* ");
+
+    if (isBullet) {
+      if (!inList) {
+        inList = true;
+        listItems = [];
+      }
+      const itemContent = line.replace(/^\s*[-*]\s*/, "");
+      listItems.push(
+        <li key={`li-${lineIndex}`} className="ml-4 list-disc pl-1 py-0.5">
+          {parseInline(itemContent)}
+        </li>
+      );
+    } else {
+      if (inList) {
+        elements.push(
+          <ul key={`ul-${lineIndex}`} className="my-1.5 list-inside list-disc">
+            {listItems}
+          </ul>
+        );
+        inList = false;
+        listItems = [];
+      }
+      
+      if (trimmed === "") {
+        elements.push(<div key={`br-${lineIndex}`} className="h-2" />);
+      } else {
+        elements.push(
+          <p key={`p-${lineIndex}`} className="leading-relaxed">
+            {parseInline(line)}
+          </p>
+        );
+      }
+    }
+  });
+
+  if (inList) {
+    elements.push(
+      <ul key="ul-final" className="my-1.5 list-inside list-disc">
+        {listItems}
+      </ul>
+    );
+  }
+
+  return <div className="space-y-1">{elements}</div>;
+}
+
 function AssistantTextBubble({ text }: { text: string }) {
   return (
-    <div className="rounded-3xl rounded-bl-md bg-card/80 px-4 py-2.5 text-sm whitespace-pre-wrap text-foreground ring-1 ring-foreground/10 backdrop-blur">
-      {text}
+    <div className="rounded-3xl rounded-bl-md bg-card/80 px-4 py-2.5 text-sm text-foreground ring-1 ring-foreground/10 backdrop-blur">
+      {parseMarkdown(text)}
     </div>
   );
 }

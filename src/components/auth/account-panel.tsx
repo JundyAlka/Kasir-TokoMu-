@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { toast } from "sonner";
-import { signOut, useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { getInitials } from "@/lib/format";
 
@@ -14,16 +14,23 @@ export function AccountPanel() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
   async function handleSignOut() {
     try {
-      await signOut();
+      const response = await fetch("/api/auth/sign-out", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+
+      if (!response.ok) {
+        throw new Error("Gagal keluar dari akun.");
+      }
+
       toast.success("Kamu sudah keluar dari akun.");
+      router.replace("/auth");
       router.refresh();
-      router.push("/auth");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal keluar dari akun.");
     }

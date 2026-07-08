@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type PointerEvent, useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   Download,
@@ -39,7 +39,8 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCompactCurrency, formatCurrency, formatDate } from "@/lib/format";
-import { buildSeries, estimateProductVelocity } from "@/lib/reporting";
+import { estimateProductVelocity } from "@/lib/reporting";
+import { cn } from "@/lib/utils";
 
 function currentMonthValue() {
   const now = new Date();
@@ -59,6 +60,21 @@ const emptySummary: ProfitLossSummary = {
 };
 
 type ReportPreviewLayout = "cards" | "table";
+type TrendRange = "mingguan" | "bulanan";
+type TrendPoint = {
+  key: string;
+  label: string;
+  revenue: number;
+  tickLabel: string;
+  transactions: number;
+};
+type TrendWeekOption = {
+  endDay: number;
+  label: string;
+  rangeLabel: string;
+  startDay: number;
+  value: number;
+};
 
 const monthOptions = [
   { value: "01", label: "Januari" },
@@ -75,6 +91,427 @@ const monthOptions = [
   { value: "12", label: "Desember" },
 ];
 
+const trendRangeOptions: Array<{ value: TrendRange; label: string }> = [
+  { value: "mingguan", label: "1 Minggu" },
+  { value: "bulanan", label: "1 Bulan" },
+];
+
+const jakartaDateFormatter = new Intl.DateTimeFormat("en-US", {
+  day: "2-digit",
+  month: "2-digit",
+  timeZone: "Asia/Jakarta",
+  year: "numeric",
+});
+
+const trendDayFormatter = new Intl.DateTimeFormat("id-ID", {
+  day: "numeric",
+  month: "short",
+  timeZone: "Asia/Jakarta",
+});
+
+const trendWeekdayFormatter = new Intl.DateTimeFormat("id-ID", {
+  timeZone: "Asia/Jakarta",
+  weekday: "short",
+});
+
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function formatDateKey(year: number, month: number, day: number) {
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+
+function dateFromKey(key: string) {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12));
+}
+
+function getJakartaDateKey(value: string | Date) {
+  const parts = jakartaDateFormatter.formatToParts(new Date(value));
+  const year = Number(parts.find((part) => part.type === "year")?.value ?? 0);
+  const month = Number(parts.find((part) => part.type === "month")?.value ?? 0);
+  const day = Number(parts.find((part) => part.type === "day")?.value ?? 0);
+  return formatDateKey(year, month, day);
+}
+
+function getDaysInMonth(year: number, month: number) {
+  return new Date(Date.UTC(year, month, 0, 12)).getUTCDate();
+}
+
+function getTrendWeekOptions(period: string): TrendWeekOption[] {
+  const [selectedYear, selectedMonth] = period.split("-").map(Number);
+  const daysInMonth = getDaysInMonth(selectedYear, selectedMonth);
+  const weekCount = Math.ceil(daysInMonth / 7);
+
+  return Array.from({ length: weekCount }, (_, index) => {
+    const startDay = index * 7 + 1;
+    const endDay = Math.min(startDay + 6, daysInMonth);
+    const startDate = dateFromKey(formatDateKey(selectedYear, selectedMonth, startDay));
+    const endDate = dateFromKey(formatDateKey(selectedYear, selectedMonth, endDay));
+    const rangeLabel =
+      startDay === endDay
+        ? trendDayFormatter.format(startDate)
+        : `${trendDayFormatter.format(startDate)} - ${trendDayFormatter.format(endDate)}`;
+
+    return {
+      endDay,
+      label: `Minggu ${index + 1}`,
+      rangeLabel,
+      startDay,
+      value: index + 1,
+    };
+  });
+}
+
+function getDefaultTrendWeek(period: string) {
+  const [selectedYear, selectedMonth] = period.split("-").map(Number);
+  const todayKey = getJakartaDateKey(new Date());
+  const [todayYear, todayMonth, todayDay] = todayKey.split("-").map(Number);
+
+  if (todayYear === selectedYear && todayMonth === selectedMonth) {
+    return Math.ceil(todayDay / 7);
+  }
+
+  return 1;
+}
+
+function getTrendKeys(period: string, range: TrendRange, weekNumber: number) {
+  const [selectedYear, selectedMonth] = period.split("-").map(Number);
+  const daysInMonth = getDaysInMonth(selectedYear, selectedMonth);
+
+  if (range === "bulanan") {
+    return Array.from({ length: daysInMonth }, (_, index) =>
+      formatDateKey(selectedYear, selectedMonth, index + 1)
+    );
+  }
+
+  const week = getTrendWeekOptions(period).find((option) => option.value === weekNumber) ??
+    getTrendWeekOptions(period)[0];
+  const dayCount = week ? week.endDay - week.startDay + 1 : 7;
+
+  return Array.from({ length: dayCount }, (_, index) =>
+    formatDateKey(selectedYear, selectedMonth, (week?.startDay ?? 1) + index)
+  );
+}
+
+function buildTrendSeries(
+  period: string,
+  range: TrendRange,
+  weekNumber: number,
+  transactions: Array<{ createdAt: string; total: number }>
+) {
+  const keys = getTrendKeys(period, range, weekNumber);
+  const values = new Map(keys.map((key) => [key, { revenue: 0, transactions: 0 }]));
+
+  for (const transaction of transactions) {
+    const key = getJakartaDateKey(transaction.createdAt);
+    const current = values.get(key);
+    if (!current) {
+      continue;
+    }
+
+    current.revenue += transaction.total;
+    current.transactions += 1;
+  }
+
+  return keys.map((key) => {
+    const date = dateFromKey(key);
+    const value = values.get(key) ?? { revenue: 0, transactions: 0 };
+    return {
+      key,
+      label: trendWeekdayFormatter.format(date),
+      revenue: value.revenue,
+      tickLabel: trendDayFormatter.format(date),
+      transactions: value.transactions,
+    };
+  });
+}
+
+function filterTransactionsByMonth<T extends { createdAt: string }>(period: string, transactions: T[]) {
+  return transactions.filter((transaction) => getJakartaDateKey(transaction.createdAt).startsWith(period));
+}
+
+function formatTrendPeriodLabel(series: TrendPoint[]) {
+  const first = series.at(0);
+  const last = series.at(-1);
+  if (!first || !last) {
+    return "-";
+  }
+  return first.key === last.key ? first.tickLabel : `${first.tickLabel} - ${last.tickLabel}`;
+}
+
+function buildLinePath(points: Array<{ x: number; y: number }>) {
+  if (points.length === 0) {
+    return "";
+  }
+
+  if (points.length === 1) {
+    return `M ${points[0].x} ${points[0].y}`;
+  }
+
+  const [firstPoint, ...remainingPoints] = points;
+  const commands = [`M ${firstPoint.x} ${firstPoint.y}`];
+
+  remainingPoints.forEach((point, index) => {
+    const previousPoint = points[index];
+    const beforePreviousPoint = points[index - 1] ?? previousPoint;
+    const nextPoint = points[index + 2] ?? point;
+    const controlPointA = {
+      x: previousPoint.x + (point.x - beforePreviousPoint.x) / 6,
+      y: previousPoint.y + (point.y - beforePreviousPoint.y) / 6,
+    };
+    const controlPointB = {
+      x: point.x - (nextPoint.x - previousPoint.x) / 6,
+      y: point.y - (nextPoint.y - previousPoint.y) / 6,
+    };
+
+    commands.push(
+      `C ${controlPointA.x} ${controlPointA.y}, ${controlPointB.x} ${controlPointB.y}, ${point.x} ${point.y}`
+    );
+  });
+
+  return commands.join(" ");
+}
+
+function TrendRevenueChart({
+  periodLabel,
+  scopeLabel,
+  series,
+}: Readonly<{
+  periodLabel: string;
+  scopeLabel: string;
+  series: TrendPoint[];
+}>) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const maxRevenue = Math.max(...series.map((item) => item.revenue), 1);
+  const chartPoints = series.map((item, index) => {
+    const x = series.length === 1 ? 50 : 6 + (index / (series.length - 1)) * 88;
+    const y = 86 - (item.revenue / maxRevenue) * 68;
+    return { ...item, x, y };
+  });
+  const linePath = buildLinePath(chartPoints);
+  const areaPath =
+    chartPoints.length > 0
+      ? `${linePath} L ${chartPoints.at(-1)?.x ?? 94} 92 L ${chartPoints[0].x} 92 Z`
+      : "";
+  const peakRevenue = Math.max(...chartPoints.map((point) => point.revenue), 0);
+  const peakIndex = Math.max(0, chartPoints.findIndex((point) => point.revenue === peakRevenue));
+  const displayPoint = chartPoints[activeIndex ?? peakIndex] ?? chartPoints[0];
+  const tooltipLeft = displayPoint ? Math.min(84, Math.max(16, displayPoint.x)) : 50;
+  const tooltipTop = displayPoint ? (displayPoint.y > 34 ? displayPoint.y - 13 : displayPoint.y + 15) : 20;
+  const tickIndexes = new Set(
+    series
+      .map((_, index) => index)
+      .filter((index) => series.length <= 10 || index === 0 || index === series.length - 1 || index % 5 === 0)
+  );
+  const visibleTicks = series.filter((_, index) => tickIndexes.has(index));
+
+  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (chartPoints.length === 0) {
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pointerX = ((event.clientX - rect.left) / rect.width) * 100;
+    const nearestIndex = chartPoints.reduce((nearest, point, index) => {
+      const currentDistance = Math.abs(point.x - pointerX);
+      const nearestDistance = Math.abs(chartPoints[nearest].x - pointerX);
+      return currentDistance < nearestDistance ? index : nearest;
+    }, 0);
+    setActiveIndex(nearestIndex);
+  }
+
+  if (series.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-5 rounded-[24px] border border-border/70 bg-background/25 p-4">
+      <div
+        className="relative h-60 overflow-hidden rounded-[24px] border border-white/5 bg-card/65 shadow-inner"
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => setActiveIndex(null)}
+      >
+        <div className="pointer-events-none absolute top-4 left-4 z-10 rounded-2xl border border-white/10 bg-card/78 px-3 py-2 text-xs shadow-[0_16px_38px_-28px_rgba(0,0,0,0.55)] backdrop-blur">
+          <p className="font-semibold text-foreground">{scopeLabel}</p>
+          <p className="mt-0.5 text-muted-foreground">{periodLabel}</p>
+        </div>
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="absolute inset-0 size-full cursor-crosshair"
+          role="img"
+          aria-label="Kurva tren omzet"
+        >
+          <defs>
+            <radialGradient id="trend-ambient-gradient" cx="52%" cy="0%" r="78%">
+              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.22" />
+              <stop offset="55%" stopColor="hsl(var(--primary))" stopOpacity="0.06" />
+              <stop offset="100%" stopColor="hsl(var(--background))" stopOpacity="0" />
+            </radialGradient>
+            <linearGradient id="trend-area-gradient" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.34" />
+              <stop offset="64%" stopColor="hsl(var(--primary))" stopOpacity="0.1" />
+              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="trend-line-gradient" x1="0" x2="1" y1="0" y2="0">
+              <stop offset="0%" stopColor="hsl(var(--primary))" />
+              <stop offset="54%" stopColor="#fff0dc" />
+              <stop offset="100%" stopColor="hsl(var(--chart-3))" />
+            </linearGradient>
+            <filter id="trend-line-glow" x="-20%" y="-45%" width="140%" height="190%">
+              <feGaussianBlur stdDeviation="2.6" result="blur" />
+              <feColorMatrix
+                in="blur"
+                type="matrix"
+                values="1 0 0 0 1  0 0.72 0 0 0.46  0 0 0.36 0 0.18  0 0 0 1 0"
+                result="warmGlow"
+              />
+              <feMerge>
+                <feMergeNode in="warmGlow" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <rect x="0" y="0" width="100" height="100" fill="url(#trend-ambient-gradient)" />
+          {[18, 35, 52, 69, 86].map((y) => (
+            <line
+              key={y}
+              x1="4"
+              x2="96"
+              y1={y}
+              y2={y}
+              stroke="hsl(var(--border))"
+              strokeDasharray="2 3"
+              strokeOpacity="0.28"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          <path key={`area-${linePath}`} d={areaPath} fill="url(#trend-area-gradient)" className="trend-area-animate" />
+          <path
+            key={`glow-${linePath}`}
+            d={linePath}
+            fill="none"
+            stroke="hsl(var(--primary))"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeOpacity="0.36"
+            strokeWidth="9"
+            vectorEffect="non-scaling-stroke"
+            filter="url(#trend-line-glow)"
+            pathLength={1}
+            className="trend-line-animate"
+          />
+          <path
+            key={`line-${linePath}`}
+            d={linePath}
+            fill="none"
+            stroke="url(#trend-line-gradient)"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3.2"
+            vectorEffect="non-scaling-stroke"
+            pathLength={1}
+            className="trend-line-animate"
+          />
+          <path
+            key={`shine-${linePath}`}
+            d={linePath}
+            fill="none"
+            stroke="#fff8ec"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeOpacity="0.72"
+            strokeWidth="1.1"
+            vectorEffect="non-scaling-stroke"
+            pathLength={1}
+            className="trend-line-animate"
+          />
+          {displayPoint ? (
+            <line
+              x1={displayPoint.x}
+              x2={displayPoint.x}
+              y1="12"
+              y2="91"
+              stroke="hsl(var(--primary))"
+              strokeDasharray="2 3"
+              strokeOpacity="0.46"
+              vectorEffect="non-scaling-stroke"
+            />
+          ) : null}
+        </svg>
+        <div className="pointer-events-none absolute inset-0">
+          {chartPoints.map((point, index) => {
+            const isPeak = point.revenue > 0 && point.revenue === peakRevenue;
+            const isActive = activeIndex === null ? isPeak : activeIndex === index;
+
+            return (
+              <div
+                key={point.key}
+                title={`${point.tickLabel}: ${formatCurrency(point.revenue)} dari ${point.transactions} transaksi`}
+                className={cn(
+                  "trend-marker-animate absolute rounded-full border shadow-[0_0_18px_rgba(255,189,123,0.42)] transition-transform",
+                  point.revenue > 0
+                    ? "size-3 border-card bg-primary"
+                    : "size-2 border-muted-foreground/30 bg-muted-foreground/55",
+                  isPeak && "size-4 border-primary-foreground bg-[#fff0dc] shadow-[0_0_26px_rgba(255,189,123,0.72)]"
+                )}
+                style={{
+                  left: `${point.x}%`,
+                  top: `${point.y}%`,
+                  transform: `translate(-50%, -50%) scale(${isActive ? 1.25 : 1})`,
+                }}
+              />
+            );
+          })}
+        </div>
+        {displayPoint ? (
+          <div
+            className="pointer-events-none absolute z-20 min-w-44 rounded-2xl border border-white/10 bg-popover/92 px-3 py-2 text-xs text-popover-foreground shadow-[0_18px_42px_-28px_rgba(0,0,0,0.75)] backdrop-blur"
+            style={{
+              left: `${tooltipLeft}%`,
+              top: `${tooltipTop}%`,
+              transform: "translate(-50%, -50%)",
+            }}
+          >
+            <p className="font-semibold">{displayPoint.label}, {displayPoint.tickLabel}</p>
+            <p className="mt-1 font-heading text-lg font-semibold">{formatCurrency(displayPoint.revenue)}</p>
+            <p className="text-muted-foreground">{displayPoint.transactions} transaksi</p>
+          </div>
+        ) : null}
+      </div>
+      {displayPoint ? (
+        <div className="mt-3 grid gap-2 rounded-2xl border border-border/60 bg-card/65 px-3 py-2 text-xs sm:grid-cols-3">
+          <div>
+            <p className="text-muted-foreground">{activeIndex === null ? "Info puncak" : "Titik dibaca"}</p>
+            <p className="mt-0.5 font-medium text-foreground">{displayPoint.tickLabel}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Omzet</p>
+            <p className="mt-0.5 font-medium text-foreground">{formatCurrency(displayPoint.revenue)}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Transaksi</p>
+            <p className="mt-0.5 font-medium text-foreground">{displayPoint.transactions} transaksi</p>
+          </div>
+        </div>
+      ) : null}
+      <div
+        className="mt-3 grid gap-2 text-xs text-muted-foreground"
+        style={{ gridTemplateColumns: `repeat(${visibleTicks.length}, minmax(0, 1fr))` }}
+      >
+        {visibleTicks.map((item) => (
+          <div key={item.key} className="min-w-0 text-center">
+            <p className="truncate font-medium text-foreground">{item.label}</p>
+            <p className="truncate">{item.tickLabel}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function LaporanView() {
   const { expenses, transactions, products, settings } = useAppState();
   const [period, setPeriod] = useState(currentMonthValue());
@@ -84,6 +521,8 @@ export function LaporanView() {
   const [reportPreviewLayout, setReportPreviewLayout] = useState<ReportPreviewLayout>("cards");
   const [customOwnerNotes, setCustomOwnerNotes] = useState("");
   const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
+  const [trendRange, setTrendRange] = useState<TrendRange>("bulanan");
+  const [trendWeek, setTrendWeek] = useState(() => getDefaultTrendWeek(currentMonthValue()));
 
   useEffect(() => {
     let active = true;
@@ -112,13 +551,44 @@ export function LaporanView() {
     };
   }, [period]);
 
-  const series = useMemo(() => buildSeries("bulanan", transactions), [transactions]);
-  const topVelocity = useMemo(
-    () => estimateProductVelocity(products, transactions).slice(0, 4),
-    [products, transactions]
-  );
-  const highestValue = Math.max(...series.map((item) => item.revenue), 1);
   const [selectedYear, selectedMonth] = period.split("-");
+  const trendWeekOptions = useMemo(() => getTrendWeekOptions(period), [period]);
+  const defaultTrendWeek = getDefaultTrendWeek(period);
+  const maxTrendWeek = trendWeekOptions.at(-1)?.value ?? defaultTrendWeek;
+  const selectedTrendWeek = Math.min(Math.max(trendWeek || defaultTrendWeek, 1), maxTrendWeek);
+  const periodLabel = new Intl.DateTimeFormat("id-ID", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${period}-01T00:00:00`));
+  const trendSeries = useMemo(
+    () => buildTrendSeries(period, trendRange, selectedTrendWeek, transactions),
+    [period, transactions, trendRange, selectedTrendWeek]
+  );
+  const trendTotal = trendSeries.reduce((sum, item) => sum + item.revenue, 0);
+  const trendTransactionCount = trendSeries.reduce((sum, item) => sum + item.transactions, 0);
+  const trendAverageTicket = trendTransactionCount > 0 ? trendTotal / trendTransactionCount : 0;
+  const trendPeak = trendSeries.reduce(
+    (peak, item) => (item.revenue > peak.revenue ? item : peak),
+    trendSeries[0] ?? { key: "", label: "-", revenue: 0, tickLabel: "-", transactions: 0 }
+  );
+  const trendPeriodLabel = formatTrendPeriodLabel(trendSeries);
+  const activeTrendWeek = trendWeekOptions.find((option) => option.value === selectedTrendWeek) ?? trendWeekOptions[0];
+  const trendScopeLabel =
+    trendRange === "mingguan" && activeTrendWeek ? activeTrendWeek.label : "Bulanan";
+  const trendChartPeriodLabel =
+    trendRange === "mingguan" && activeTrendWeek ? activeTrendWeek.rangeLabel : periodLabel;
+  const periodTransactions = useMemo(
+    () => filterTransactionsByMonth(period, transactions),
+    [period, transactions]
+  );
+  const topVelocity = useMemo(
+    () =>
+      estimateProductVelocity(products, periodTransactions)
+        .filter((item) => item.sold > 0)
+        .sort((a, b) => b.sold - a.sold)
+        .slice(0, 4),
+    [periodTransactions, products]
+  );
   const currentYear = new Date().getFullYear();
   const yearOptions = useMemo(() => {
     const years = new Set<number>();
@@ -128,10 +598,6 @@ export function LaporanView() {
     years.add(Number(selectedYear));
     return Array.from(years).sort((a, b) => b - a);
   }, [currentYear, selectedYear]);
-  const periodLabel = new Intl.DateTimeFormat("id-ID", {
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${period}-01T00:00:00`));
   const defaultOwnerNotes = useMemo(
     () => [
       `Laba bersih ${periodLabel} tercatat ${formatCurrency(summary.netProfit)}.`,
@@ -271,35 +737,73 @@ export function LaporanView() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="rounded-[26px] border border-border/70 bg-card/80 p-5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Tren omzet 6 bulan</p>
-                  <p className="mt-2 font-heading text-3xl font-semibold">{formatCurrency(summary.revenue)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Tren omzet {trendRange === "bulanan" ? "1 bulan" : "1 minggu"}
+                  </p>
+                  <p className="mt-2 font-heading text-3xl font-semibold">{formatCurrency(trendTotal)}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{trendPeriodLabel}</p>
                 </div>
-                <div className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-foreground">
-                  {summary.transactionCount} transaksi
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="flex rounded-2xl border border-border/70 bg-muted/35 p-1">
+                    {trendRangeOptions.map((option) => (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        variant={trendRange === option.value ? "default" : "ghost"}
+                        size="sm"
+                        className="rounded-xl px-3"
+                        onClick={() => setTrendRange(option.value)}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                  {trendRange === "mingguan" ? (
+                    <Select
+                      value={String(selectedTrendWeek)}
+                      onValueChange={(value) => setTrendWeek(Number(value))}
+                    >
+                      <SelectTrigger
+                        aria-label="Pilih minggu tren"
+                        className="h-10 min-w-36 rounded-2xl border-border/70 bg-card/70 px-3 font-medium"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="end" className="rounded-2xl p-1">
+                        {trendWeekOptions.map((week) => (
+                          <SelectItem key={week.value} value={String(week.value)} className="rounded-xl py-2">
+                            {week.label} ({week.rangeLabel})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
+                  <div className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-foreground">
+                    {trendTransactionCount} transaksi
+                  </div>
                 </div>
               </div>
 
-              <div className="mt-6 flex h-52 items-end gap-3">
-                {series.map((item) => (
-                  <div key={item.label} className="flex flex-1 flex-col items-center gap-3">
-                    <div className="flex w-full flex-1 items-end">
-                      <div
-                        className="w-full rounded-t-[18px] bg-gradient-to-t from-primary to-chart-3 shadow-[0_18px_28px_-18px_rgba(186,92,35,0.8)]"
-                        style={{
-                          height: `${Math.max(14, (item.revenue / highestValue) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs font-medium text-foreground">{item.label}</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        {formatCompactCurrency(item.revenue)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+              <TrendRevenueChart periodLabel={trendChartPeriodLabel} scopeLabel={trendScopeLabel} series={trendSeries} />
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-muted/35 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Puncak omzet</p>
+                  <p className="mt-1 font-semibold tabular-nums">{formatCompactCurrency(trendPeak.revenue)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{trendPeak.tickLabel}</p>
+                </div>
+                <div className="rounded-2xl bg-muted/35 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Rata-rata transaksi</p>
+                  <p className="mt-1 font-semibold tabular-nums">{formatCompactCurrency(trendAverageTicket)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">di rentang tren</p>
+                </div>
+                <div className="rounded-2xl bg-muted/35 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Total periode laporan</p>
+                  <p className="mt-1 font-semibold tabular-nums">{formatCompactCurrency(summary.revenue)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{periodLabel}</p>
+                </div>
               </div>
             </div>
 
@@ -317,12 +821,18 @@ export function LaporanView() {
               <div className="rounded-[26px] border border-border/70 bg-card/80 p-5">
                 <p className="text-sm text-muted-foreground">Produk paling bergerak</p>
                 <div className="mt-4 space-y-3">
-                  {topVelocity.map((item) => (
-                    <div key={item.productId} className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium">{item.name}</span>
-                      <span className="text-sm text-muted-foreground">{item.sold} terjual</span>
-                    </div>
-                  ))}
+                  {topVelocity.length > 0 ? (
+                    topVelocity.map((item) => (
+                      <div key={item.productId} className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-medium">{item.name}</span>
+                        <span className="text-sm text-muted-foreground">{item.sold} terjual</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="rounded-2xl bg-muted/35 px-3 py-3 text-sm text-muted-foreground">
+                      Belum ada produk terjual pada {periodLabel}.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

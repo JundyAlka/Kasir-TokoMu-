@@ -82,8 +82,11 @@ export function TransactionDetailDialog({
               </DialogDescription>
             </DialogHeader>
 
-            <ScrollArea className="max-h-[64vh]">
-              <div className="space-y-4 pr-2">
+            <ScrollArea
+              className="max-h-[64vh] pr-3"
+              scrollBarClassName="data-vertical:w-1.5 data-vertical:border-l-0 data-vertical:px-0"
+            >
+              <div className="space-y-4 pr-4">
                 <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4 dark:bg-primary/10">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <ReceiptText className="size-4 text-primary" />

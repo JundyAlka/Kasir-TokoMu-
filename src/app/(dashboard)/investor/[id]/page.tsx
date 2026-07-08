@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { InvestmentFormDialog } from "@/components/tokomu/investment-form";
+import { InvestorDeactivateButton, InvestorDeleteButton } from "@/components/tokomu/investor-actions";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { getRequestUser } from "@/lib/server/app-service";
 import { getInvestor, listInvestments } from "@/lib/server/investor-service";
@@ -76,6 +77,7 @@ export default async function InvestorDetailPage({
   ]);
 
   const activeInvestments = investmentRows.filter((investment) => investment.isActive === 1);
+  const isInvestorActive = investor.isActive === 1;
   const totalModal = activeInvestments.reduce((total, investment) => {
     if (investment.type === "uang") return total + (investment.amount ?? 0);
     return total + (investment.unitCount ?? 0) * (investment.unitCost ?? 0);
@@ -93,7 +95,28 @@ export default async function InvestorDetailPage({
           <ArrowLeft className="size-4" />
           Kembali
         </Button>
-        <InvestmentFormDialog investorId={investor.id} products={productRows} />
+        <div className="flex flex-wrap gap-2">
+          {isInvestorActive ? (
+            <>
+              <InvestorDeactivateButton
+                investorId={investor.id}
+                investorName={investor.name}
+                redirectToInactive
+                size="lg"
+                className="rounded-2xl"
+              />
+              <InvestmentFormDialog investorId={investor.id} products={productRows} />
+            </>
+          ) : (
+            <InvestorDeleteButton
+              investorId={investor.id}
+              investorName={investor.name}
+              redirectToInactive
+              size="lg"
+              className="rounded-2xl"
+            />
+          )}
+        </div>
       </div>
 
       <Card className="border-border/60 bg-card/80">
@@ -105,8 +128,8 @@ export default async function InvestorDetailPage({
                 {investor.whatsapp || "WA belum diisi"} - {investor.address || "Alamat belum diisi"}
               </CardDescription>
             </div>
-            <Badge variant={investor.isActive === 1 ? "default" : "secondary"}>
-              {investor.isActive === 1 ? "Aktif" : "Nonaktif"}
+            <Badge variant={isInvestorActive ? "default" : "secondary"}>
+              {isInvestorActive ? "Aktif" : "Nonaktif"}
             </Badge>
           </div>
         </CardHeader>
@@ -171,7 +194,9 @@ export default async function InvestorDetailPage({
                 <CardTitle>Investasi</CardTitle>
                 <CardDescription>Modal uang dan barang titip jual yang tercatat.</CardDescription>
               </div>
-              <InvestmentFormDialog investorId={investor.id} products={productRows} />
+              {isInvestorActive ? (
+                <InvestmentFormDialog investorId={investor.id} products={productRows} />
+              ) : null}
             </CardHeader>
             <CardContent>
               <Table className="min-w-[820px]">

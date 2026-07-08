@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { Pool } from "pg";
+import { createPoolConfig } from "@/db/pool-config";
 
 const globalForAuth = globalThis as typeof globalThis & {
   __warungosAuthPool?: Pool;
@@ -41,6 +42,21 @@ function getTrustedAuthOrigins(request?: Request) {
 }
 
 function resolveAuthBaseUrl() {
+  const localPort = process.env.PORT;
+
+  if (localPort && process.env.BETTER_AUTH_URL) {
+    const configuredUrl = new URL(process.env.BETTER_AUTH_URL);
+
+    if (
+      configuredUrl.hostname === "localhost" &&
+      configuredUrl.port &&
+      configuredUrl.port !== localPort
+    ) {
+      configuredUrl.port = localPort;
+      return configuredUrl.toString().replace(/\/$/, "");
+    }
+  }
+
   if (process.env.BETTER_AUTH_URL) {
     return process.env.BETTER_AUTH_URL;
   }
@@ -55,16 +71,17 @@ function resolveAuthBaseUrl() {
     return `https://${vercelHost}`;
   }
 
-  return "http://localhost:3000";
+  return `http://localhost:${localPort ?? "3000"}`;
 }
 
 function getAuthPool() {
   if (!globalForAuth.__warungosAuthPool) {
-    globalForAuth.__warungosAuthPool = new Pool({
-      connectionString:
+    globalForAuth.__warungosAuthPool = new Pool(
+      createPoolConfig(
         process.env.DATABASE_URL ??
-        "postgresql://postgres:postgres@127.0.0.1:5432/warungos",
-    });
+          "postgresql://postgres:postgres@127.0.0.1:5432/warungos"
+      )
+    );
   }
 
   return globalForAuth.__warungosAuthPool;

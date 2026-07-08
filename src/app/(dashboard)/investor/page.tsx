@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { InactiveInvestorManager } from "@/components/tokomu/inactive-investor-manager";
 import { InvestorCard, type InvestorSummary } from "@/components/tokomu/investor-card";
 import { getRequestUser } from "@/lib/server/app-service";
 import { listInvestors } from "@/lib/server/investor-service";
@@ -50,38 +51,48 @@ export default async function InvestorPage({
             </Link>
           ))}
         </div>
-        <Button
-          render={<Link href="/investor/baru" />}
-          nativeButton={false}
-          size="lg"
-          className="rounded-2xl"
-        >
-          <Plus className="size-4" />
-          Investor Baru
-        </Button>
+        {status !== "inactive" ? (
+          <Button
+            render={<Link href="/investor/baru" />}
+            nativeButton={false}
+            size="lg"
+            className="rounded-2xl"
+          >
+            <Plus className="size-4" />
+            Investor Baru
+          </Button>
+        ) : null}
       </div>
 
       {investors.length > 0 ? (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {investors.map((investor) => (
-            <InvestorCard key={investor.id} investor={investor} />
-          ))}
-        </div>
+        status === "inactive" ? (
+          <InactiveInvestorManager investors={investors} />
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {investors.map((investor) => (
+              <InvestorCard key={investor.id} investor={investor} />
+            ))}
+          </div>
+        )
       ) : (
         <Card className="border-border/60 bg-card/80">
           <CardContent className="flex min-h-60 flex-col items-center justify-center text-center">
             <p className="font-heading text-2xl font-semibold">Belum ada investor pada filter ini</p>
             <p className="mt-2 max-w-md text-sm text-muted-foreground">
-              Tambahkan investor baru untuk mulai mencatat modal uang atau barang titip jual.
+              {status === "inactive"
+                ? "Investor yang dinonaktifkan dari kartu atau halaman detail akan muncul di sini."
+                : "Tambahkan investor baru untuk mulai mencatat modal uang atau barang titip jual."}
             </p>
-            <Button
-              render={<Link href="/investor/baru" />}
-              nativeButton={false}
-              className="mt-4 rounded-2xl"
-            >
-              <Plus className="size-4" />
-              Investor Baru
-            </Button>
+            {status !== "inactive" ? (
+              <Button
+                render={<Link href="/investor/baru" />}
+                nativeButton={false}
+                className="mt-4 rounded-2xl"
+              >
+                <Plus className="size-4" />
+                Investor Baru
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       )}

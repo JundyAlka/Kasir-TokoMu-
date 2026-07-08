@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import {
   BanknoteArrowDown,
@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -117,17 +118,17 @@ function ProductCard({
       onClick={onAdd}
       disabled={product.stock <= 0}
       className={cn(
-        "group flex min-h-[164px] flex-col justify-between rounded-[26px] border border-border/65 bg-card/80 p-4 text-left shadow-[0_24px_50px_-36px_rgba(66,38,20,0.48)] transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_26px_60px_-34px_rgba(186,92,35,0.4)] disabled:cursor-not-allowed disabled:opacity-55",
+        "group relative flex min-h-[164px] min-w-0 flex-col justify-between rounded-[26px] border border-border/65 bg-card/80 p-4 text-left shadow-[0_24px_50px_-36px_rgba(66,38,20,0.48)] transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_26px_60px_-34px_rgba(186,92,35,0.4)] disabled:cursor-not-allowed disabled:opacity-55 md:min-h-[214px] md:gap-4 md:pb-16 lg:min-h-[196px] 2xl:min-h-[164px] 2xl:pb-4",
         lowStock && "border-primary/45 bg-primary/8"
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex size-12 items-center justify-center rounded-2xl bg-foreground text-background">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-foreground text-background md:size-10 2xl:size-12">
           <ProductCategoryIcon category={product.category} />
         </div>
         <Badge
           className={cn(
-            "rounded-full border-0 px-3 py-1 text-xs",
+            "max-w-[82px] truncate rounded-full border-0 px-3 py-1 text-xs md:max-w-[72px] md:px-2 md:text-[11px] 2xl:max-w-none 2xl:px-3 2xl:text-xs",
             lowStock ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
           )}
         >
@@ -135,20 +136,27 @@ function ProductCard({
         </Badge>
       </div>
 
-      <div className="space-y-2">
-        <p className="font-heading text-lg font-semibold tracking-tight">{product.name}</p>
-        <p className="line-clamp-2 text-sm text-muted-foreground">{product.description}</p>
+      <div className="min-w-0 space-y-2">
+        <p className="line-clamp-2 break-words font-heading text-lg font-semibold tracking-tight md:text-base lg:text-[15px] 2xl:text-lg">
+          {product.name}
+        </p>
+        <p className="line-clamp-2 break-words text-sm text-muted-foreground md:text-xs 2xl:text-sm">
+          {product.description}
+        </p>
       </div>
 
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+      <div className="flex items-end justify-between gap-3 md:block 2xl:flex 2xl:items-end">
+        <div className="min-w-0">
+          <p className="truncate text-xs uppercase tracking-[0.18em] text-muted-foreground md:text-[11px] 2xl:text-xs">
             {product.category}
           </p>
-          <p className="mt-1 text-lg font-semibold">{formatCurrency(product.sellPrice)}</p>
+          <p className="mt-1 truncate text-lg font-semibold md:text-base 2xl:text-lg">
+            {formatCurrency(product.sellPrice)}
+          </p>
         </div>
-        <div className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background transition group-hover:bg-primary">
-          Tap
+        <div className="grid shrink-0 place-items-center rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background transition group-hover:bg-primary md:absolute md:right-4 md:bottom-4 md:size-10 md:px-0 md:py-0 2xl:static 2xl:size-auto 2xl:px-4 2xl:py-2">
+          <Plus className="hidden size-4 md:block 2xl:hidden" />
+          <span className="md:sr-only 2xl:not-sr-only">Tap</span>
         </div>
       </div>
     </button>
@@ -366,8 +374,15 @@ function PaymentInstructionDialog({
           </div>
         </div>
 
-        <DialogFooter className="rounded-b-[28px]" showCloseButton>
-          <Button type="button" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="m-0 flex-row items-center justify-end gap-3 rounded-b-[28px] border-border/70 bg-card/70 px-5 py-4 sm:px-6">
+          <DialogClose
+            render={
+              <Button type="button" variant="outline" className="h-10 min-w-24 rounded-full" />
+            }
+          >
+            Tutup
+          </DialogClose>
+          <Button type="button" className="h-10 min-w-32 rounded-full" onClick={() => onOpenChange(false)}>
             Sudah paham
           </Button>
         </DialogFooter>
@@ -398,6 +413,50 @@ export function KasirView() {
   const [shiftBannerName, setShiftBannerName] = useState<string | null>(null);
   const [paidAmountInput, setPaidAmountInput] = useState("");
   const [paymentInfoOpen, setPaymentInfoOpen] = useState(false);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const productColumnRef = useRef<HTMLDivElement>(null);
+  const [workspaceWidth, setWorkspaceWidth] = useState(0);
+  const [productColumnWidth, setProductColumnWidth] = useState(0);
+
+  useEffect(() => {
+    const element = workspaceRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateWidth = () => setWorkspaceWidth(element.getBoundingClientRect().width);
+    updateWidth();
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        setWorkspaceWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const element = productColumnRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateWidth = () => setProductColumnWidth(element.getBoundingClientRect().width);
+    updateWidth();
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        setProductColumnWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -435,6 +494,17 @@ export function KasirView() {
   const needsPaymentInfo = paymentMethod === "Transfer";
   const cashShortfall = Math.max(0, cartTotal - paidAmount);
   const changeAmount = isCashPayment ? Math.max(0, paidAmount - cartTotal) : 0;
+  const hasMeasuredWorkspace = workspaceWidth > 0;
+  const shouldStackCheckout = hasMeasuredWorkspace && workspaceWidth < 560;
+  const isProductHeaderCompact = productColumnWidth > 0 && productColumnWidth < 740;
+  const productGridClass =
+    productColumnWidth === 0
+      ? "sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3"
+      : productColumnWidth < 480
+        ? "grid-cols-1"
+        : productColumnWidth < 720
+          ? "grid-cols-2"
+          : "grid-cols-3";
   const canCheckout =
     cartLines.length > 0 && (!isCashPayment || (paidAmountInput.trim() !== "" && cashShortfall === 0));
 
@@ -506,7 +576,15 @@ export function KasirView() {
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[1.7fr_0.95fr]">
+    <div
+      ref={workspaceRef}
+      className={cn(
+        "grid gap-4",
+        shouldStackCheckout
+          ? "grid-cols-1"
+          : "grid-cols-[minmax(220px,1fr)_minmax(300px,340px)] xl:grid-cols-[minmax(0,1fr)_minmax(340px,380px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.72fr)]"
+      )}
+    >
       {shiftBannerName ? (
         <ShiftChangeBanner cashierName={shiftBannerName} onDone={() => setShiftBannerName(null)} />
       ) : null}
@@ -522,9 +600,14 @@ export function KasirView() {
         method={paymentMethod}
         total={cartTotal}
       />
-      <div>
+      <div ref={productColumnRef} className="min-w-0">
         <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
-          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <CardHeader
+            className={cn(
+              "flex flex-col gap-4",
+              !isProductHeaderCompact && "md:flex-row md:items-center md:justify-between"
+            )}
+          >
             <div>
               <CardTitle className="font-heading text-2xl">Produk siap jual</CardTitle>
               <CardDescription>
@@ -536,8 +619,13 @@ export function KasirView() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              <div className="relative min-w-[220px]">
+            <div
+              className={cn(
+                "flex flex-col gap-3",
+                isProductHeaderCompact ? "w-full" : "md:flex-row md:items-center"
+              )}
+            >
+              <div className={cn("relative", isProductHeaderCompact ? "w-full" : "min-w-[220px]")}>
                 <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={query}
@@ -563,7 +651,12 @@ export function KasirView() {
           </CardHeader>
           <CardContent>
             {filteredProducts.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+              <div
+                className={cn(
+                  "grid gap-4",
+                  productGridClass
+                )}
+              >
                 {filteredProducts.map((product) => (
                   <ProductCard
                     key={product.id}
@@ -598,8 +691,13 @@ export function KasirView() {
         </Card>
       </div>
 
-      <div>
-        <Card className="glass-panel sticky top-4 border-border/60 shadow-[0_28px_70px_-48px_rgba(66,38,20,0.6)]">
+      <div className="min-w-0">
+        <Card
+          className={cn(
+            "glass-panel border-border/60 shadow-[0_28px_70px_-48px_rgba(66,38,20,0.6)]",
+            !shouldStackCheckout && "sticky top-4"
+          )}
+        >
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>

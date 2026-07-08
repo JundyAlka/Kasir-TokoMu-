@@ -4,6 +4,7 @@ import { getRequestUser } from "@/lib/server/app-service";
 import {
   deleteInvestor,
   getInvestor,
+  purgeInactiveInvestor,
   updateInvestor,
 } from "@/lib/server/investor-service";
 import { handleRouteError } from "@/lib/server/route-error";
@@ -52,16 +53,20 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     await requireRole(["pimpinan", "pengelola_keuangan"]);
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
-    const investor = await deleteInvestor(workspaceOwnerId, id);
+    const mode = request.nextUrl.searchParams.get("mode");
+    const investor =
+      mode === "purge"
+        ? await purgeInactiveInvestor(workspaceOwnerId, id)
+        : await deleteInvestor(workspaceOwnerId, id);
     return NextResponse.json({ investor });
   } catch (error) {
-    return handleRouteError(error, "Gagal menghapus investor.");
+    return handleRouteError(error, "Gagal memproses investor.");
   }
 }

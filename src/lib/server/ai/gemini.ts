@@ -89,7 +89,11 @@ const FALLBACK_TEXT_MODEL_PINNED =
   "gemini-2.0-flash-lite-001";
 const DEFAULT_BASE_URL =
   process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai/";
-const PROVIDER_NAME = process.env.GEMINI_BASE_URL ? "IYH API" : "Gemini API";
+const PROVIDER_NAME = process.env.GEMINI_BASE_URL
+  ? process.env.GEMINI_BASE_URL.includes("iamhc.cn")
+    ? "HCNote API"
+    : "IYH API"
+  : "Gemini API";
 
 export async function callGemini(input: {
   messages: GeminiMessage[];

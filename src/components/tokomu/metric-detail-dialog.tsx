@@ -116,6 +116,148 @@ function MiniBarChart({
   valueKey: string;
   maxHour?: number;
 }) {
+  return <HourlyCurveChart data={data} valueKey={valueKey} maxHour={maxHour} />;
+}
+
+function HourlyCurveChart({
+  data,
+  valueKey,
+  maxHour = 23,
+}: {
+  data: { hour: number; [key: string]: number }[];
+  valueKey: string;
+  maxHour?: number;
+}) {
+  const [isChartReady, setIsChartReady] = useState(false);
+  const sliced = data.filter((d) => d.hour >= 5 && d.hour <= maxHour);
+  const values = sliced.map((d) => Number(d[valueKey] ?? 0));
+  const maxVal = Math.max(...values, 1);
+  const totalValue = values.reduce((sum, value) => sum + value, 0);
+  const peak = sliced.reduce(
+    (highest, item) => (Number(item[valueKey] ?? 0) > Number(highest[valueKey] ?? 0) ? item : highest),
+    sliced[0] ?? { hour: 0, [valueKey]: 0 }
+  );
+  const points = sliced.map((d, index) => {
+    const x = sliced.length === 1 ? 50 : 6 + (index / (sliced.length - 1)) * 88;
+    const value = Number(d[valueKey] ?? 0);
+    const y = 82 - (value / maxVal) * 62;
+    return { hour: d.hour, value, x, y };
+  });
+  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const areaPath =
+    points.length > 0 ? `${linePath} L ${points.at(-1)?.x ?? 94} 90 L ${points[0].x} 90 Z` : "";
+  const valueLabel = valueKey === "total" ? "omzet" : "transaksi";
+  const formatValue = (value: number) =>
+    valueKey === "total" ? formatCurrency(value) : `${value.toLocaleString("id-ID")} trx`;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setIsChartReady(true), 450);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="mt-4 rounded-2xl border border-border/70 bg-background/35 p-3">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">Distribusi per jam</p>
+          <p className="mt-1 text-sm font-medium">
+            {totalValue > 0 ? `${formatValue(totalValue)} hari ini` : `Belum ada ${valueLabel}`}
+          </p>
+        </div>
+        <div className="rounded-full bg-muted/50 px-3 py-1 text-xs text-muted-foreground">
+          Puncak {String(peak.hour).padStart(2, "0")}:00
+        </div>
+      </div>
+
+      {!isChartReady ? (
+        <div className="h-36 overflow-hidden rounded-[18px] bg-card/55 p-4">
+          <div className="flex h-full items-end gap-2">
+            {Array.from({ length: 12 }, (_, index) => (
+              <div
+                key={index}
+                className="flex-1 animate-pulse rounded-t-full bg-muted"
+                style={{ height: `${24 + ((index * 17) % 54)}%`, animationDelay: `${index * 45}ms` }}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="relative h-36 overflow-hidden rounded-[18px] bg-card/55">
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            className="absolute inset-0 size-full"
+            role="img"
+            aria-label={`Kurva distribusi ${valueLabel} per jam`}
+          >
+            <defs>
+              <linearGradient id={`metric-hourly-area-${valueKey}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.36" />
+                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.04" />
+              </linearGradient>
+            </defs>
+            {[20, 40, 60, 80].map((y) => (
+              <line
+                key={y}
+                x1="5"
+                x2="95"
+                y1={y}
+                y2={y}
+                stroke="hsl(var(--border))"
+                strokeDasharray="2 3"
+                strokeOpacity="0.7"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+            <path d={areaPath} fill={`url(#metric-hourly-area-${valueKey})`} />
+            <path
+              d={linePath}
+              fill="none"
+              stroke="hsl(var(--primary))"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="3"
+              vectorEffect="non-scaling-stroke"
+            />
+            {points.map((point) => (
+              <circle
+                key={point.hour}
+                cx={point.x}
+                cy={point.y}
+                r={point.value > 0 ? 2.4 : 1.5}
+                fill={point.value > 0 ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))"}
+                stroke="hsl(var(--card))"
+                strokeWidth="2"
+                vectorEffect="non-scaling-stroke"
+              >
+                <title>
+                  {String(point.hour).padStart(2, "0")}:00 - {formatValue(point.value)}
+                </title>
+              </circle>
+            ))}
+          </svg>
+        </div>
+      )}
+
+      <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
+        {[5, 8, 12, 15, 18, 21, maxHour].map((hour) => (
+          <span key={hour}>{String(hour).padStart(2, "0")}:00</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/*
+function LegacyMiniBarChart({
+  data,
+  valueKey,
+  maxHour = 23,
+}: {
+  data: { hour: number; [key: string]: number }[];
+  valueKey: string;
+  maxHour?: number;
+}) {
   const values = data.map((d) => d[valueKey] as number);
   const maxVal = Math.max(...values, 1);
 
@@ -156,6 +298,7 @@ function MiniBarChart({
   );
 }
 
+*/
 function PaymentMethodBreakdown({
   data,
 }: {
@@ -483,11 +626,14 @@ export function MetricDetailDialog({ metric, onClose }: MetricDetailDialogProps)
               <DialogDescription>{METRIC_DESCRIPTIONS[metric]}</DialogDescription>
             </DialogHeader>
 
-            <ScrollArea className="max-h-[60vh]">
+            <ScrollArea
+              className="max-h-[60vh] pr-3"
+              scrollBarClassName="data-vertical:w-1.5 data-vertical:border-l-0 data-vertical:px-0"
+            >
               {loading && <LoadingSkeleton />}
               {error && <ErrorState message={error} />}
               {!loading && !error && data && (
-                <div className="pr-2">
+                <div className="pr-4">
                   {metric === "omzet" && <OmzetContent data={data} />}
                   {metric === "transaksi" && <TransaksiContent data={data} />}
                   {metric === "stok" && <StokContent data={data} />}
