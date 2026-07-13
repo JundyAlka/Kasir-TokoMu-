@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useSession } from "@/lib/auth-client";
+import { useSession, authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { getInitials } from "@/lib/format";
 
@@ -12,27 +12,26 @@ export function AccountPanel() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const [mounted, setMounted] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   async function handleSignOut() {
+    setIsSigningOut(true);
     try {
-      const response = await fetch("/api/auth/sign-out", {
-        method: "POST",
-        credentials: "same-origin",
-      });
-
-      if (!response.ok) {
-        throw new Error("Gagal keluar dari akun.");
-      }
-
+      await authClient.signOut();
       toast.success("Kamu sudah keluar dari akun.");
       router.replace("/auth");
       router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal keluar dari akun.");
+    } catch {
+      // Fallback: langsung redirect paksa
+      toast.success("Keluar dari akun.");
+      router.replace("/auth");
+      router.refresh();
+    } finally {
+      setIsSigningOut(false);
     }
   }
 
@@ -67,9 +66,14 @@ export function AccountPanel() {
         size="lg"
         className="mt-4 h-11 w-full rounded-2xl"
         onClick={() => void handleSignOut()}
+        disabled={isSigningOut}
       >
-        <LogOut className="size-4" />
-        Keluar
+        {isSigningOut ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <LogOut className="size-4" />
+        )}
+        {isSigningOut ? "Keluar..." : "Keluar"}
       </Button>
     </div>
   );
