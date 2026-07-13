@@ -381,6 +381,9 @@ const settings: Settings = {
   profitSharePcmPct: 30,
   profitShareReservePct: 20,
   enabledPayments: ["Tunai", "QRIS", "Transfer"],
+  qrisPayload: "00020101021126660016ID.CO.TELKOMSEL.WWW01189360091530123456780214241029103010310303UMI51440014ID.CO.QRIS.WWW0215ID10200210345670303UMI5204541153033605802ID5911TokoMu Demo6007Jakarta61051234562070703A016304",
+  qrisImageUrl: "",
+  bankTransferInfo: "BSI: 7123456789 a/n TokoMu\nBCA: 1234567890 a/n TokoMu",
 };
 
 export const seedState: AppState = {

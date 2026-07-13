@@ -722,7 +722,7 @@ export function AIAssistantPanel({
                 {chat?.title ?? "WarungOS AI"}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                Asisten kontekstual · IYH · Tool calling
+                Asisten kontekstual · Claude · Tool calling
               </p>
             </div>
             <Button
@@ -730,8 +730,8 @@ export function AIAssistantPanel({
               size="icon-sm"
               onClick={handleNewChat}
               disabled={isLoading || isThinking}
-              aria-label="Mulai chat baru"
-              title="Mulai chat baru"
+              aria-label="Reset chat"
+              title="Reset chat"
             >
               <ArrowRight className="size-4" />
             </Button>
@@ -740,6 +740,7 @@ export function AIAssistantPanel({
               size="icon-sm"
               onClick={() => onOpenChange(false)}
               aria-label="Tutup asisten"
+              title="Tutup asisten"
             >
               <X className="size-4" />
             </Button>

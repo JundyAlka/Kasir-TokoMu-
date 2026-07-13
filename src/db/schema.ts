@@ -18,6 +18,9 @@ export const storeProfiles = pgTable("store_profiles", {
   profitSharePcmPct: integer("profit_share_pcm_pct").notNull().default(30),
   profitShareReservePct: integer("profit_share_reserve_pct").notNull().default(20),
   enabledPayments: jsonb("enabled_payments").$type<PaymentMethod[]>().notNull(),
+  qrisPayload: text("qris_payload").notNull().default(""),
+  qrisImageUrl: text("qris_image_url").notNull().default(""),
+  bankTransferInfo: text("bank_transfer_info").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull(),
 });

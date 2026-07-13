@@ -9,6 +9,7 @@ const pg = new EmbeddedPostgres({
   password: "postgres",
   port: 5439,
   persistent: true,
+  initdbFlags: ["-E", "UTF8", "--locale=C"],
   onLog: (message) => console.log(String(message).trimEnd()),
   onError: (message) => console.error(String(message).trimEnd()),
 });

@@ -181,8 +181,8 @@ export function ShiftSettings() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <section className="grid gap-4 rounded-[24px] border border-border/70 bg-card/85 p-4 md:grid-cols-[1fr_150px_150px_220px_auto] md:items-end">
-          <div className="grid gap-2">
+        <section className="flex flex-wrap items-end gap-4 rounded-[24px] border border-border/70 bg-card/85 p-4">
+          <div className="grid flex-1 min-w-[120px] gap-2">
             <Label htmlFor="shift-name">Nama shift</Label>
             <Input
               id="shift-name"
@@ -215,8 +215,10 @@ export function ShiftSettings() {
           <div className="grid gap-2">
             <Label>Kasir</Label>
             <Select value={draft.assignedUserId} onValueChange={(value) => setDraft({ ...draft, assignedUserId: value ?? "none" })}>
-              <SelectTrigger className="h-11 w-full rounded-2xl bg-card">
-                <SelectValue />
+              <SelectTrigger className="h-11 w-full min-w-[180px] rounded-2xl bg-card">
+                <SelectValue placeholder="Pilih kasir">
+                  {draft.assignedUserId === "none" ? "Belum ditugaskan" : users.find(u => u.id === draft.assignedUserId)?.name ?? "Pilih..."}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Belum ditugaskan</SelectItem>
@@ -312,8 +314,10 @@ export function ShiftSettings() {
                           }))
                         }
                       >
-                        <SelectTrigger className="h-10 w-56 rounded-2xl bg-card">
-                          <SelectValue />
+                        <SelectTrigger className="h-10 w-full min-w-[160px] max-w-[200px] rounded-2xl bg-card">
+                          <SelectValue placeholder="Pilih kasir">
+                            {row.assignedUserId === "none" ? "Belum ditugaskan" : users.find(u => u.id === row.assignedUserId)?.name ?? "Pilih..."}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Belum ditugaskan</SelectItem>

@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { bearer } from "better-auth/plugins";
 import { Pool } from "pg";
 import { createPoolConfig } from "@/db/pool-config";
 
@@ -15,7 +16,11 @@ function toOrigin(value: string) {
 }
 
 function getTrustedAuthOrigins(request?: Request) {
-  const origins = new Set<string>();
+  const origins = new Set<string>([
+    "http://localhost:8090",
+    "http://localhost:3030",
+    "http://localhost:3000",
+  ]);
 
   for (const value of [
     process.env.BETTER_AUTH_URL,
@@ -32,10 +37,6 @@ function getTrustedAuthOrigins(request?: Request) {
 
   if (request) {
     origins.add(new URL(request.url).origin);
-  }
-
-  if (origins.size === 0) {
-    origins.add("http://localhost:3000");
   }
 
   return Array.from(origins);
@@ -98,4 +99,6 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+  plugins: [bearer()],
 });
+

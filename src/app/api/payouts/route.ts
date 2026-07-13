@@ -27,13 +27,11 @@ function parseBodyPeriod(body: unknown) {
 }
 
 function parseSearchPeriod(request: NextRequest) {
-  const periodYear = Number(
-    request.nextUrl.searchParams.get("year") ?? request.nextUrl.searchParams.get("periodYear")
-  );
-  const periodMonth = Number(
-    request.nextUrl.searchParams.get("month") ?? request.nextUrl.searchParams.get("periodMonth")
-  );
-  return getPeriodRange(periodYear, periodMonth);
+  const periodYear = request.nextUrl.searchParams.get("year") ?? request.nextUrl.searchParams.get("periodYear");
+  const periodMonth = request.nextUrl.searchParams.get("month") ?? request.nextUrl.searchParams.get("periodMonth");
+  
+  if (!periodYear || !periodMonth) return null;
+  return getPeriodRange(Number(periodYear), Number(periodMonth));
 }
 
 export async function GET(request: NextRequest) {
@@ -41,42 +39,76 @@ export async function GET(request: NextRequest) {
     await requireRole(["pimpinan", "pengelola_keuangan"]);
     const { workspaceOwnerId } = await getRequestUser();
     const range = parseSearchPeriod(request);
-    const result = await pool.query(
-      `
-        select
-          p.id,
-          p.investment_id as "investmentId",
-          p.investor_id as "investorId",
-          inv.name as "investorName",
-          coalesce(i.akad_type, case when i.type = 'barang_titip_jual' then 'barang_titip_jual' else 'murabahah_bil_wakalah' end) as "akadType",
-          p.period_start as "periodStart",
-          p.period_end as "periodEnd",
-          p.base_profit as "baseAmount",
-          p.share_pct as "ratePct",
-          p.amount,
-          p.status,
-          p.paid_at as "paidAt",
-          p.note,
-          p.created_at as "createdAt",
-          p.updated_at as "updatedAt"
-        from investor_payouts p
-        left join investors inv
-          on inv.id = p.investor_id
-          and inv.workspace_owner_id = p.workspace_owner_id
-        left join investments i
-          on i.id = p.investment_id
-          and i.workspace_owner_id = p.workspace_owner_id
-        where p.workspace_owner_id = $1
-          and p.period_start = $2::timestamptz
-          and p.period_end = $3::timestamptz
-        order by inv.name asc, p.created_at asc
-      `,
-      [workspaceOwnerId, range.start, range.end]
-    );
+    let result;
+    if (range) {
+      result = await pool.query(
+        `
+          select
+            p.id,
+            p.investment_id as "investmentId",
+            p.investor_id as "investorId",
+            inv.name as "investorName",
+            coalesce(i.akad_type, case when i.type = 'barang_titip_jual' then 'barang_titip_jual' else 'murabahah_bil_wakalah' end) as "akadType",
+            p.period_start as "periodStart",
+            p.period_end as "periodEnd",
+            p.base_profit as "baseAmount",
+            p.share_pct as "ratePct",
+            p.amount,
+            p.status,
+            p.paid_at as "paidAt",
+            p.note,
+            p.created_at as "createdAt",
+            p.updated_at as "updatedAt"
+          from investor_payouts p
+          left join investors inv
+            on inv.id = p.investor_id
+            and inv.workspace_owner_id = p.workspace_owner_id
+          left join investments i
+            on i.id = p.investment_id
+            and i.workspace_owner_id = p.workspace_owner_id
+          where p.workspace_owner_id = $1
+            and p.period_start = $2::timestamptz
+            and p.period_end = $3::timestamptz
+          order by inv.name asc, p.created_at asc
+        `,
+        [workspaceOwnerId, range.start, range.end]
+      );
+    } else {
+      result = await pool.query(
+        `
+          select
+            p.id,
+            p.investment_id as "investmentId",
+            p.investor_id as "investorId",
+            inv.name as "investorName",
+            coalesce(i.akad_type, case when i.type = 'barang_titip_jual' then 'barang_titip_jual' else 'murabahah_bil_wakalah' end) as "akadType",
+            p.period_start as "periodStart",
+            p.period_end as "periodEnd",
+            p.base_profit as "baseAmount",
+            p.share_pct as "ratePct",
+            p.amount,
+            p.status,
+            p.paid_at as "paidAt",
+            p.note,
+            p.created_at as "createdAt",
+            p.updated_at as "updatedAt"
+          from investor_payouts p
+          left join investors inv
+            on inv.id = p.investor_id
+            and inv.workspace_owner_id = p.workspace_owner_id
+          left join investments i
+            on i.id = p.investment_id
+            and i.workspace_owner_id = p.workspace_owner_id
+          where p.workspace_owner_id = $1
+          order by p.period_start desc, inv.name asc, p.created_at asc
+        `,
+        [workspaceOwnerId]
+      );
+    }
 
     return NextResponse.json({
-      periodStart: range.start,
-      periodEnd: range.end,
+      periodStart: range?.start,
+      periodEnd: range?.end,
       payouts: result.rows,
     });
   } catch (error) {

@@ -80,6 +80,7 @@ if (!(await isPortOpen(databasePort))) {
 const nextProcess = startChild(process.execPath, [
   resolve("node_modules/next/dist/bin/next"),
   "dev",
+  ...process.argv.slice(2),
 ]);
 
 nextProcess.once("exit", (code) => {

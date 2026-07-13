@@ -265,6 +265,42 @@ export function PengaturanView() {
             <p className="mt-3 text-sm text-muted-foreground">
               Daftar ini langsung dipakai untuk opsi pembayaran di kasir utama.
             </p>
+
+            <div className="mt-6 space-y-4 border-t border-border/70 pt-5">
+              <div className="grid gap-2">
+                <Label htmlFor="bank-transfer-info">Informasi Rekening Bank (Untuk Transfer)</Label>
+                <Textarea
+                  id="bank-transfer-info"
+                  value={form.bankTransferInfo}
+                  onChange={(event) => updateField("bankTransferInfo", event.target.value)}
+                  className="min-h-24 rounded-[22px]"
+                  placeholder="Contoh: BCA 1234567890 a/n TokoMu"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="qris-payload">QRIS Payload Dinamis (NMID)</Label>
+                <Textarea
+                  id="qris-payload"
+                  value={form.qrisPayload}
+                  onChange={(event) => updateField("qrisPayload", event.target.value)}
+                  className="min-h-24 rounded-[22px]"
+                  placeholder="Paste string QRIS dari aplikasi (cth: 000201010211...)"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Jika diisi, kasir bisa langsung generate QRIS otomatis sesuai nominal belanja pelanggan.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="qris-image">Link Gambar QRIS Statis (Opsional)</Label>
+                <Input
+                  id="qris-image"
+                  value={form.qrisImageUrl}
+                  onChange={(event) => updateField("qrisImageUrl", event.target.value)}
+                  className="h-11 rounded-2xl"
+                  placeholder="URL gambar QRIS (contoh: https://...)"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-3">

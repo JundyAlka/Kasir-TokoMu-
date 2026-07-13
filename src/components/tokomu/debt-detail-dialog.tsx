@@ -186,7 +186,7 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto rounded-[28px] p-0">
+      <DialogContent className="flex max-h-[92vh] max-w-4xl flex-col gap-0 overflow-hidden rounded-[28px] p-0">
         <DialogHeader className="border-b border-border/70 p-6 pb-4">
           <DialogTitle className="flex items-center gap-2 font-heading text-2xl">
             <Info className="size-5" />
@@ -195,10 +195,11 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
           <DialogDescription>Rincian peminjam, barang, pembayaran cicilan, dan status kasbon.</DialogDescription>
         </DialogHeader>
 
-        {loading ? (
-          <div className="p-6 text-sm text-muted-foreground">Memuat detail kasbon...</div>
-        ) : detail ? (
-          <div className="grid gap-5 p-6">
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="p-6 text-sm text-muted-foreground">Memuat detail kasbon...</div>
+          ) : detail ? (
+            <div className="grid gap-5 p-6">
             <section className="grid gap-4 md:grid-cols-[1fr_auto]">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -316,8 +317,9 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
         ) : (
           <div className="p-6 text-sm text-muted-foreground">Pilih kasbon untuk melihat detail.</div>
         )}
+        </div>
 
-        <DialogFooter className="rounded-b-[28px]" showCloseButton>
+        <DialogFooter className="border-t border-border/70 bg-card p-4 sm:justify-end" showCloseButton>
           {detail ? (
             <>
               <Button

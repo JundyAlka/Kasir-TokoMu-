@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Loader2, Save, Search, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -33,6 +40,8 @@ type PayoutRow = {
   status?: PayoutStatus;
   paidAt?: string | null;
   note: string;
+  periodStart?: string;
+  periodEnd?: string;
 };
 
 type PayoutCalculation = {
@@ -61,6 +70,18 @@ const akadLabels: Record<AkadType, string> = {
 function currentMonthValue() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function getRecentMonths(count = 12) {
+  const options = [];
+  const now = new Date();
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(d);
+    options.push({ value, label });
+  }
+  return options;
 }
 
 function parseMonthValue(value: string) {
@@ -159,12 +180,14 @@ export function BagiHasilClient() {
   const [period, setPeriod] = useState(currentMonthValue());
   const [calculation, setCalculation] = useState<PayoutCalculation | null>(null);
   const [savedRows, setSavedRows] = useState<PayoutRow[]>([]);
+  const [historyRows, setHistoryRows] = useState<PayoutRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const periodPayload = useMemo(() => parseMonthValue(period), [period]);
   const hasSavedDraft = savedRows.length > 0;
   const visibleRows = hasSavedDraft ? savedRows : calculation?.payouts ?? [];
+  const selectedMonthLabel = getRecentMonths().find((m) => m.value === period)?.label ?? period;
 
   async function loadSavedRows() {
     const data = await requestJson<{ payouts: PayoutRow[] }>(
@@ -172,6 +195,32 @@ export function BagiHasilClient() {
     );
     setSavedRows(data.payouts);
     return data.payouts;
+  }
+
+  useEffect(() => {
+    let mounted = true;
+    requestJson<{ payouts: PayoutRow[] }>(
+      `/api/payouts?year=${periodPayload.year}&month=${periodPayload.month}`
+    )
+      .then((data) => {
+        if (mounted) setSavedRows(data.payouts);
+      })
+      .catch(() => undefined);
+      
+    requestJson<{ payouts: PayoutRow[] }>("/api/payouts")
+      .then((data) => {
+        if (mounted) setHistoryRows(data.payouts);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      mounted = false;
+    };
+  }, [periodPayload.year, periodPayload.month]);
+
+  async function loadHistoryRows() {
+    const data = await requestJson<{ payouts: PayoutRow[] }>("/api/payouts");
+    setHistoryRows(data.payouts);
   }
 
   async function handleCalculate() {
@@ -219,6 +268,7 @@ export function BagiHasilClient() {
         body: JSON.stringify({ status }),
       });
       await loadSavedRows();
+      await loadHistoryRows();
       toast.success(status === "dibayar" ? "Payout ditandai dibayar." : "Payout disetujui.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal memperbarui payout.");
@@ -236,19 +286,27 @@ export function BagiHasilClient() {
             </CardDescription>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="grid gap-2">
+            <div className="grid gap-2 min-w-[200px]">
               <Label htmlFor="period-month">Bulan</Label>
-              <Input
-                id="period-month"
-                type="month"
+              <Select
                 value={period}
-                onChange={(event) => {
-                  setPeriod(event.target.value);
+                onValueChange={(value) => {
+                  setPeriod(value);
                   setCalculation(null);
                   setSavedRows([]);
                 }}
-                className="h-11 rounded-2xl"
-              />
+              >
+                <SelectTrigger id="period-month" className="h-11 rounded-2xl bg-card">
+                  <SelectValue placeholder="Pilih bulan" />
+                </SelectTrigger>
+                <SelectContent>
+                  {getRecentMonths().map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <Button className="h-11 rounded-2xl" onClick={() => void handleCalculate()} disabled={isLoading}>
               {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
@@ -287,41 +345,75 @@ export function BagiHasilClient() {
         </section>
       ) : null}
 
-      <Card className="border-border/60 bg-card/80">
-        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <WalletCards className="size-5" />
-              {hasSavedDraft ? "Draft payout tersimpan" : "Preview payout"}
-            </CardTitle>
-            <CardDescription>
-              {hasSavedDraft
-                ? "Periode ini sudah tersimpan. Gunakan aksi status per baris."
-                : "Preview tidak menyimpan data sampai tombol draft ditekan."}
-            </CardDescription>
-          </div>
-          {calculation && !hasSavedDraft ? (
-            <Button className="rounded-2xl" onClick={() => void handleSaveDraft()} disabled={isSaving}>
-              {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              Simpan sebagai Draft
-            </Button>
-          ) : null}
-        </CardHeader>
-        <CardContent>
-          <PayoutPreviewTable
-            rows={visibleRows}
-            mode={hasSavedDraft ? "saved" : "preview"}
-            onApprove={(id) => void updateStatus(id, "disetujui")}
-            onPaid={(id) => void updateStatus(id, "dibayar")}
-          />
-          {hasSavedDraft ? (
-            <div className="mt-4 flex items-center gap-2 rounded-2xl border border-primary/20 bg-primary/8 p-3 text-sm">
-              <CheckCircle2 className="size-4 text-primary" />
-              Draft periode ini sudah ada, sehingga tombol simpan dinonaktifkan.
+      {calculation || hasSavedDraft ? (
+        <Card className="border-border/60 bg-card/80">
+          <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <WalletCards className="size-5" />
+                {hasSavedDraft ? `Draft payout tersimpan (${selectedMonthLabel})` : `Preview payout (${selectedMonthLabel})`}
+              </CardTitle>
+              <CardDescription>
+                {hasSavedDraft
+                  ? "Periode ini sudah tersimpan. Gunakan aksi status per baris."
+                  : "Preview tidak menyimpan data sampai tombol draft ditekan."}
+              </CardDescription>
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
+            {calculation && !hasSavedDraft ? (
+              <Button className="rounded-2xl" onClick={() => void handleSaveDraft()} disabled={isSaving}>
+                {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                Simpan sebagai Draft
+              </Button>
+            ) : null}
+          </CardHeader>
+          <CardContent>
+            <PayoutPreviewTable
+              rows={visibleRows}
+              mode={hasSavedDraft ? "saved" : "preview"}
+              onApprove={(id) => void updateStatus(id, "disetujui")}
+              onPaid={(id) => void updateStatus(id, "dibayar")}
+            />
+            {hasSavedDraft ? (
+              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-primary/20 bg-primary/8 p-3 text-sm">
+                <CheckCircle2 className="size-4 text-primary" />
+                Draft periode ini sudah ada, sehingga tombol simpan dinonaktifkan.
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {historyRows.length > 0 ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 pt-4">
+            <h3 className="font-heading text-xl font-semibold">Riwayat Payout Sebelumnya</h3>
+          </div>
+          {Object.entries(
+            historyRows.reduce((acc, row) => {
+              const monthKey = row.periodStart ? new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(new Date(row.periodStart)) : "Periode Tidak Diketahui";
+              if (!acc[monthKey]) acc[monthKey] = [];
+              acc[monthKey].push(row);
+              return acc;
+            }, {} as Record<string, PayoutRow[]>)
+          )
+          .filter(([monthKey]) => monthKey !== selectedMonthLabel || !hasSavedDraft)
+          .map(([monthKey, groupRows]) => (
+            <Card key={monthKey} className="border-border/60 bg-card/60">
+              <CardHeader className="py-4">
+                <CardTitle className="text-lg">{monthKey}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PayoutPreviewTable
+                  rows={groupRows}
+                  mode="saved"
+                  onApprove={(id) => void updateStatus(id, "disetujui")}
+                  onPaid={(id) => void updateStatus(id, "dibayar")}
+                />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -187,6 +187,10 @@ export function MonthlyReportPreview() {
     setSelectedId(report.id);
     setEditingId(report.id);
     setNote(asSnapshot(report.data).note ?? "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => {
+      document.getElementById("report-note")?.focus();
+    }, 100);
   }
 
   function handleCancelEdit() {
@@ -368,6 +372,12 @@ export function MonthlyReportPreview() {
                     <div><span className="text-muted-foreground">Cadangan</span><p className="font-medium tabular-nums">{formatCurrency(metrics.reserveShare)}</p></div>
                     <div><span className="text-muted-foreground">Investor</span><p className="font-medium tabular-nums">{formatCurrency(metrics.investorPayout)}</p></div>
                   </div>
+
+                  {asSnapshot(report.data).note ? (
+                    <div className="rounded-xl bg-accent/40 px-4 py-3 text-sm italic text-muted-foreground">
+                      "{asSnapshot(report.data).note}"
+                    </div>
+                  ) : null}
 
                   <div className="flex flex-wrap gap-2">
                           <Button

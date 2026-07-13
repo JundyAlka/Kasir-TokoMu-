@@ -133,6 +133,9 @@ export const SettingsUpdateSchema = z
       .array(z.enum(paymentMethods))
       .min(1, "Pilih minimal satu metode bayar.")
       .transform((methods) => Array.from(new Set(methods))),
+    qrisPayload: optionalText,
+    qrisImageUrl: optionalText,
+    bankTransferInfo: optionalText,
   })
   .strict();
 

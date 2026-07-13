@@ -66,6 +66,7 @@ export function KaryawanClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<InviteCredentials | null>(null);
+  const [confirmDeactivateUser, setConfirmDeactivateUser] = useState<WorkspaceUser | null>(null);
 
   async function refreshUsers() {
     const response = await fetch("/api/users", { cache: "no-store" });
@@ -149,10 +150,10 @@ export function KaryawanClient({
     }
   }
 
-  async function handleDeactivate(user: WorkspaceUser) {
-    if (!window.confirm(`Nonaktifkan akses ${user.email} dari workspace ini?`)) {
-      return;
-    }
+  async function executeDeactivate() {
+    if (!confirmDeactivateUser) return;
+    const user = confirmDeactivateUser;
+    setConfirmDeactivateUser(null);
 
     const actionId = `${user.id}:delete`;
     setPendingAction(actionId);
@@ -198,7 +199,57 @@ export function KaryawanClient({
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+    <div className="flex flex-col gap-4">
+      <RoleGate role={["pimpinan"]} currentRole={currentRole}>
+        <Card className="border-border/60 bg-card/80">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 font-heading text-2xl">
+              <UserPlus className="size-5" />
+              Invite user
+            </CardTitle>
+            <CardDescription>
+              Buat akun baru dan tempatkan user langsung ke workspace ini.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={(event) => void handleInvite(event)}>
+              <div className="grid gap-2">
+                <Label htmlFor="invite-email">Email</Label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="kasir@email.com"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Role</Label>
+                <Select value={role} onValueChange={(value) => setRole(value as StaffRole)}>
+                  <SelectTrigger className="h-11 w-full rounded-2xl bg-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {staffRoles.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {roleLabels[item]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button type="submit" className="h-11 w-full rounded-2xl" disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
+                Invite user
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </RoleGate>
+
       <Card className="border-border/60 bg-card/80">
         <CardHeader>
           <CardTitle className="font-heading text-2xl">Daftar karyawan</CardTitle>
@@ -269,7 +320,7 @@ export function KaryawanClient({
                           size="sm"
                           variant="destructive"
                           disabled={!canManage || deletePending || Boolean(pendingAction)}
-                          onClick={() => void handleDeactivate(user)}
+                          onClick={() => setConfirmDeactivateUser(user)}
                         >
                           {deletePending ? (
                             <Loader2 className="size-3.5 animate-spin" />
@@ -369,6 +420,24 @@ export function KaryawanClient({
             <Button type="button" onClick={() => void copyCredentials()}>
               <Copy className="size-4" />
               Salin
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(confirmDeactivateUser)} onOpenChange={(open) => !open && setConfirmDeactivateUser(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nonaktifkan Karyawan</DialogTitle>
+            <DialogDescription>
+              Nonaktifkan akses {confirmDeactivateUser?.email} dari workspace ini? Karyawan tidak akan bisa login lagi ke warung ini.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-end gap-2 mt-4">
+            <Button type="button" variant="outline" onClick={() => setConfirmDeactivateUser(null)}>
+              Batal
+            </Button>
+            <Button type="button" variant="destructive" onClick={() => void executeDeactivate()}>
+              Nonaktifkan
             </Button>
           </DialogFooter>
         </DialogContent>

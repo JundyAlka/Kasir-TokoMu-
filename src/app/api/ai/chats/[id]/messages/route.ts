@@ -32,8 +32,10 @@ export async function POST(
   try {
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
+    console.log(`[POST /messages] chatId=${id} workspaceOwnerId=${workspaceOwnerId}`);
     const chat = await getChat(workspaceOwnerId, id);
     if (!chat) {
+      console.log(`[POST /messages] getChat returned null for chatId=${id} and userId=${workspaceOwnerId}`);
       return NextResponse.json({ error: "Chat tidak ditemukan." }, { status: 404 });
     }
     const body = (await request.json()) as { text?: string };
@@ -48,6 +50,7 @@ export async function POST(
     });
     return NextResponse.json({ newMessages });
   } catch (error) {
+    console.log("[POST /messages] error inside runUserTurn:", error);
     return handleRouteError(error, "Gagal mengirim pesan ke AI.");
   }
 }

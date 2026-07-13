@@ -22,5 +22,8 @@ export const emptyAppState: AppState = {
     profitSharePcmPct: 30,
     profitShareReservePct: 20,
     enabledPayments: ["Tunai", "QRIS", "Transfer"],
+    qrisPayload: "",
+    qrisImageUrl: "",
+    bankTransferInfo: "",
   },
 };

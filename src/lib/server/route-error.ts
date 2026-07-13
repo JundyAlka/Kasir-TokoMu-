@@ -14,14 +14,14 @@ function friendlyAiError(message: string) {
     return {
       status: 502,
       message:
-        "IYH API key sudah terbaca, tetapi belum ada model yang aktif untuk key ini. Aktifkan model di dashboard IYH lalu coba lagi.",
+        "API key sudah terbaca, tetapi belum ada model yang aktif untuk key ini. Aktifkan model di dashboard penyedia API lalu coba lagi.",
     };
   }
 
-  if (message.includes("IYH API")) {
+  if (message.includes("Claude API") || message.includes("authorization failed")) {
     return {
       status: 502,
-      message,
+      message: "API key Claude/Gemini Anda bermasalah atau kehabisan saldo (authorization failed). Silakan isi ulang saldo di dashboard Claude atau ganti API key Anda.",
     };
   }
 

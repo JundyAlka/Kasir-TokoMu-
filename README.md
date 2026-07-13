@@ -1,68 +1,94 @@
 # TokoMu
 
-TokoMu is a tablet-first retail operating system for PCM Muhammadiyah Grabag. The application brings together cashier workflows, inventory control, customer receivables, investor records, profit sharing, and monthly PCM reporting in one workspace.
+TokoMu adalah sistem operasi ritel (_retail operating system_) berbasis web yang dioptimalkan untuk perangkat tablet. Aplikasi ini menggabungkan alur kerja kasir (POS), manajemen inventaris, pencatatan piutang (kasbon), catatan investor, pembagian hasil, dan pelaporan bulanan dalam satu ruang kerja.
 
-## Product Scope
+## 🚀 Quick Start (Development Lokal)
 
-- Visual point-of-sale interface with cart management and checkout recording.
-- Inventory management for daily goods, stock thresholds, and restock activity.
-- Customer receivables tracking for active kasbon and follow-up context.
-- Investor and investment management for cash capital and consignment goods.
-- Profit-sharing calculation for investor payouts, PCM allocation, reserve funds, and store operations.
-- Monthly PCM report generation with frozen data snapshots and downloadable PDF output.
-- Role-based access control for pimpinan, pengelola keuangan, and kasir.
+Untuk menjalankan proyek ini secara lokal, ikuti langkah berikut:
 
-## Key Modules
+### 1. Persiapan Environment
+TokoMu menggunakan variabel environment untuk konfigurasi keamanan dan database.
 
-| Module | Capability |
-| --- | --- |
-| Kasir | Transaction capture, payment method selection, and stock deduction. |
-| Inventaris | Product catalog, pricing, stock levels, and restock monitoring. |
-| Buku Hutang | Customer debt records and repayment status. |
-| Investor | Investor profiles and hybrid investment records. |
-| Bagi Hasil | Periodic payout preview, draft persistence, approval, and paid status. |
-| Laporan | Profit-loss reporting sourced from transaction, item, and expense data. |
-| Laporan PCM | Official monthly reporting for PCM review with PDF export. |
-| Pengaturan | Store profile, PCM identity, payment methods, and staff access. |
+1. Salin file template ke file `.env` dan `.env.local`:
+   ```bash
+   cp .env.example .env.local
+   cp .env.example .env
+   ```
+2. Buka `.env.local` dan sesuaikan nilainya:
+   - `DATABASE_URL`: Biarkan default (`postgres://postgres:postgres@localhost:5439/warungos`) jika menggunakan script bawaan.
+   - `BETTER_AUTH_SECRET`: Generate kunci rahasia acak 32 karakter (bisa gunakan `openssl rand -base64 32`).
+   - `BETTER_AUTH_URL`: Biarkan default (`http://localhost:3000`).
+   - `GEMINI_API_KEY`: Masukkan API Key dari Google AI Studio jika ingin menggunakan fitur AI.
 
-## Technology
+### 2. Instalasi & Menjalankan Server Lokal
+Aplikasi ini sudah membundel PostgreSQL secara tertanam (_embedded_) untuk mempermudah development.
+```bash
+npm install
+npm run dev
+```
+Perintah `npm run dev` otomatis akan:
+- Menjalankan PostgreSQL di background (port `5439`).
+- Menjalankan Next.js di `http://localhost:3000`.
 
-- Next.js App Router
-- React and Tailwind CSS
-- shadcn/ui and Base UI primitives
-- Drizzle ORM with PostgreSQL
-- Better Auth
-- React PDF renderer
+### 3. Migrasi & Data Dummy (Reset)
+Jika database masih kosong, jalankan langkah ini di terminal terpisah:
+```bash
+npm run db:reset
+npm run db:push
+npm run auth:migrate
+npm run db:seed
+```
+Ini akan membuat semua skema tabel dan mengisi aplikasi dengan data dummy lengkap.
 
-## Gemini AI Setup
+---
 
-TokoMu AI uses the Gemini API through Google's OpenAI-compatible endpoint:
-`https://generativelanguage.googleapis.com/v1beta/openai/`.
+## 🚢 Deployment ke VPS (Production)
 
-To configure it locally:
+TokoMu sudah disiapkan untuk bisa di-deploy dengan mudah menggunakan **Docker Compose**. Ini sangat disarankan agar aplikasi lebih hemat memori berkat metode _multi-stage standalone build_.
 
-1. Open [Google AI Studio](https://aistudio.google.com/app/apikey).
-2. Create or copy an API key.
-3. Add these values to `.env.local`:
-
+### 1. Clone & Set Environment VPS
+Masuk ke VPS Anda via SSH, clone repo ini, lalu siapkan `.env`:
+```bash
+cp .env.example .env
+nano .env
+```
+Sesuaikan konfigurasi `.env` untuk **production**:
 ```env
-GEMINI_API_KEY=replace-with-google-ai-studio-key
-GEMINI_TEXT_MODEL=gemini-2.0-flash
-GEMINI_VISION_MODEL=gemini-2.0-flash
+# URL Database untuk docker compose
+DATABASE_URL=postgresql://postgres:PasswordAman123!@postgres:5432/warungos
+DB_PASSWORD=PasswordAman123!
+
+# URL Publik website Anda
+BETTER_AUTH_URL=https://kasir.tokomu.com
+BETTER_AUTH_SECRET=RahasiaPanjangAndaDisini
 ```
 
-The chat assistant and receipt OCR both use Gemini. Receipt OCR sends base64 `image_url` content to `GEMINI_VISION_MODEL`.
+### 2. Build & Jalankan via Docker
+Jalankan perintah ini:
+```bash
+docker compose up -d --build
+```
 
-## Data And Access Model
+### 3. Setup Database (Migrasi Awal di Server)
+Masuk ke container aplikasi untuk memvalidasi dan memigrasi database:
+```bash
+docker compose exec app sh
+npx better-auth migrate --config src/lib/auth.ts
+node --import tsx ./scripts/reset-db.mjs
+node --import tsx ./scripts/seed.ts
+exit
+```
 
-TokoMu uses a workspace ownership model. The first registered user becomes `pimpinan` for their workspace. Additional users can be invited as `pengelola_keuangan` or `kasir`, with server-side RBAC applied to pages and API routes.
+### 4. Ekspos Domain
+Setup Nginx / Caddy sebagai _reverse proxy_ di VPS Anda yang mem-forward request port 80/443 ke `localhost:3000`.
 
-Operational data is scoped by `workspaceOwnerId` so multiple users in the same workspace work against the same store, investor, payout, and report records.
+---
 
-## Security Notes
+## 🛠 Teknologi
 
-Runtime credentials are expected to be supplied through environment variables and are not committed to the repository. Local database files, generated logs, build output, and temporary test artifacts are ignored.
-
-## Status
-
-This codebase is prepared as a TokoMu PCM Muhammadiyah Grabag demo and SUS testing build, with seeded retail, investor, and reporting data for evaluation.
+- **Framework**: Next.js App Router (React)
+- **Styling**: Tailwind CSS, shadcn/ui
+- **Database**: PostgreSQL (Drizzle ORM)
+- **Autentikasi**: Better Auth
+- **AI**: Google Gemini API (untuk receipt OCR & chat assistant)
+- **Laporan PDF**: React PDF renderer

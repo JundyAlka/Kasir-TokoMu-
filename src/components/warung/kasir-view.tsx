@@ -41,7 +41,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/format";
-import { PaymentMethod, Product, ProductCategory, Transaction } from "@/lib/types";
+import { generateDynamicQris } from "@/lib/qris";
+import { PaymentMethod, Product, ProductCategory, Settings, Transaction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const paymentLabels: Record<PaymentMethod, string> = {
@@ -197,45 +198,52 @@ function createQrisPayload(total: number, items: QrisPreviewLine[]) {
 function QrisPaymentPreview({
   items,
   total,
+  settings,
 }: Readonly<{
   items: QrisPreviewLine[];
   total: number;
+  settings: Settings;
 }>) {
   const [qrResult, setQrResult] = useState<{ dataUrl: string; payload: string } | null>(null);
   const reference = createQrisReference(total, items);
-  const payload = createQrisPayload(total, items);
+
+  const isDynamic = Boolean(settings.qrisPayload && settings.qrisPayload.length > 20);
+  const isStaticImage = Boolean(settings.qrisImageUrl && !isDynamic);
+
+  const payload = isDynamic ? generateDynamicQris(settings.qrisPayload, total) : "";
   const qrDataUrl = qrResult?.payload === payload ? qrResult.dataUrl : null;
 
   useEffect(() => {
-    if (total <= 0 || items.length === 0) {
+    if (total <= 0 || items.length === 0 || !isDynamic || !payload) {
       return;
     }
 
     let active = true;
     void QRCode.toDataURL(payload, {
-      color: {
-        dark: "#1f1713",
-        light: "#ffffff",
-      },
+      color: { dark: "#1f1713", light: "#ffffff" },
       errorCorrectionLevel: "M",
       margin: 1,
       width: 220,
     })
       .then((dataUrl) => {
-        if (active) {
-          setQrResult({ dataUrl, payload });
-        }
+        if (active) setQrResult({ dataUrl, payload });
       })
       .catch(() => {
-        if (active) {
-          setQrResult(null);
-        }
+        if (active) setQrResult(null);
       });
 
     return () => {
       active = false;
     };
-  }, [items, payload, total]);
+  }, [items, payload, total, isDynamic]);
+
+  if (!isDynamic && !isStaticImage) {
+    return (
+      <div className="mt-4 rounded-[22px] border border-border/70 bg-card/60 p-4 text-center text-sm text-muted-foreground">
+        QRIS belum diatur. Silakan atur Payload Dinamis atau Gambar QRIS Statis di menu Pengaturan.
+      </div>
+    );
+  }
 
   return (
     <div className="mt-4 rounded-[22px] border border-primary/25 bg-primary/8 p-4">
@@ -243,7 +251,7 @@ function QrisPaymentPreview({
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium">
             <QrCode className="size-4 text-primary" />
-            QRIS pembayaran
+            {isDynamic ? "QRIS Dinamis (Otomatis)" : "QRIS Statis"}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             Ref: <span className="font-mono">{reference}</span>
@@ -256,20 +264,19 @@ function QrisPaymentPreview({
 
       <div className="mt-4 flex flex-col items-center gap-3">
         <div className="flex size-48 items-center justify-center rounded-[26px] border border-border/70 bg-white p-3 shadow-inner">
-          {qrDataUrl ? (
+          {isDynamic && qrDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={qrDataUrl}
-              alt={`QRIS pembayaran ${formatCurrency(total)}`}
-              className="size-full"
-            />
+            <img src={qrDataUrl} alt={`QRIS pembayaran ${formatCurrency(total)}`} className="size-full" />
+          ) : isStaticImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={settings.qrisImageUrl} alt={`QRIS pembayaran`} className="size-full object-contain" />
           ) : (
             <QrCode className="size-10 text-muted-foreground" />
           )}
         </div>
         <div className="flex items-center gap-2 text-xs font-medium text-primary">
           <CheckCircle2 className="size-4" />
-          Menunggu pembayaran
+          Menunggu pembayaran pelanggan
         </div>
       </div>
     </div>
@@ -329,17 +336,23 @@ function PaymentInstructionDialog({
   onOpenChange,
   open,
   total,
+  settings,
 }: Readonly<{
   method: PaymentMethod;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   total: number;
+  settings: Settings;
 }>) {
   const isTransfer = method === "Transfer";
 
   if (!isTransfer) {
     return null;
   }
+
+  const transferInfos = settings.bankTransferInfo
+    ? settings.bankTransferInfo.split("\n").filter((line) => line.trim())
+    : [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -350,7 +363,7 @@ function PaymentInstructionDialog({
           </div>
           <DialogTitle className="font-heading text-2xl">Pembayaran Transfer</DialogTitle>
           <DialogDescription>
-            Gunakan nomor dummy DANA atau BRI berikut untuk simulasi pembayaran.
+            Arahkan pelanggan untuk mentransfer ke rekening di bawah ini.
           </DialogDescription>
         </DialogHeader>
 
@@ -363,29 +376,69 @@ function PaymentInstructionDialog({
           </div>
 
           <div className="space-y-3">
-            <TransferAccountCard
-              account={dummyPaymentAccounts.dana}
-              icon={<Smartphone className="size-4" />}
-            />
-            <TransferAccountCard
-              account={dummyPaymentAccounts.bri}
-              icon={<Building2 className="size-4" />}
-            />
+            {transferInfos.length > 0 ? (
+              transferInfos.map((info, idx) => {
+                const parts = info.split(/:(.+)/);
+                const bankName = parts[0]?.trim() ?? "Bank";
+                const accDetails = parts[1]?.trim() ?? info;
+
+                return (
+                  <div key={idx} className="rounded-[22px] border border-border/70 bg-card/70 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-primary">
+                          <Building2 className="size-4" />
+                        </div>
+                        <p className="font-medium text-sm">{bankName}</p>
+                      </div>
+                      <CopyButton text={accDetails.split(" ")[0] ?? accDetails} />
+                    </div>
+                    <p className="mt-4 rounded-2xl bg-muted/40 px-3 py-2 font-mono text-base font-semibold tracking-wide">
+                      {accDetails}
+                    </p>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="rounded-[22px] border border-border/70 bg-card/70 p-4 text-center text-sm text-muted-foreground">
+                Informasi rekening belum diatur. Silakan atur di menu Pengaturan.
+              </div>
+            )}
           </div>
         </div>
 
-        <DialogFooter className="m-0 flex-row items-center justify-end gap-3 rounded-b-[28px] border-border/70 bg-card/70 px-5 py-4 sm:px-6">
-          <DialogClose
-            render={
-              <Button type="button" variant="outline" className="h-10 min-w-24 rounded-full" />
-            }
-          >
-            Tutup
-          </DialogClose>
-          <Button type="button" className="h-10 min-w-32 rounded-full" onClick={() => onOpenChange(false)}>
-            Sudah paham
-          </Button>
-        </DialogFooter>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-b-[28px] border-t border-border/70 bg-card/70 px-5 py-4 sm:px-6">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <input 
+              type="checkbox" 
+              id="hideTransferPopup" 
+              className="size-4 cursor-pointer rounded border-border"
+              defaultChecked={typeof window !== "undefined" ? window.localStorage.getItem("hideTransferPopup") === "true" : false}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  window.localStorage.setItem("hideTransferPopup", "true");
+                } else {
+                  window.localStorage.removeItem("hideTransferPopup");
+                }
+              }}
+            />
+            <label htmlFor="hideTransferPopup" className="text-sm text-muted-foreground cursor-pointer select-none">
+              Jangan otomatis tampilkan ini lagi
+            </label>
+          </div>
+          <div className="flex items-center justify-end gap-3 w-full sm:w-auto">
+            <DialogClose
+              render={
+                <Button type="button" variant="outline" className="h-10 min-w-24 rounded-full" />
+              }
+            >
+              Tutup
+            </DialogClose>
+            <Button type="button" className="h-10 min-w-32 rounded-full" onClick={() => onOpenChange(false)}>
+              Sudah paham
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -599,6 +652,7 @@ export function KasirView() {
         onOpenChange={setPaymentInfoOpen}
         method={paymentMethod}
         total={cartTotal}
+        settings={settings}
       />
       <div ref={productColumnRef} className="min-w-0">
         <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
@@ -695,7 +749,7 @@ export function KasirView() {
         <Card
           className={cn(
             "glass-panel border-border/60 shadow-[0_28px_70px_-48px_rgba(66,38,20,0.6)]",
-            !shouldStackCheckout && "sticky top-4"
+            !shouldStackCheckout && "sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto custom-scrollbar"
           )}
         >
           <CardHeader>
@@ -794,7 +848,7 @@ export function KasirView() {
                     )}
                     onClick={() => {
                       setPaymentMethod(method);
-                      if (method === "Transfer") {
+                      if (method === "Transfer" && typeof window !== "undefined" && window.localStorage.getItem("hideTransferPopup") !== "true") {
                         setPaymentInfoOpen(true);
                       }
                     }}
@@ -808,25 +862,23 @@ export function KasirView() {
 
             {needsPaymentInfo ? (
               <div className="rounded-[22px] border border-border/70 bg-card/55 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <CreditCard className="size-4 text-primary" />
-                      Transfer DANA / BRI
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Tampilkan nomor dummy untuk DANA atau BRI.
-                    </p>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <CreditCard className="size-4 text-primary" />
+                    Transfer Bank / e-Wallet
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9 shrink-0 rounded-xl"
-                    onClick={() => setPaymentInfoOpen(true)}
-                  >
-                    Lihat nomor
-                  </Button>
+                  <div className="space-y-2">
+                    {settings.bankTransferInfo ? (
+                      settings.bankTransferInfo.split("\n").filter(Boolean).map((info, idx) => (
+                        <div key={idx} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-card/70 px-3 py-2 border border-border/50 text-xs">
+                          <span className="font-medium">{info.split(":")[0]?.trim() || "Bank"}</span>
+                          <span className="font-mono text-muted-foreground">{info.split(":")[1]?.trim() || info}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Belum ada info rekening.</p>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -892,7 +944,7 @@ export function KasirView() {
               <p className="mt-3 font-heading text-4xl font-semibold tracking-tight">
                 {formatCurrency(cartTotal)}
               </p>
-              {showQrisPreview ? <QrisPaymentPreview items={cartLines} total={cartTotal} /> : null}
+              {showQrisPreview ? <QrisPaymentPreview items={cartLines} total={cartTotal} settings={settings} /> : null}
               <Button
                 type="button"
                 size="lg"

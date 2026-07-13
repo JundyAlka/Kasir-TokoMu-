@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { products, restockLogs } from "@/db/schema";
 import { getRequestUser } from "@/lib/server/app-service";
+import { logEvent } from "@/lib/server/audit";
 import { handleRouteError } from "@/lib/server/route-error";
 import { requireRole } from "@/lib/server/rbac";
 
@@ -104,6 +105,21 @@ export async function POST(request: NextRequest) {
           .where(and(eq(products.userId, workspaceOwnerId), eq(products.id, item.productId)))
           .returning();
         productById.set(item.productId, updated);
+
+        await logEvent(
+          { workspaceOwnerId, actorUserId: userId },
+          {
+            eventType: "PRODUCT_RESTOCKED",
+            entityType: "product",
+            entityId: item.productId,
+            category: "update",
+            payload: {
+              quantity: item.quantity,
+              unitCost: item.unitCost,
+              source: "ai_ocr",
+            },
+          }
+        );
       }
 
       return tx

@@ -135,6 +135,9 @@ async function ensureWorkspace(userId: string, session?: SessionHint) {
         profitSharePcmPct: 30,
         profitShareReservePct: 20,
         enabledPayments: ["Tunai", "QRIS", "Transfer"],
+        qrisPayload: "",
+        qrisImageUrl: "",
+        bankTransferInfo: "",
         createdAt: timestamp,
         updatedAt: timestamp,
       });
@@ -250,6 +253,9 @@ function mapSettings(profile: typeof storeProfiles.$inferSelect): Settings {
     profitSharePcmPct: profile.profitSharePcmPct,
     profitShareReservePct: profile.profitShareReservePct,
     enabledPayments: profile.enabledPayments,
+    qrisPayload: profile.qrisPayload,
+    qrisImageUrl: profile.qrisImageUrl,
+    bankTransferInfo: profile.bankTransferInfo,
   };
 }
 
@@ -277,6 +283,9 @@ function normalizeSettings(settings: Settings): Settings {
     profitSharePcmPct: Math.min(100, Math.max(0, Math.round(settings.profitSharePcmPct || 0))),
     profitShareReservePct: Math.min(100, Math.max(0, Math.round(settings.profitShareReservePct || 0))),
     enabledPayments,
+    qrisPayload: settings.qrisPayload.trim(),
+    qrisImageUrl: settings.qrisImageUrl.trim(),
+    bankTransferInfo: settings.bankTransferInfo.trim(),
   };
 }
 
@@ -928,6 +937,9 @@ export async function updateStoreSettings(userId: string, settings: Settings) {
       profitSharePcmPct: nextSettings.profitSharePcmPct,
       profitShareReservePct: nextSettings.profitShareReservePct,
       enabledPayments: nextSettings.enabledPayments,
+      qrisPayload: nextSettings.qrisPayload,
+      qrisImageUrl: nextSettings.qrisImageUrl,
+      bankTransferInfo: nextSettings.bankTransferInfo,
       updatedAt: nowIso(),
     })
     .where(eq(storeProfiles.userId, userId))

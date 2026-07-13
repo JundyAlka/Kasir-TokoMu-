@@ -88,7 +88,7 @@ export function DashboardView() {
               Semua ringkasan yang sebelumnya membuat layar kasir terasa penuh dipindahkan ke sini.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+          <CardContent className="grid gap-4">
             <div className="rounded-[26px] border border-primary/20 bg-primary/10 px-5 py-5 text-foreground dark:border-primary/25 dark:bg-muted/55">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <ReceiptText className="size-4 text-primary" />

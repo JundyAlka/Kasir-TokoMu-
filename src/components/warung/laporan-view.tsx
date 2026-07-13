@@ -257,13 +257,14 @@ function buildLinePath(points: Array<{ x: number; y: number }>) {
     const previousPoint = points[index];
     const beforePreviousPoint = points[index - 1] ?? previousPoint;
     const nextPoint = points[index + 2] ?? point;
+    const tension = 0.18;
     const controlPointA = {
-      x: previousPoint.x + (point.x - beforePreviousPoint.x) / 6,
-      y: previousPoint.y + (point.y - beforePreviousPoint.y) / 6,
+      x: previousPoint.x + (point.x - beforePreviousPoint.x) * tension,
+      y: previousPoint.y + (point.y - beforePreviousPoint.y) * tension,
     };
     const controlPointB = {
-      x: point.x - (nextPoint.x - previousPoint.x) / 6,
-      y: point.y - (nextPoint.y - previousPoint.y) / 6,
+      x: point.x - (nextPoint.x - previousPoint.x) * tension,
+      y: point.y - (nextPoint.y - previousPoint.y) * tension,
     };
 
     commands.push(
@@ -285,33 +286,45 @@ function TrendRevenueChart({
 }>) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const maxRevenue = Math.max(...series.map((item) => item.revenue), 1);
+
+  // Map X across [5%, 95%] for clean side padding, and Y across [20%, 88%]
   const chartPoints = series.map((item, index) => {
-    const x = series.length === 1 ? 50 : 6 + (index / (series.length - 1)) * 88;
-    const y = 86 - (item.revenue / maxRevenue) * 68;
+    const x = series.length === 1 ? 50 : 5 + (index / (series.length - 1)) * 90;
+    const y = 88 - (item.revenue / maxRevenue) * 68;
     return { ...item, x, y };
   });
+
   const linePath = buildLinePath(chartPoints);
+  const firstX = chartPoints[0]?.x ?? 5;
+  const lastX = chartPoints.at(-1)?.x ?? 95;
   const areaPath =
     chartPoints.length > 0
-      ? `${linePath} L ${chartPoints.at(-1)?.x ?? 94} 92 L ${chartPoints[0].x} 92 Z`
+      ? `${linePath} L ${lastX} 95 L ${firstX} 95 Z`
       : "";
+
   const peakRevenue = Math.max(...chartPoints.map((point) => point.revenue), 0);
   const peakIndex = Math.max(0, chartPoints.findIndex((point) => point.revenue === peakRevenue));
-  const displayPoint = chartPoints[activeIndex ?? peakIndex] ?? chartPoints[0];
-  const tooltipLeft = displayPoint ? Math.min(84, Math.max(16, displayPoint.x)) : 50;
-  const tooltipTop = displayPoint ? (displayPoint.y > 34 ? displayPoint.y - 13 : displayPoint.y + 15) : 20;
+  const displayIndex = activeIndex ?? peakIndex;
+  const displayPoint = chartPoints[displayIndex] ?? chartPoints[0];
+
+  // Tooltip X: clamp to keep the box from overflowing the left/right edges.
+  const tooltipLeft = displayPoint ? Math.min(82, Math.max(18, displayPoint.x)) : 50;
+
+  // Choose perfectly spaced index ticks for the bottom axis
   const tickIndexes = new Set(
     series
       .map((_, index) => index)
-      .filter((index) => series.length <= 10 || index === 0 || index === series.length - 1 || index % 5 === 0)
+      .filter((index) => {
+        if (series.length <= 8) return true;
+        if (index === 0 || index === series.length - 1) return true;
+        const step = Math.ceil((series.length - 1) / 6);
+        return index % step === 0 && index + step < series.length;
+      })
   );
-  const visibleTicks = series.filter((_, index) => tickIndexes.has(index));
+  const visibleTicks = chartPoints.filter((_, index) => tickIndexes.has(index));
 
-  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
-    if (chartPoints.length === 0) {
-      return;
-    }
-
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (chartPoints.length === 0) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const pointerX = ((event.clientX - rect.left) / rect.width) * 100;
     const nearestIndex = chartPoints.reduce((nearest, point, index) => {
@@ -327,187 +340,221 @@ function TrendRevenueChart({
   }
 
   return (
-    <div className="mt-5 rounded-[24px] border border-border/70 bg-background/25 p-4">
-      <div
-        className="relative h-60 overflow-hidden rounded-[24px] border border-white/5 bg-card/65 shadow-inner"
-        onPointerMove={handlePointerMove}
-        onPointerLeave={() => setActiveIndex(null)}
-      >
-        <div className="pointer-events-none absolute top-4 left-4 z-10 rounded-2xl border border-white/10 bg-card/78 px-3 py-2 text-xs shadow-[0_16px_38px_-28px_rgba(0,0,0,0.55)] backdrop-blur">
-          <p className="font-semibold text-foreground">{scopeLabel}</p>
-          <p className="mt-0.5 text-muted-foreground">{periodLabel}</p>
+    <div className="mt-6 rounded-[28px] border border-border/70 bg-gradient-to-b from-card/85 to-card/50 p-5 shadow-sm">
+      {/* Chart Header Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-border/40">
+        <div className="flex items-center gap-2.5">
+          <span className="flex size-8 items-center justify-center rounded-xl bg-primary/15 text-primary">
+            <TrendingUp className="size-4" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-foreground">{scopeLabel}</p>
+            <p className="text-xs text-muted-foreground">{periodLabel}</p>
+          </div>
         </div>
-        <svg
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          className="absolute inset-0 size-full cursor-crosshair"
-          role="img"
-          aria-label="Kurva tren omzet"
-        >
-          <defs>
-            <radialGradient id="trend-ambient-gradient" cx="52%" cy="0%" r="78%">
-              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.22" />
-              <stop offset="55%" stopColor="hsl(var(--primary))" stopOpacity="0.06" />
-              <stop offset="100%" stopColor="hsl(var(--background))" stopOpacity="0" />
-            </radialGradient>
-            <linearGradient id="trend-area-gradient" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.34" />
-              <stop offset="64%" stopColor="hsl(var(--primary))" stopOpacity="0.1" />
-              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
-            </linearGradient>
-            <linearGradient id="trend-line-gradient" x1="0" x2="1" y1="0" y2="0">
-              <stop offset="0%" stopColor="hsl(var(--primary))" />
-              <stop offset="54%" stopColor="#fff0dc" />
-              <stop offset="100%" stopColor="hsl(var(--chart-3))" />
-            </linearGradient>
-            <filter id="trend-line-glow" x="-20%" y="-45%" width="140%" height="190%">
-              <feGaussianBlur stdDeviation="2.6" result="blur" />
-              <feColorMatrix
-                in="blur"
-                type="matrix"
-                values="1 0 0 0 1  0 0.72 0 0 0.46  0 0 0.36 0 0.18  0 0 0 1 0"
-                result="warmGlow"
-              />
-              <feMerge>
-                <feMergeNode in="warmGlow" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-          <rect x="0" y="0" width="100" height="100" fill="url(#trend-ambient-gradient)" />
-          {[18, 35, 52, 69, 86].map((y) => (
-            <line
-              key={y}
-              x1="4"
-              x2="96"
-              y1={y}
-              y2={y}
-              stroke="hsl(var(--border))"
-              strokeDasharray="2 3"
-              strokeOpacity="0.28"
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-          <path key={`area-${linePath}`} d={areaPath} fill="url(#trend-area-gradient)" className="trend-area-animate" />
-          <path
-            key={`glow-${linePath}`}
-            d={linePath}
-            fill="none"
-            stroke="hsl(var(--primary))"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeOpacity="0.36"
-            strokeWidth="9"
-            vectorEffect="non-scaling-stroke"
-            filter="url(#trend-line-glow)"
-            pathLength={1}
-            className="trend-line-animate"
-          />
-          <path
-            key={`line-${linePath}`}
-            d={linePath}
-            fill="none"
-            stroke="url(#trend-line-gradient)"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="3.2"
-            vectorEffect="non-scaling-stroke"
-            pathLength={1}
-            className="trend-line-animate"
-          />
-          <path
-            key={`shine-${linePath}`}
-            d={linePath}
-            fill="none"
-            stroke="#fff8ec"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeOpacity="0.72"
-            strokeWidth="1.1"
-            vectorEffect="non-scaling-stroke"
-            pathLength={1}
-            className="trend-line-animate"
-          />
-          {displayPoint ? (
-            <line
-              x1={displayPoint.x}
-              x2={displayPoint.x}
-              y1="12"
-              y2="91"
-              stroke="hsl(var(--primary))"
-              strokeDasharray="2 3"
-              strokeOpacity="0.46"
-              vectorEffect="non-scaling-stroke"
-            />
-          ) : null}
-        </svg>
-        <div className="pointer-events-none absolute inset-0">
-          {chartPoints.map((point, index) => {
-            const isPeak = point.revenue > 0 && point.revenue === peakRevenue;
-            const isActive = activeIndex === null ? isPeak : activeIndex === index;
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 font-medium text-primary">
+            <span className="size-1.5 rounded-full bg-primary animate-pulse" />
+            Puncak: {formatCompactCurrency(peakRevenue)}
+          </span>
+        </div>
+      </div>
 
-            return (
-              <div
-                key={point.key}
-                title={`${point.tickLabel}: ${formatCurrency(point.revenue)} dari ${point.transactions} transaksi`}
-                className={cn(
-                  "trend-marker-animate absolute rounded-full border shadow-[0_0_18px_rgba(255,189,123,0.42)] transition-transform",
-                  point.revenue > 0
-                    ? "size-3 border-card bg-primary"
-                    : "size-2 border-muted-foreground/30 bg-muted-foreground/55",
-                  isPeak && "size-4 border-primary-foreground bg-[#fff0dc] shadow-[0_0_26px_rgba(255,189,123,0.72)]"
-                )}
-                style={{
-                  left: `${point.x}%`,
-                  top: `${point.y}%`,
-                  transform: `translate(-50%, -50%) scale(${isActive ? 1.25 : 1})`,
-                }}
+      {/* Chart wrapper — relative positioning context for both chart + tooltip */}
+      <div
+        className="relative mt-4 h-64 touch-none"
+        onPointerMove={handlePointerMove}
+        onPointerDown={handlePointerMove}
+        onPointerLeave={(e) => {
+          if (e.pointerType === "mouse") setActiveIndex(null);
+        }}
+      >
+        {/* Chart area — overflow hidden only clips SVG/dots, NOT tooltip */}
+        <div className="absolute inset-0 overflow-hidden rounded-[22px] border border-border/40 bg-background/45 shadow-inner transition-colors hover:bg-background/60">
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            className="absolute inset-0 size-full cursor-crosshair select-none"
+            role="img"
+            aria-label="Kurva tren omzet"
+          >
+            <defs>
+              <linearGradient id="trend-area-gradient" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.32" />
+                <stop offset="65%" stopColor="hsl(var(--primary))" stopOpacity="0.08" />
+                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id="trend-line-gradient" x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0%" stopColor="hsl(var(--primary))" />
+                <stop offset="50%" stopColor="#ffb966" />
+                <stop offset="100%" stopColor="hsl(var(--primary))" />
+              </linearGradient>
+              <filter id="trend-line-glow" x="-20%" y="-45%" width="140%" height="190%">
+                <feGaussianBlur stdDeviation="2.2" result="blur" />
+                <feColorMatrix
+                  in="blur"
+                  type="matrix"
+                  values="1 0 0 0 1  0 0.72 0 0 0.46  0 0 0.36 0 0.18  0 0 0 0.8 0"
+                  result="glow"
+                />
+                <feMerge>
+                  <feMergeNode in="glow" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            {/* Horizontal Grid Lines */}
+            {[22, 44, 66, 88].map((y) => (
+              <line
+                key={y}
+                x1="3"
+                x2="97"
+                y1={y}
+                y2={y}
+                stroke="hsl(var(--border))"
+                strokeDasharray="3 4"
+                strokeOpacity="0.35"
+                vectorEffect="non-scaling-stroke"
               />
-            );
-          })}
+            ))}
+
+            {/* Area under curve */}
+            <path d={areaPath} fill="url(#trend-area-gradient)" className="transition-all duration-300 ease-out" />
+
+            {/* Glowing Line */}
+            <path
+              d={linePath}
+              fill="none"
+              stroke="hsl(var(--primary))"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity="0.3"
+              strokeWidth="7.5"
+              vectorEffect="non-scaling-stroke"
+              filter="url(#trend-line-glow)"
+            />
+
+            {/* Main Sharp Line */}
+            <path
+              d={linePath}
+              fill="none"
+              stroke="url(#trend-line-gradient)"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="3.2"
+              vectorEffect="non-scaling-stroke"
+            />
+
+            {/* Active Vertical Crosshair */}
+            {displayPoint ? (
+              <line
+                x1={displayPoint.x}
+                x2={displayPoint.x}
+                y1="12"
+                y2="95"
+                stroke="hsl(var(--primary))"
+                strokeDasharray="3 3"
+                strokeOpacity="0.65"
+                strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : null}
+          </svg>
+
+          {/* Marker Dots Layer */}
+          <div className="pointer-events-none absolute inset-0">
+            {chartPoints.map((point, index) => {
+              const isPeak = point.revenue > 0 && point.revenue === peakRevenue;
+              const isActive = displayIndex === index;
+
+              return (
+                <div
+                  key={point.key}
+                  className={cn(
+                    "absolute rounded-full border transition-all duration-150",
+                    point.revenue > 0
+                      ? "size-2.5 border-card bg-primary shadow-sm"
+                      : "size-2 border-muted-foreground/40 bg-muted/80",
+                    isPeak && "size-3.5 border-primary-foreground bg-[#ffe4be] shadow-[0_0_16px_rgba(255,189,123,0.85)]",
+                    isActive && "size-4 border-2 border-primary-foreground bg-primary shadow-[0_0_20px_rgba(255,189,123,0.95)] z-10"
+                  )}
+                  style={{
+                    left: `${point.x}%`,
+                    top: `${point.y}%`,
+                    transform: "translate(-50%, -50%)",
+                  }}
+                />
+              );
+            })}
+          </div>
         </div>
+
+        {/* Floating Tooltip — OUTSIDE overflow-hidden, never clipped, always above curve */}
         {displayPoint ? (
           <div
-            className="pointer-events-none absolute z-20 min-w-44 rounded-2xl border border-white/10 bg-popover/92 px-3 py-2 text-xs text-popover-foreground shadow-[0_18px_42px_-28px_rgba(0,0,0,0.75)] backdrop-blur"
+            className="pointer-events-none absolute z-30 min-w-40 rounded-2xl border border-white/10 bg-popover/92 px-3 py-2 text-xs text-popover-foreground shadow-[0_12px_32px_-12px_rgba(0,0,0,0.7)] backdrop-blur-md transition-all duration-100"
             style={{
               left: `${tooltipLeft}%`,
-              top: `${tooltipTop}%`,
-              transform: "translate(-50%, -50%)",
+              top: `${displayPoint.y}%`,
+              transform: "translate(-50%, calc(-100% - 16px))",
             }}
           >
-            <p className="font-semibold">{displayPoint.label}, {displayPoint.tickLabel}</p>
-            <p className="mt-1 font-heading text-lg font-semibold">{formatCurrency(displayPoint.revenue)}</p>
-            <p className="text-muted-foreground">{displayPoint.transactions} transaksi</p>
+            <div className="flex items-center justify-between gap-3 text-muted-foreground">
+              <span className="font-semibold text-foreground">{displayPoint.label}</span>
+              <span>{displayPoint.tickLabel}</span>
+            </div>
+            <p className="mt-1 font-heading text-base font-bold text-primary">{formatCurrency(displayPoint.revenue)}</p>
+            <p className="text-[11px] text-muted-foreground">{displayPoint.transactions} transaksi</p>
           </div>
         ) : null}
       </div>
-      {displayPoint ? (
-        <div className="mt-3 grid gap-2 rounded-2xl border border-border/60 bg-card/65 px-3 py-2 text-xs sm:grid-cols-3">
-          <div>
-            <p className="text-muted-foreground">{activeIndex === null ? "Info puncak" : "Titik dibaca"}</p>
-            <p className="mt-0.5 font-medium text-foreground">{displayPoint.tickLabel}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Omzet</p>
-            <p className="mt-0.5 font-medium text-foreground">{formatCurrency(displayPoint.revenue)}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Transaksi</p>
-            <p className="mt-0.5 font-medium text-foreground">{displayPoint.transactions} transaksi</p>
-          </div>
-        </div>
-      ) : null}
-      <div
-        className="mt-3 grid gap-2 text-xs text-muted-foreground"
-        style={{ gridTemplateColumns: `repeat(${visibleTicks.length}, minmax(0, 1fr))` }}
-      >
+
+      {/* Perfectly Aligned X-Axis Date Labels Below Chart */}
+      <div className="relative mt-2.5 h-7 w-full select-none text-[11px] text-muted-foreground">
         {visibleTicks.map((item) => (
-          <div key={item.key} className="min-w-0 text-center">
-            <p className="truncate font-medium text-foreground">{item.label}</p>
-            <p className="truncate">{item.tickLabel}</p>
+          <div
+            key={item.key}
+            className="absolute top-0 flex flex-col items-center transition-colors hover:text-foreground"
+            style={{
+              left: `${item.x}%`,
+              transform: "translateX(-50%)",
+            }}
+          >
+            <span className="font-semibold text-foreground/80">{item.label}</span>
+            <span className="text-[10px] text-muted-foreground/75">{item.tickLabel}</span>
           </div>
         ))}
       </div>
+
+      {/* Selected Point Status Bar */}
+      {displayPoint ? (
+        <div className="mt-3 grid gap-2.5 rounded-[20px] border border-border/60 bg-card/75 p-3 text-xs sm:grid-cols-3">
+          <div className="flex items-center gap-2.5 rounded-xl bg-muted/40 px-3 py-2">
+            <CalendarDays className="size-4 shrink-0 text-primary" />
+            <div>
+              <p className="text-[11px] text-muted-foreground">
+                {activeIndex === null ? "Titik puncak periode" : "Titik terpilih"}
+              </p>
+              <p className="font-semibold text-foreground">{displayPoint.label}, {displayPoint.tickLabel}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5 rounded-xl bg-muted/40 px-3 py-2">
+            <TrendingUp className="size-4 shrink-0 text-primary" />
+            <div>
+              <p className="text-[11px] text-muted-foreground">Omzet tercatat</p>
+              <p className="font-semibold text-foreground">{formatCurrency(displayPoint.revenue)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5 rounded-xl bg-muted/40 px-3 py-2">
+            <ListChecks className="size-4 shrink-0 text-primary" />
+            <div>
+              <p className="text-[11px] text-muted-foreground">Jumlah transaksi</p>
+              <p className="font-semibold text-foreground">{displayPoint.transactions} transaksi</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -745,7 +792,7 @@ export function LaporanView() {
                   <p className="mt-2 font-heading text-3xl font-semibold">{formatCurrency(trendTotal)}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{trendPeriodLabel}</p>
                 </div>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                   <div className="flex rounded-2xl border border-border/70 bg-muted/35 p-1">
                     {trendRangeOptions.map((option) => (
                       <Button
@@ -780,7 +827,7 @@ export function LaporanView() {
                       </SelectContent>
                     </Select>
                   ) : null}
-                  <div className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-foreground">
+                  <div className="shrink-0 whitespace-nowrap rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-foreground">
                     {trendTransactionCount} transaksi
                   </div>
                 </div>

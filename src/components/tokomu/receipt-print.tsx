@@ -1,4 +1,5 @@
 "use client";
+"use client";
 
 import { Printer, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import type { Settings, Transaction } from "@/lib/types";
@@ -220,9 +222,11 @@ export function ReceiptPrintDialog({
           </div>
         </div>
 
-        <DialogFooter className="rounded-b-[28px]" showCloseButton>
+        <DialogFooter className="rounded-b-[28px] border-t-0 p-6 pt-2 sm:justify-end gap-2" showCloseButton={false}>
           <Button
             type="button"
+            variant="outline"
+            className="rounded-xl px-4 text-muted-foreground hover:text-foreground"
             onClick={() => {
               try {
                 printReceipt(transaction, settings);
@@ -234,6 +238,13 @@ export function ReceiptPrintDialog({
             <Printer className="size-4" />
             Cetak Struk
           </Button>
+          <DialogClose
+            render={
+              <Button className="rounded-xl px-8 bg-primary text-primary-foreground hover:bg-primary/90">
+                Selesai
+              </Button>
+            }
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>

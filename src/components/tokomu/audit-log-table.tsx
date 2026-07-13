@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Bot,
   Calendar,
@@ -17,6 +17,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   AuditLogDetailDialog,
   type AuditLogEntry,
@@ -206,9 +214,9 @@ function NativeSelect({
         className
       )}
     >
-      <option value="">{placeholder}</option>
+      <option value="" className="bg-background text-foreground">{placeholder}</option>
       {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
+        <option key={opt.value} value={opt.value} className="bg-background text-foreground">
           {opt.label}
         </option>
       ))}
@@ -444,61 +452,85 @@ export function AuditLogTable() {
               Belum ada audit log untuk filter ini.
             </div>
           ) : (
-            <div>
-              {groupedLogs.map((group) => (
-                <div key={group.day}>
-                  {/* Day header */}
-                  <div className="sticky top-0 z-10 border-b border-t border-border/40 bg-muted/50 px-4 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-sm first:border-t-0">
-                    {group.day}
-                  </div>
-                  {group.entries.map((entry) => {
-                    const labelInfo = getAuditLabel(entry.eventType);
-                    const cat = (entry.category || labelInfo.category) as AuditCategory;
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">Waktu</TableHead>
+                    <TableHead>Aktivitas</TableHead>
+                    <TableHead>Aktor</TableHead>
+                    <TableHead className="hidden md:table-cell">Target</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {groupedLogs.map((group) => (
+                    <React.Fragment key={group.day}>
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={5} className="bg-muted/50 py-2 text-xs font-medium text-muted-foreground">
+                          {group.day}
+                        </TableCell>
+                      </TableRow>
+                      {group.entries.map((entry) => {
+                        const labelInfo = getAuditLabel(entry.eventType);
+                        const cat = (entry.category || labelInfo.category) as AuditCategory;
 
-                    return (
-                      <button
-                        key={entry.id}
-                        type="button"
-                        onClick={() => setSelectedEntry(entry)}
-                        className="flex w-full items-center gap-3 border-b border-border/30 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/30 focus-visible:bg-muted/30 focus-visible:outline-none"
-                      >
-                        {/* Time */}
-                        <div className="w-[80px] shrink-0" title={exactTime(entry.createdAt)}>
-                          <p className="text-xs tabular-nums text-muted-foreground">
-                            {relativeTime(entry.createdAt)}
-                          </p>
-                        </div>
+                        return (
+                          <TableRow
+                            key={entry.id}
+                            className="cursor-pointer transition-colors hover:bg-muted/30"
+                            onClick={() => setSelectedEntry(entry)}
+                          >
+                            <TableCell className="w-[100px] whitespace-nowrap" title={exactTime(entry.createdAt)}>
+                              <span className="text-xs tabular-nums text-muted-foreground">
+                                {relativeTime(entry.createdAt)}
+                              </span>
+                            </TableCell>
 
-                        {/* Event + category badge */}
-                        <div className="flex min-w-[180px] items-center gap-2">
-                          <CategoryBadge category={cat} />
-                          <span className="text-sm font-medium">{labelInfo.label}</span>
-                        </div>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <div className="w-[80px] shrink-0">
+                                  <CategoryBadge category={cat} />
+                                </div>
+                                <span className="text-sm font-medium whitespace-nowrap">{labelInfo.label}</span>
+                              </div>
+                            </TableCell>
 
-                        {/* Actor */}
-                        <div className="hidden min-w-[160px] md:block">
-                          <ActorCell name={entry.actorName} email={entry.actorEmail} />
-                        </div>
+                            <TableCell>
+                              <ActorCell name={entry.actorName} email={entry.actorEmail} />
+                            </TableCell>
 
-                        {/* Entity */}
-                        <div className="hidden min-w-[120px] lg:block">
-                          <p className="text-sm text-muted-foreground">
-                            {entry.entityType}
-                            {entry.entityId && (
-                              <span className="ml-1 text-[11px] opacity-60">#{entry.entityId.slice(0, 12)}</span>
-                            )}
-                          </p>
-                        </div>
+                            <TableCell className="hidden md:table-cell">
+                              {entry.entityId ? (
+                                <span className="text-xs text-muted-foreground truncate max-w-[200px] block">
+                                  {entry.entityType || "Item"} #{entry.entityId}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
 
-                        {/* Detail button */}
-                        <div className="ml-auto shrink-0">
-                          <Eye className="size-4 text-muted-foreground/50" />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
+                            <TableCell className="w-[50px] text-right">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-primary rounded-full shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedEntry(entry);
+                                }}
+                              >
+                                <Eye className="size-4" />
+                                <span className="sr-only">Lihat detail</span>
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>

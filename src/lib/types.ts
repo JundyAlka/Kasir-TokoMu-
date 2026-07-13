@@ -105,6 +105,9 @@ export interface Settings {
   profitSharePcmPct: number;
   profitShareReservePct: number;
   enabledPayments: PaymentMethod[];
+  qrisPayload: string;
+  qrisImageUrl: string;
+  bankTransferInfo: string;
 }
 
 export interface AppState {
