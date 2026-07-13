@@ -13,7 +13,7 @@ import {
   CheckCircle2,
   Loader2,
 } from "lucide-react";
-import { useSession } from "@/lib/auth-client";
+import { useSession, authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,6 +63,7 @@ export function AuthScreen() {
   const authError = searchParams.get("error");
   const [mode, setMode] = useState<AuthMode>(queryMode);
   const [isLoading, setIsLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [signInForm, setSignInForm] = useState({ email: "", password: "" });
   const [signUpForm, setSignUpForm] = useState({ name: "", email: "", password: "" });
 
@@ -165,10 +166,10 @@ export function AuthScreen() {
             </div>
 
             {/* Error banner */}
-            {authError ? (
+            {(formError ?? authError) ? (
               <div className="flex items-start gap-2.5 rounded-2xl border border-destructive/25 bg-destructive/8 px-4 py-3 text-sm text-destructive">
                 <span className="mt-px">⚠</span>
-                <span>{authError}</span>
+                <span>{formError ?? authError}</span>
               </div>
             ) : null}
 
@@ -193,118 +194,131 @@ export function AuthScreen() {
 
             {/* Forms */}
             {mode === "signin" ? (
-              <>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
-                    <Input
-                      id="signin-email"
-                      name="email"
-                      form="signin-form"
-                      type="email"
-                      value={signInForm.email}
-                      onChange={(e) => setSignInForm((s) => ({ ...s, email: e.target.value }))}
-                      autoComplete="email"
-                      className="h-12 rounded-2xl bg-card/80"
-                      placeholder="warung@email.com"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-password">Kata sandi</Label>
-                    <Input
-                      id="signin-password"
-                      name="password"
-                      form="signin-form"
-                      type="password"
-                      value={signInForm.password}
-                      onChange={(e) => setSignInForm((s) => ({ ...s, password: e.target.value }))}
-                      autoComplete="current-password"
-                      className="h-12 rounded-2xl bg-card/80"
-                      placeholder="Minimal 8 karakter"
-                      required
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    form="signin-form"
-                    size="lg"
-                    className="h-12 w-full rounded-2xl"
-                    disabled={isLoading}
-                    onClick={() => setIsLoading(true)}
-                  >
-                    {isLoading ? <Loader2 className="size-4 animate-spin" /> : null}
-                    {isLoading ? "Masuk..." : "Masuk ke dashboard"}
-                  </Button>
+              <form
+                className="space-y-4"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setFormError(null);
+                  setIsLoading(true);
+                  try {
+                    const { error } = await authClient.signIn.email({
+                      email: signInForm.email,
+                      password: signInForm.password,
+                      callbackURL: "/dashboard",
+                    });
+                    if (error) {
+                      setFormError(error.message ?? "Email atau kata sandi salah.");
+                    } else {
+                      router.replace("/dashboard");
+                    }
+                  } catch {
+                    setFormError("Gagal masuk. Periksa koneksi internet kamu.");
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="signin-email">Email</Label>
+                  <Input
+                    id="signin-email"
+                    type="email"
+                    value={signInForm.email}
+                    onChange={(e) => setSignInForm((s) => ({ ...s, email: e.target.value }))}
+                    autoComplete="email"
+                    className="h-12 rounded-2xl bg-card/80"
+                    placeholder="warung@email.com"
+                    required
+                  />
                 </div>
-                <form id="signin-form" action="/api/session/sign-in" method="post">
-                  <input type="hidden" name="callbackURL" value="/dashboard" />
-                </form>
-              </>
+                <div className="space-y-2">
+                  <Label htmlFor="signin-password">Kata sandi</Label>
+                  <Input
+                    id="signin-password"
+                    type="password"
+                    value={signInForm.password}
+                    onChange={(e) => setSignInForm((s) => ({ ...s, password: e.target.value }))}
+                    autoComplete="current-password"
+                    className="h-12 rounded-2xl bg-card/80"
+                    placeholder="Minimal 8 karakter"
+                    required
+                  />
+                </div>
+                <Button type="submit" size="lg" className="h-12 w-full rounded-2xl" disabled={isLoading}>
+                  {isLoading ? <Loader2 className="size-4 animate-spin" /> : null}
+                  {isLoading ? "Masuk..." : "Masuk ke dashboard"}
+                </Button>
+              </form>
             ) : (
-              <>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name">Nama pemilik</Label>
-                    <Input
-                      id="signup-name"
-                      name="name"
-                      form="signup-form"
-                      value={signUpForm.name}
-                      onChange={(e) => setSignUpForm((s) => ({ ...s, name: e.target.value }))}
-                      autoComplete="name"
-                      className="h-12 rounded-2xl bg-card/80"
-                      placeholder="Ibu Sari"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
-                    <Input
-                      id="signup-email"
-                      name="email"
-                      form="signup-form"
-                      type="email"
-                      value={signUpForm.email}
-                      onChange={(e) => setSignUpForm((s) => ({ ...s, email: e.target.value }))}
-                      autoComplete="email"
-                      className="h-12 rounded-2xl bg-card/80"
-                      placeholder="warung@email.com"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">Kata sandi</Label>
-                    <Input
-                      id="signup-password"
-                      name="password"
-                      form="signup-form"
-                      type="password"
-                      value={signUpForm.password}
-                      onChange={(e) => setSignUpForm((s) => ({ ...s, password: e.target.value }))}
-                      autoComplete="new-password"
-                      className="h-12 rounded-2xl bg-card/80"
-                      placeholder="Minimal 8 karakter"
-                      minLength={8}
-                      required
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    form="signup-form"
-                    size="lg"
-                    className="h-12 w-full rounded-2xl"
-                    disabled={isLoading}
-                    onClick={() => setIsLoading(true)}
-                  >
-                    {isLoading ? <Loader2 className="size-4 animate-spin" /> : null}
-                    {isLoading ? "Membuat akun..." : "Buat akun baru"}
-                  </Button>
+              <form
+                className="space-y-4"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setFormError(null);
+                  setIsLoading(true);
+                  try {
+                    const { error } = await authClient.signUp.email({
+                      name: signUpForm.name,
+                      email: signUpForm.email,
+                      password: signUpForm.password,
+                      callbackURL: "/dashboard",
+                    });
+                    if (error) {
+                      setFormError(error.message ?? "Gagal membuat akun.");
+                    } else {
+                      router.replace("/dashboard");
+                    }
+                  } catch {
+                    setFormError("Gagal membuat akun. Periksa koneksi internet kamu.");
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="signup-name">Nama pemilik</Label>
+                  <Input
+                    id="signup-name"
+                    value={signUpForm.name}
+                    onChange={(e) => setSignUpForm((s) => ({ ...s, name: e.target.value }))}
+                    autoComplete="name"
+                    className="h-12 rounded-2xl bg-card/80"
+                    placeholder="Ibu Sari"
+                    required
+                  />
                 </div>
-                <form id="signup-form" action="/api/session/sign-up" method="post">
-                  <input type="hidden" name="callbackURL" value="/dashboard" />
-                </form>
-              </>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-email">Email</Label>
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    value={signUpForm.email}
+                    onChange={(e) => setSignUpForm((s) => ({ ...s, email: e.target.value }))}
+                    autoComplete="email"
+                    className="h-12 rounded-2xl bg-card/80"
+                    placeholder="warung@email.com"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-password">Kata sandi</Label>
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    value={signUpForm.password}
+                    onChange={(e) => setSignUpForm((s) => ({ ...s, password: e.target.value }))}
+                    autoComplete="new-password"
+                    className="h-12 rounded-2xl bg-card/80"
+                    placeholder="Minimal 8 karakter"
+                    minLength={8}
+                    required
+                  />
+                </div>
+                <Button type="submit" size="lg" className="h-12 w-full rounded-2xl" disabled={isLoading}>
+                  {isLoading ? <Loader2 className="size-4 animate-spin" /> : null}
+                  {isLoading ? "Membuat akun..." : "Buat akun baru"}
+                </Button>
+              </form>
             )}
 
             <p className="text-center text-xs text-muted-foreground">
