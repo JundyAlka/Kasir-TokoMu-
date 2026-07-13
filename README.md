@@ -1,94 +1,91 @@
-# TokoMu
+# 🛒 Kasir TokoMu (WarungOS)
 
-TokoMu adalah sistem operasi ritel (_retail operating system_) berbasis web yang dioptimalkan untuk perangkat tablet. Aplikasi ini menggabungkan alur kerja kasir (POS), manajemen inventaris, pencatatan piutang (kasbon), catatan investor, pembagian hasil, dan pelaporan bulanan dalam satu ruang kerja.
+TokoMu adalah **Sistem Operasi Ritel (Retail Operating System)** modern berbasis web yang dirancang dan dioptimalkan secara khusus untuk perangkat tablet. Aplikasi ini merupakan _all-in-one workspace_ yang menggabungkan berbagai alur operasional warung atau toko ritel.
 
-## 🚀 Quick Start (Development Lokal)
+![TokoMu Kasir](screenshots/gambar_4.7_kasir_pos.png)
 
-Untuk menjalankan proyek ini secara lokal, ikuti langkah berikut:
+---
+
+## ✨ Fitur Utama
+
+- 💻 **Point of Sales (Kasir)**: Antarmuka kasir layar sentuh (_touch-friendly_) dengan keranjang responsif, dukungan uang pas, kalkulasi kembalian, dan cetak struk.
+- 📦 **Manajemen Inventaris**: Pengelolaan stok barang dengan notifikasi stok kritis, multi-kategori, dan pencatatan restok harian.
+- 💳 **Buku Hutang (Kasbon)**: Pencatatan hutang pelanggan dengan perhitungan _progress_ cicilan, jatuh tempo, dan satu klik untuk menyalin pesan penagihan (WhatsApp).
+- 🤝 **Investor & Distribusi Bagi Hasil**: Fitur transparansi keuangan untuk membagikan profit (laba bersih) sesuai _akad_ persentase investasi di akhir bulan secara otomatis.
+- 📊 **Laporan Cerdas (PCM)**: Rekapitulasi laporan bulanan untuk Ketua PCM/Pemilik, mencakup laba rugi bersih, estimasi nilai aset, dan status pelaporan.
+- 🤖 **Asisten AI Terintegrasi**: Chatbot AI (Gemini) yang paham konteks data toko, bisa diajak konsultasi strategi diskon, analisis laporan, dan _OCR_ faktur belanja.
+- 👥 **Manajemen Karyawan**: Sistem _Role-Based Access Control_ (Pimpinan, Kasir, Admin) dengan jejak aktivitas (_Audit Log_) untuk mengawasi operasional.
+
+---
+
+## 🛠 Teknologi Utama
+
+Sistem ini dibangun menggunakan sekumpulan _stack_ teknologi modern yang _Type-Safe_ dan berkinerja tinggi:
+
+- **Framework:** Next.js (App Router), React 19
+- **Database:** PostgreSQL
+- **ORM & Migrations:** Drizzle ORM
+- **Autentikasi:** Better Auth (Sesi berbasis cookie & database)
+- **Styling:** Tailwind CSS, Shadcn UI, Framer Motion
+- **AI Integrasi:** Google Generative AI (Gemini 2.0 Flash)
+- **Laporan & Export:** React PDF, ExcelJS, Papaparse
+
+---
+
+## 🚀 Panduan Pengembangan Lokal (Local Development)
 
 ### 1. Persiapan Environment
-TokoMu menggunakan variabel environment untuk konfigurasi keamanan dan database.
-
-1. Salin file template ke file `.env` dan `.env.local`:
-   ```bash
-   cp .env.example .env.local
-   cp .env.example .env
-   ```
-2. Buka `.env.local` dan sesuaikan nilainya:
-   - `DATABASE_URL`: Biarkan default (`postgres://postgres:postgres@localhost:5439/warungos`) jika menggunakan script bawaan.
-   - `BETTER_AUTH_SECRET`: Generate kunci rahasia acak 32 karakter (bisa gunakan `openssl rand -base64 32`).
-   - `BETTER_AUTH_URL`: Biarkan default (`http://localhost:3000`).
-   - `GEMINI_API_KEY`: Masukkan API Key dari Google AI Studio jika ingin menggunakan fitur AI.
-
-### 2. Instalasi & Menjalankan Server Lokal
-Aplikasi ini sudah membundel PostgreSQL secara tertanam (_embedded_) untuk mempermudah development.
-```bash
-npm install
-npm run dev
-```
-Perintah `npm run dev` otomatis akan:
-- Menjalankan PostgreSQL di background (port `5439`).
-- Menjalankan Next.js di `http://localhost:3000`.
-
-### 3. Migrasi & Data Dummy (Reset)
-Jika database masih kosong, jalankan langkah ini di terminal terpisah:
-```bash
-npm run db:reset
-npm run db:push
-npm run auth:migrate
-npm run db:seed
-```
-Ini akan membuat semua skema tabel dan mengisi aplikasi dengan data dummy lengkap.
-
----
-
-## 🚢 Deployment ke VPS (Production)
-
-TokoMu sudah disiapkan untuk bisa di-deploy dengan mudah menggunakan **Docker Compose**. Ini sangat disarankan agar aplikasi lebih hemat memori berkat metode _multi-stage standalone build_.
-
-### 1. Clone & Set Environment VPS
-Masuk ke VPS Anda via SSH, clone repo ini, lalu siapkan `.env`:
 ```bash
 cp .env.example .env
-nano .env
 ```
-Sesuaikan konfigurasi `.env` untuk **production**:
-```env
-# URL Database untuk docker compose
-DATABASE_URL=postgresql://postgres:PasswordAman123!@postgres:5432/warungos
-DB_PASSWORD=PasswordAman123!
+Isi konfigurasi pada file `.env` yang baru dibuat. Anda dapat menggunakan database lokal atau database cloud pilihan Anda.
 
-# URL Publik website Anda
-BETTER_AUTH_URL=https://kasir.tokomu.com
-BETTER_AUTH_SECRET=RahasiaPanjangAndaDisini
-```
-
-### 2. Build & Jalankan via Docker
-Jalankan perintah ini:
+### 2. Instalasi Dependensi
 ```bash
-docker compose up -d --build
+npm install
 ```
 
-### 3. Setup Database (Migrasi Awal di Server)
-Masuk ke container aplikasi untuk memvalidasi dan memigrasi database:
+### 3. Migrasi & Seed Database
+Pastikan `DATABASE_URL` sudah terhubung ke database kosong.
 ```bash
-docker compose exec app sh
-npx better-auth migrate --config src/lib/auth.ts
-node --import tsx ./scripts/reset-db.mjs
-node --import tsx ./scripts/seed.ts
-exit
+# Melakukan push skema ke database
+npm run db:push
+
+# Mengisi database dengan data dummy awal (produk, hutang, laporan, dll)
+npm run db:seed
 ```
 
-### 4. Ekspos Domain
-Setup Nginx / Caddy sebagai _reverse proxy_ di VPS Anda yang mem-forward request port 80/443 ke `localhost:3000`.
+### 4. Menjalankan Server Lokal
+```bash
+npm run dev
+```
+Aplikasi dapat diakses melalui `http://localhost:3000`.
 
 ---
 
-## 🛠 Teknologi
+## 🚢 Panduan Deployment (Production)
 
-- **Framework**: Next.js App Router (React)
-- **Styling**: Tailwind CSS, shadcn/ui
-- **Database**: PostgreSQL (Drizzle ORM)
-- **Autentikasi**: Better Auth
-- **AI**: Google Gemini API (untuk receipt OCR & chat assistant)
-- **Laporan PDF**: React PDF renderer
+TokoMu sangat mudah untuk di-deploy ke Vercel, Railway, VPS (via Docker), atau platform *hosting* modern lainnya.
+
+### Standar Deployment (Vercel/Node.js)
+1. Atur **Environment Variables** di _dashboard_ hosting Anda menggunakan nilai dari file `.env` production.
+2. Atur **Build Command**: `npm run build`
+3. Atur **Start Command**: `npm run start`
+
+### Sinkronisasi Skema Database Production
+Setelah environment terpasang, pastikan skema database *production* sudah sesuai. Anda bisa melakukan *push* skema dari lokal ke production dengan cara:
+```bash
+# Pastikan DATABASE_URL di lokal Anda (sementara) diubah ke URL database production
+npx drizzle-kit push
+```
+
+### Mentransfer Data ke Production (Opsional)
+Jika Anda ingin "menarik" (pull/transfer) data dummy atau data awal dari database lokal ke database *production*, Anda dapat menggunakan skrip bawaan:
+```bash
+# Ubah SOURCE_DB_URL dan TARGET_DB_URL di dalam script atau env
+npx tsx scripts/transfer-data.ts
+```
+
+---
+
+*Dibangun dengan dedikasi untuk memajukan ritel dan UMKM di seluruh nusantara.*
