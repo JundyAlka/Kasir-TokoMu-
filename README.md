@@ -1,91 +1,214 @@
-# 🛒 Kasir TokoMu (WarungOS)
+# Kasir TokoMu
 
-TokoMu adalah **Sistem Operasi Ritel (Retail Operating System)** modern berbasis web yang dirancang dan dioptimalkan secara khusus untuk perangkat tablet. Aplikasi ini merupakan _all-in-one workspace_ yang menggabungkan berbagai alur operasional warung atau toko ritel.
-
-![TokoMu Kasir](screenshots/gambar_4.7_kasir_pos.png)
+> **Retail Operating System** berbasis web — POS, Inventaris, Kasbon, Laporan, & AI Assistant dalam satu workspace.
 
 ---
 
-## ✨ Fitur Utama
+## Tentang Proyek
 
-- 💻 **Point of Sales (Kasir)**: Antarmuka kasir layar sentuh (_touch-friendly_) dengan keranjang responsif, dukungan uang pas, kalkulasi kembalian, dan cetak struk.
-- 📦 **Manajemen Inventaris**: Pengelolaan stok barang dengan notifikasi stok kritis, multi-kategori, dan pencatatan restok harian.
-- 💳 **Buku Hutang (Kasbon)**: Pencatatan hutang pelanggan dengan perhitungan _progress_ cicilan, jatuh tempo, dan satu klik untuk menyalin pesan penagihan (WhatsApp).
-- 🤝 **Investor & Distribusi Bagi Hasil**: Fitur transparansi keuangan untuk membagikan profit (laba bersih) sesuai _akad_ persentase investasi di akhir bulan secara otomatis.
-- 📊 **Laporan Cerdas (PCM)**: Rekapitulasi laporan bulanan untuk Ketua PCM/Pemilik, mencakup laba rugi bersih, estimasi nilai aset, dan status pelaporan.
-- 🤖 **Asisten AI Terintegrasi**: Chatbot AI (Gemini) yang paham konteks data toko, bisa diajak konsultasi strategi diskon, analisis laporan, dan _OCR_ faktur belanja.
-- 👥 **Manajemen Karyawan**: Sistem _Role-Based Access Control_ (Pimpinan, Kasir, Admin) dengan jejak aktivitas (_Audit Log_) untuk mengawasi operasional.
+**Kasir TokoMu** (kode internal: *WarungOS*) adalah sistem manajemen toko ritel modern yang dibangun dengan pendekatan *tablet-first*. Dirancang untuk warung, minimarket, dan UMKM yang membutuhkan sistem kasir ringan namun kaya fitur — tanpa ketergantungan pada *software* berbayar berlangganan.
+
+Sistem ini menggabungkan seluruh alur operasional harian dalam satu platform terpadu: dari transaksi kasir, pengelolaan stok, pencatatan piutang pelanggan, transparansi keuangan investor, hingga laporan laba-rugi bulanan yang siap cetak.
 
 ---
 
-## 🛠 Teknologi Utama
+## Fitur Utama
 
-Sistem ini dibangun menggunakan sekumpulan _stack_ teknologi modern yang _Type-Safe_ dan berkinerja tinggi:
-
-- **Framework:** Next.js (App Router), React 19
-- **Database:** PostgreSQL
-- **ORM & Migrations:** Drizzle ORM
-- **Autentikasi:** Better Auth (Sesi berbasis cookie & database)
-- **Styling:** Tailwind CSS, Shadcn UI, Framer Motion
-- **AI Integrasi:** Google Generative AI (Gemini 2.0 Flash)
-- **Laporan & Export:** React PDF, ExcelJS, Papaparse
+| Modul | Deskripsi |
+|---|---|
+| 🛒 **Point of Sale (Kasir)** | Antarmuka kasir *touch-friendly* dengan keranjang responsif, dukungan uang pas & kembalian otomatis, QRIS & transfer bank, cetak struk termal |
+| 📦 **Manajemen Inventaris** | CRUD produk multi-kategori, notifikasi stok kritis, pencatatan restok harian, ekspor ke Excel |
+| 💳 **Buku Hutang (Kasbon)** | Pencatatan hutang pelanggan, tracking cicilan, jatuh tempo, salin pesan tagihan via WhatsApp |
+| 🤝 **Investor & Bagi Hasil** | Manajemen data investor, kalkulasi distribusi profit otomatis berdasarkan persentase akad per bulan |
+| 📊 **Laporan Keuangan** | Rekap harian/mingguan/bulanan, laporan PCM (Pendapatan, Pengeluaran, Modal), ekspor PDF & CSV |
+| 🤖 **Asisten AI** | Chatbot berbasis Gemini yang memahami konteks data toko — analisis penjualan, saran diskon, OCR struk belanja |
+| 👥 **Manajemen Karyawan** | Role-based access (Pimpinan / Kasir / Admin), undang via email, audit log seluruh aktivitas |
+| 🔐 **Shift & Keamanan** | Manajemen shift kasir, pengaturan harga & pajak, keamanan sesi berbasis database |
 
 ---
 
-## 🚀 Panduan Pengembangan Lokal (Local Development)
+## Tech Stack
 
-### 1. Persiapan Environment
-```bash
-cp .env.example .env
+### Core
+| Layer | Teknologi | Versi |
+|---|---|---|
+| Framework | [Next.js](https://nextjs.org) (App Router) | `16.2.1` |
+| Language | TypeScript | `^5` |
+| UI Runtime | React | `19.2.4` |
+
+### Database & ORM
+| Layer | Teknologi | Versi |
+|---|---|---|
+| Database | PostgreSQL | `≥ 15` |
+| ORM | [Drizzle ORM](https://orm.drizzle.team) | `^0.45` |
+| Migrations | Drizzle Kit | `^0.31` |
+| Client | `pg` (node-postgres) | `^8.20` |
+
+### Autentikasi
+| Layer | Teknologi | Versi |
+|---|---|---|
+| Auth Library | [Better Auth](https://better-auth.com) | `^1.5.6` |
+| Strategy | Email + Password, sesi berbasis database | — |
+
+### UI & Styling
+| Layer | Teknologi |
+|---|---|
+| Component Primitives | [Base UI](https://base-ui.com) (`@base-ui/react`) |
+| Component System | [shadcn/ui](https://ui.shadcn.com) |
+| CSS Framework | Tailwind CSS `v4` |
+| Icon Library | Lucide React |
+| Toast / Notifikasi | Sonner |
+| PDF Renderer | `@react-pdf/renderer` |
+
+### AI & Integrasi
+| Layer | Teknologi |
+|---|---|
+| AI Provider | Google Generative AI (Gemini 2.0 Flash) |
+| QR Code | `qrcode` |
+| Date Utils | `date-fns`, `date-fns-tz` |
+| Validation | Zod v4 |
+
+### Tooling & Testing
+| Tool | Keterangan |
+|---|---|
+| Vitest | Unit & integration testing |
+| Playwright | E2E testing |
+| MSW | API mocking untuk testing |
+| ESLint | Linting & code quality |
+| tsx | TypeScript script runner |
+
+---
+
+## Struktur Direktori
+
 ```
-Isi konfigurasi pada file `.env` yang baru dibuat. Anda dapat menggunakan database lokal atau database cloud pilihan Anda.
+warungos/
+├── src/
+│   ├── app/                    # Next.js App Router (pages & API routes)
+│   │   ├── (dashboard)/        # Layout dashboard utama
+│   │   └── api/                # REST API endpoints
+│   ├── components/
+│   │   ├── tokomu/             # Komponen domain bisnis (audit, struk, kasbon, dll)
+│   │   ├── warung/             # Komponen layout & view utama (kasir, inventaris, dll)
+│   │   └── ui/                 # Design system (shadcn/base-ui)
+│   ├── db/
+│   │   └── schema.ts           # Drizzle schema — single source of truth database
+│   └── lib/
+│       ├── server/             # Server-only: auth, AI, app-service, validasi
+│       ├── types.ts            # TypeScript types terpusat
+│       └── format.ts           # Formatter mata uang, tanggal, dll
+├── drizzle/                    # File migrasi SQL (auto-generated)
+├── scripts/                    # Utilitas: seed, reset-db, transfer-data, dll
+├── Dockerfile                  # Multi-stage Docker build
+├── docker-compose.yml          # Orkestrasi: app + postgres
+└── deploy_instructions.txt     # Panduan deployment & env variables
+```
 
-### 2. Instalasi Dependensi
+---
+
+## Menjalankan Secara Lokal
+
+### Prasyarat
+- Node.js `≥ 20`
+- PostgreSQL `≥ 15` (atau gunakan Docker)
+- npm `≥ 10`
+
+### Langkah Setup
+
+**1. Clone & install dependensi:**
 ```bash
+git clone https://github.com/JundyAlka/Kasir-TokoMu-.git
+cd Kasir-TokoMu-
 npm install
 ```
 
-### 3. Migrasi & Seed Database
-Pastikan `DATABASE_URL` sudah terhubung ke database kosong.
+**2. Konfigurasi environment:**
 ```bash
-# Melakukan push skema ke database
-npm run db:push
+cp .env.example .env
+```
+Isi file `.env` dengan konfigurasi database dan API key Anda (lihat bagian [Environment Variables](#environment-variables)).
 
-# Mengisi database dengan data dummy awal (produk, hutang, laporan, dll)
-npm run db:seed
+**3. Jalankan migrasi & seed database:**
+```bash
+npm run db:push      # Terapkan skema ke database
+npm run db:seed      # Isi database dengan data awal/dummy
 ```
 
-### 4. Menjalankan Server Lokal
+**4. Jalankan dev server:**
 ```bash
 npm run dev
 ```
-Aplikasi dapat diakses melalui `http://localhost:3000`.
+Buka `http://localhost:3000`.
 
 ---
 
-## 🚢 Panduan Deployment (Production)
+## Environment Variables
 
-TokoMu sangat mudah untuk di-deploy ke Vercel, Railway, VPS (via Docker), atau platform *hosting* modern lainnya.
+Buat file `.env` di root folder `warungos/` dengan isian berikut:
 
-### Standar Deployment (Vercel/Node.js)
-1. Atur **Environment Variables** di _dashboard_ hosting Anda menggunakan nilai dari file `.env` production.
-2. Atur **Build Command**: `npm run build`
-3. Atur **Start Command**: `npm run start`
+```env
+# ── Database ──────────────────────────────────────────────────────────
+# PostgreSQL connection string
+DATABASE_URL=postgresql://user:password@localhost:5432/warungos
 
-### Sinkronisasi Skema Database Production
-Setelah environment terpasang, pastikan skema database *production* sudah sesuai. Anda bisa melakukan *push* skema dari lokal ke production dengan cara:
-```bash
-# Pastikan DATABASE_URL di lokal Anda (sementara) diubah ke URL database production
-npx drizzle-kit push
+# ── Better Auth ───────────────────────────────────────────────────────
+# Generate secret: openssl rand -base64 32
+BETTER_AUTH_SECRET=your-secret-key-here
+# URL publik aplikasi (ubah ke domain production saat deploy)
+BETTER_AUTH_URL=http://localhost:3000
+
+# ── Google Gemini AI ──────────────────────────────────────────────────
+# Dapatkan API Key dari: https://aistudio.google.com/apikey
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_TEXT_MODEL=gemini-2.0-flash
+GEMINI_VISION_MODEL=gemini-2.0-flash
 ```
 
-### Mentransfer Data ke Production (Opsional)
-Jika Anda ingin "menarik" (pull/transfer) data dummy atau data awal dari database lokal ke database *production*, Anda dapat menggunakan skrip bawaan:
+> **Lihat `deploy_instructions.txt`** di root repo untuk konfigurasi siap-pakai yang sudah diisi dengan environment aktual proyek ini.
+
+---
+
+## Deployment
+
+### Via Vercel (Rekomendasi)
+1. *Fork* / *import* repo ini ke Vercel.
+2. Atur seluruh *Environment Variables* di *dashboard* Vercel.
+3. Vercel akan otomatis menjalankan `npm run build` dan `npm start`.
+4. Setelah deploy pertama, jalankan migrasi database dari lokal:
+   ```bash
+   # Arahkan DATABASE_URL ke database production
+   npm run db:push
+   ```
+
+### Via Docker Compose (VPS/Self-hosted)
 ```bash
-# Ubah SOURCE_DB_URL dan TARGET_DB_URL di dalam script atau env
-npx tsx scripts/transfer-data.ts
+cp .env.example .env
+# Edit .env sesuaikan dengan production
+docker compose up -d --build
 ```
 
 ---
 
-*Dibangun dengan dedikasi untuk memajukan ritel dan UMKM di seluruh nusantara.*
+## Scripts yang Tersedia
+
+| Perintah | Fungsi |
+|---|---|
+| `npm run dev` | Jalankan dev server (Next.js) |
+| `npm run build` | Build untuk production |
+| `npm run start` | Jalankan server production |
+| `npm run db:push` | Push skema Drizzle ke database |
+| `npm run db:seed` | Isi database dengan data dummy |
+| `npm run db:reset` | Reset ulang database (hapus semua data) |
+| `npm run db:studio` | Buka Drizzle Studio (GUI database) |
+| `npm run auth:migrate` | Jalankan migrasi tabel autentikasi |
+| `npm test` | Jalankan semua unit test (Vitest) |
+
+---
+
+## Lisensi
+
+Proyek ini dikembangkan sebagai sistem kasir mandiri untuk kebutuhan internal UMKM dan penelitian akademis.
+
+---
+
+*Dibangun dengan ❤️ untuk memajukan ritel dan UMKM Indonesia.*
