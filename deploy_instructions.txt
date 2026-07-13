@@ -1,0 +1,49 @@
+# WarungOS (Kasir TokoMu) - Deploy Instructions
+
+## 1. Environment Variables (.env)
+Berikut adalah konfigurasi environment (*credentials*) aktual dari *workspace* ini. Silakan pasang tepat seperti ini di Vercel, VPS, Supabase, atau platform *hosting* yang Anda gunakan untuk production:
+
+```env
+# URL Koneksi Database PostgreSQL (Sudah diatur ke cloud database InsForge Anda)
+DATABASE_URL=postgresql://postgres:0a8d012736ad8dabcd543d58c94fed1c@rnuh6nq3.us-east.database.insforge.app:5432/insforge?sslmode=verify-full
+
+# Secret keamanan autentikasi
+BETTER_AUTH_SECRET=MuZmPjxaAxALgft1g0Zr2YZXWK3FF9HRs3ESlXzsLP8=
+
+# URL utama dari aplikasi Anda (Ubah ke domain live Anda nanti setelah memiliki domain)
+BETTER_AUTH_URL=http://localhost:3000
+
+# Jika menggunakan Asisten AI, jangan lupa set GEMINI API Key (bila diperlukan)
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
+```
+
+## 2. Setup Database (Schema Push & Data Pull)
+Agar database InsForge di cloud tersebut dapat digunakan dengan struktur aplikasi terbaru, jalankan perintah ini di dalam *workspace* ini:
+
+**A. Menerapkan Struktur / Skema (*Push*):**
+Menyelaraskan tabel-tabel di database cloud dengan kode lokal Anda.
+```bash
+npm run db:push
+```
+
+**B. Mentransfer Data ke Cloud (*Pull / Transfer*):**
+Karena Anda menggunakan database cloud, jika Anda ingin "menarik" data lokal Anda saat ini untuk diisi langsung ke dalam database cloud production, Anda bisa menggunakan _script_ bawaan yang tersedia.
+1. Sesuaikan variabel di dalam file `scripts/transfer-data.ts`.
+2. Jalankan perintah:
+```bash
+npx tsx scripts/transfer-data.ts
+```
+
+*(Opsional) Jika Anda hanya ingin database cloud-nya bersih tapi terisi data awalan dummy yang otomatis (bukan data riwayat Anda), jalankan seed:*
+```bash
+npm run db:seed
+```
+
+## 3. Build & Run
+Apabila Anda men-deploy ke Node.js VPS biasa, berikut perintah untuk merilis:
+```bash
+npm install
+npm run build
+npm run start
+```
+*(Untuk Vercel, cukup hubungkan repositori Github, build akan berjalan otomatis)*
