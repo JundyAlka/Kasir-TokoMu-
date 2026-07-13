@@ -42,6 +42,12 @@ yarn-error.log*
 !.env.example
 
 # vercel
+
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+
+# vercel
 .vercel
 
 # typescript
@@ -62,3 +68,22 @@ next-env.d.ts
 .roo
 .trae
 .windsurf
+
+# Sensitive deploy files & dev output
+deploy_instructions.txt
+models-out.txt
+test-output.txt
+
+# Dev/test scripts (not for production)
+scripts/test-*.ts
+scripts/check-*.ts
+scripts/check-*.mjs
+scripts/fix-*.ts
+scripts/recover.ts
+scripts/capture-screenshots.mjs
+scripts/transfer-data.ts
+
+# Screenshot assets (large binary files)
+screenshots/
+screenshots all menu.zip
+screenshot_report.md
