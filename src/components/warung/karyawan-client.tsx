@@ -339,56 +339,6 @@ export function KaryawanClient({
         </CardContent>
       </Card>
 
-      <RoleGate role={["pimpinan"]} currentRole={currentRole}>
-        <Card className="border-border/60 bg-card/80">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-heading text-2xl">
-              <UserPlus className="size-5" />
-              Invite user
-            </CardTitle>
-            <CardDescription>
-              Buat akun baru dan tempatkan user langsung ke workspace ini.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={(event) => void handleInvite(event)}>
-              <div className="grid gap-2">
-                <Label htmlFor="invite-email">Email</Label>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="kasir@email.com"
-                  required
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>Role</Label>
-                <Select value={role} onValueChange={(value) => setRole(value as StaffRole)}>
-                  <SelectTrigger className="h-11 w-full rounded-2xl bg-card">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {staffRoles.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {roleLabels[item]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button type="submit" className="h-11 w-full rounded-2xl" disabled={isSubmitting}>
-                {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
-                Invite user
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </RoleGate>
-
       <Dialog open={Boolean(credentials)} onOpenChange={(open) => !open && setCredentials(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
