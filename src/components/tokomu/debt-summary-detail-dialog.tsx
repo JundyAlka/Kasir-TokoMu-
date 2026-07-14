@@ -170,9 +170,9 @@ export function DebtSummaryDetailDialog({
                         className="rounded-xl border border-border/60 p-3"
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-medium">{debt.borrowerName}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium truncate">{debt.borrowerName}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground truncate">
                               {debt.whatsapp} - {statusText(debt.status)}
                             </p>
                           </div>

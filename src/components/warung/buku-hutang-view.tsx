@@ -178,6 +178,33 @@ export function BukuHutangView() {
                         </Badge>
                       </div>
 
+                      {/* Progress bar */}
+                      {(() => {
+                        const paidPct = debt.amount > 0
+                          ? Math.min(100, Math.round(((debt.amount - debt.remainingAmount) / debt.amount) * 100))
+                          : 0;
+                        return (
+                          <div className="rounded-[16px] border border-border/50 bg-muted/30 px-4 py-3">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Progress pembayaran</span>
+                              <span className="font-semibold tabular-nums">{paidPct}%</span>
+                            </div>
+                            <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-border/60">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  paidPct >= 100
+                                    ? "bg-emerald-500"
+                                    : paidPct > 0
+                                      ? "bg-primary"
+                                      : "bg-border"
+                                }`}
+                                style={{ width: `${paidPct}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       <div className="grid gap-3 sm:grid-cols-3">
                         <div className="rounded-[20px] bg-muted/55 p-4">
                           <p className="text-sm text-muted-foreground">Total</p>

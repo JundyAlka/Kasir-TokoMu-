@@ -186,8 +186,8 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-4xl flex-col gap-0 overflow-hidden rounded-[28px] p-0">
-        <DialogHeader className="border-b border-border/70 p-6 pb-4">
+      <DialogContent className="flex max-h-[92vh] w-[96vw] max-w-[96vw] sm:max-w-2xl md:max-w-3xl flex-col gap-0 overflow-hidden rounded-[28px] p-0">
+        <DialogHeader className="border-b border-border/70 p-5 pb-4 sm:p-6 sm:pb-4">
           <DialogTitle className="flex items-center gap-2 font-heading text-2xl">
             <Info className="size-5" />
             Detail kasbon
@@ -195,21 +195,21 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
           <DialogDescription>Rincian peminjam, barang, pembayaran cicilan, dan status kasbon.</DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
           {loading ? (
             <div className="p-6 text-sm text-muted-foreground">Memuat detail kasbon...</div>
           ) : detail ? (
-            <div className="grid gap-5 p-6">
+            <div className="grid gap-5 p-5 sm:p-6">
             <section className="grid gap-4 md:grid-cols-[1fr_auto]">
-              <div>
+              <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-heading text-2xl font-semibold">{detail.borrowerName}</h3>
+                  <h3 className="font-heading text-2xl font-semibold break-words truncate max-w-full">{detail.borrowerName}</h3>
                   <Badge className={statusClassName(detail.status)}>{statusLabel(detail.status)}</Badge>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">{detail.whatsapp}</p>
+                <p className="mt-1 text-sm text-muted-foreground break-words">{detail.whatsapp}</p>
                 <p className="mt-1 text-sm text-muted-foreground">Jatuh tempo {formatDate(detail.dueDate)}</p>
               </div>
-              <div className="grid min-w-[220px] gap-2 rounded-[20px] border border-border/70 bg-muted/40 p-4">
+              <div className="grid min-w-0 sm:min-w-[220px] w-full gap-2 rounded-[20px] border border-border/70 bg-muted/40 p-4">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Progress</span>
                   <span className="font-medium">{paidPct}%</span>
@@ -220,18 +220,18 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
               </div>
             </section>
 
-            <section className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[20px] bg-muted/45 p-4">
+            <section className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-3">
+              <div className="rounded-[20px] bg-muted/45 p-3 sm:p-4 flex flex-col justify-center">
                 <p className="text-sm text-muted-foreground">Total hutang</p>
-                <p className="mt-2 text-xl font-semibold">{formatCurrency(detail.amount)}</p>
+                <p className="mt-1 sm:mt-2 text-lg sm:text-xl font-semibold whitespace-nowrap tracking-tight">{formatCurrency(detail.amount)}</p>
               </div>
-              <div className="rounded-[20px] bg-muted/45 p-4">
+              <div className="rounded-[20px] bg-muted/45 p-3 sm:p-4 flex flex-col justify-center">
                 <p className="text-sm text-muted-foreground">Terbayar</p>
-                <p className="mt-2 text-xl font-semibold">{formatCurrency(detail.paidAmount)}</p>
+                <p className="mt-1 sm:mt-2 text-lg sm:text-xl font-semibold whitespace-nowrap tracking-tight">{formatCurrency(detail.paidAmount)}</p>
               </div>
-              <div className="rounded-[20px] bg-muted/45 p-4">
+              <div className="rounded-[20px] bg-muted/45 p-3 sm:p-4 flex flex-col justify-center col-span-2 sm:col-span-1">
                 <p className="text-sm text-muted-foreground">Sisa</p>
-                <p className="mt-2 text-xl font-semibold">{formatCurrency(detail.remainingAmount)}</p>
+                <p className="mt-1 sm:mt-2 text-lg sm:text-xl font-semibold whitespace-nowrap tracking-tight">{formatCurrency(detail.remainingAmount)}</p>
               </div>
             </section>
 
@@ -285,8 +285,8 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
             {detail.status !== "lunas" ? (
               <section className="grid gap-3 rounded-[22px] border border-border/70 bg-card/70 p-4">
                 <h4 className="font-heading text-lg font-semibold">Catat pembayaran</h4>
-                <div className="grid gap-3 md:grid-cols-[180px_1fr_auto] md:items-end">
-                  <div className="grid gap-2">
+                <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:items-end">
+                  <div className="grid flex-1 gap-2 min-w-[120px]">
                     <Label htmlFor="debt-payment-amount">Nominal</Label>
                     <Input
                       id="debt-payment-amount"
@@ -296,7 +296,7 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
                       className="h-11 rounded-2xl"
                     />
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid flex-[2] gap-2 min-w-[150px]">
                     <Label htmlFor="debt-payment-note">Catatan</Label>
                     <Textarea
                       id="debt-payment-note"
@@ -306,7 +306,7 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
                       className="min-h-11 rounded-2xl"
                     />
                   </div>
-                  <Button type="button" onClick={() => void handlePayment()} disabled={submitting} className="rounded-full">
+                  <Button type="button" onClick={() => void handlePayment()} disabled={submitting} className="rounded-full w-full sm:w-auto h-11">
                     <WalletCards className="size-4" />
                     Catat pembayaran
                   </Button>
@@ -319,7 +319,7 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
         )}
         </div>
 
-        <DialogFooter className="border-t border-border/70 bg-card p-4 sm:justify-end" showCloseButton>
+        <DialogFooter className="m-0 rounded-b-[28px] border-t border-border/70 bg-card p-4 sm:p-5 sm:justify-end" showCloseButton>
           {detail ? (
             <>
               <Button
