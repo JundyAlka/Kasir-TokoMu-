@@ -1,0 +1,11 @@
+screenshots all menu.zip
+screenshots
+tmp
+.tmp
+coverage
+.git
+node_modules
+.next
+deploy-log.txt
+*.zip
+.local
