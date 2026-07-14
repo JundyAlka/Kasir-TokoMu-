@@ -96,9 +96,9 @@ export function PengaturanView() {
       </TabsList>
 
       <TabsContent value="profil">
-        <div className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
-      <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
-        <CardHeader>
+        <div className="grid gap-4 md:grid-cols-[1.08fr_0.92fr]">
+          <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
+            <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle className="font-heading text-2xl">Profil warung & notifikasi</CardTitle>

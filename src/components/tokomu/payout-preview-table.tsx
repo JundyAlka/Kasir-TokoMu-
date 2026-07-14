@@ -291,7 +291,7 @@ export function BagiHasilClient() {
               <Select
                 value={period}
                 onValueChange={(value) => {
-                  setPeriod(value);
+                  setPeriod(value || "");
                   setCalculation(null);
                   setSavedRows([]);
                 }}

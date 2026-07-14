@@ -191,7 +191,7 @@ function HistoryBatchCard({ batch }: Readonly<{ batch: HistoryBatch }>) {
 
         <ScrollArea className="max-h-[calc(94vh-108px)]">
           <div className="space-y-5 px-5 pb-6 sm:px-6">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
               <div className="min-w-0 rounded-2xl border border-border/60 bg-card/70 p-4">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Package className="size-3.5 text-primary" />
@@ -234,7 +234,7 @@ function HistoryBatchCard({ batch }: Readonly<{ batch: HistoryBatch }>) {
               </div>
             </div>
 
-            <div className="grid gap-5 xl:grid-cols-[minmax(360px,0.8fr)_minmax(0,0.95fr)_minmax(0,1.05fr)]">
+            <div className="grid gap-5 md:grid-cols-[minmax(360px,0.8fr)_minmax(0,0.95fr)_minmax(0,1.05fr)] xl:grid-cols-[minmax(360px,0.8fr)_minmax(0,0.95fr)_minmax(0,1.05fr)]">
               {batch.receiptImageUrl ? (
                 <div className="rounded-2xl border border-border/60 bg-card/60 p-4">
                   <div className="mb-3">
@@ -347,7 +347,7 @@ function HistoryBatchCard({ batch }: Readonly<{ batch: HistoryBatch }>) {
                               {changed ? "Diedit" : "Sesuai OCR"}
                             </span>
                           </div>
-                          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                             <div className="rounded-xl border border-border/50 bg-muted/25 p-3">
                               <p className="mb-1 text-[11px] font-medium text-muted-foreground">
                                 Scan asli

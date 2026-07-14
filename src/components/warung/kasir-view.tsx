@@ -549,15 +549,17 @@ export function KasirView() {
   const changeAmount = isCashPayment ? Math.max(0, paidAmount - cartTotal) : 0;
   const hasMeasuredWorkspace = workspaceWidth > 0;
   const shouldStackCheckout = hasMeasuredWorkspace && workspaceWidth < 560;
-  const isProductHeaderCompact = productColumnWidth > 0 && productColumnWidth < 740;
+  const isProductHeaderCompact = productColumnWidth > 0 && productColumnWidth < 600;
   const productGridClass =
     productColumnWidth === 0
-      ? "sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3"
-      : productColumnWidth < 480
+      ? "sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4"
+      : productColumnWidth < 280
         ? "grid-cols-1"
-        : productColumnWidth < 720
+        : productColumnWidth < 400
           ? "grid-cols-2"
-          : "grid-cols-3";
+          : productColumnWidth < 640
+            ? "grid-cols-3"
+            : "grid-cols-4";
   const canCheckout =
     cartLines.length > 0 && (!isCashPayment || (paidAmountInput.trim() !== "" && cashShortfall === 0));
 
@@ -635,7 +637,7 @@ export function KasirView() {
         "grid gap-4",
         shouldStackCheckout
           ? "grid-cols-1"
-          : "grid-cols-[minmax(220px,1fr)_minmax(300px,340px)] xl:grid-cols-[minmax(0,1fr)_minmax(340px,380px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.72fr)]"
+          : "grid-cols-[minmax(200px,1fr)_minmax(280px,320px)] md:grid-cols-[minmax(0,1fr)_minmax(300px,340px)] xl:grid-cols-[minmax(0,1fr)_minmax(340px,380px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.72fr)]"
       )}
     >
       {shiftBannerName ? (

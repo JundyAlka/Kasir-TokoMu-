@@ -158,7 +158,7 @@ export function BukuHutangView() {
           </Tabs>
 
           {filteredDebts.length > 0 ? (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               {filteredDebts.map((debt) => (
                 <button
                   key={debt.id}

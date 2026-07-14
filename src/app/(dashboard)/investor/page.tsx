@@ -68,7 +68,7 @@ export default async function InvestorPage({
         status === "inactive" ? (
           <InactiveInvestorManager investors={investors} />
         ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             {investors.map((investor) => (
               <InvestorCard key={investor.id} investor={investor} />
             ))}

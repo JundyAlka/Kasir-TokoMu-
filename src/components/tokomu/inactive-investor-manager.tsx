@@ -116,7 +116,7 @@ export function InactiveInvestorManager({
         </Button>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {investors.map((investor) => (
           <InvestorCard
             key={investor.id}

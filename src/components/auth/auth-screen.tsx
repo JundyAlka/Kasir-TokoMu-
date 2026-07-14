@@ -80,14 +80,14 @@ export function AuthScreen() {
   return (
     <div className="relative min-h-screen bg-background">
       {/* Theme toggle */}
-      <div className="absolute top-4 right-4 z-10 lg:top-6 lg:right-6">
+      <div className="absolute top-4 right-4 z-10 md:top-6 md:right-6">
         <ThemeToggle variant="default" className="bg-card/85 shadow-sm backdrop-blur" />
       </div>
 
-      <div className="mx-auto grid min-h-screen max-w-[1440px] lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="mx-auto grid min-h-screen max-w-[1440px] md:grid-cols-[1.1fr_0.9fr]">
 
         {/* ── Left panel ── */}
-        <div className="relative hidden flex-col overflow-hidden bg-[linear-gradient(145deg,#1e0f08,#3a2218,#5a3020)] lg:flex">
+        <div className="relative hidden flex-col overflow-hidden bg-[linear-gradient(145deg,#1e0f08,#3a2218,#5a3020)] md:flex">
           {/* Ambient blobs */}
           <div className="pointer-events-none absolute -top-32 -left-32 size-[480px] rounded-full bg-amber-600/20 blur-[120px]" />
           <div className="pointer-events-none absolute bottom-0 right-0 size-[320px] rounded-full bg-orange-500/15 blur-[100px]" />

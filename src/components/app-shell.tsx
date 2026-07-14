@@ -41,13 +41,13 @@ const navigation = [
   { href: "/pengaturan/audit-log", label: "Audit Log", icon: ListChecks, roles: ["pimpinan"] },
 ] satisfies Array<{ href: string; label: string; icon: typeof Gauge; roles: Role[] }>;
 
-const layoutStorageKey = "warungos.shell.layout.v1";
-const defaultSidebarWidth = 272;
-const defaultAiWidth = 400;
-const minSidebarWidth = 220;
-const maxSidebarWidth = 360;
-const minAiWidth = 320;
-const maxAiWidth = 560;
+const layoutStorageKey = "warungos.shell.layout.v2";
+const defaultSidebarWidth = 240;
+const defaultAiWidth = 320;
+const minSidebarWidth = 200;
+const maxSidebarWidth = 320;
+const minAiWidth = 280;
+const maxAiWidth = 460;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -149,7 +149,7 @@ export function AppShell({
           className={cn(
             "glass-panel hidden h-full shrink-0 flex-col overflow-hidden rounded-[30px] border border-border/60 shadow-[0_32px_80px_-50px_rgba(68,39,20,0.65)] transition-[width] duration-200 ease-out md:flex",
             tabletSidebarExpanded
-              ? "w-[292px] items-stretch p-4"
+              ? "w-[240px] items-stretch p-4"
               : "w-[72px] items-center px-2 py-3",
             leftCollapsed
               ? "2xl:w-[88px] 2xl:items-center 2xl:px-5 2xl:py-4"

@@ -690,7 +690,7 @@ export function LaporanView() {
 
   return (
     <div className="space-y-4">
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <StatCard
           title="Omzet"
           value={formatCompactCurrency(summary.revenue)}
@@ -719,7 +719,7 @@ export function LaporanView() {
         />
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+      <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr] xl:grid-cols-[1.05fr_0.95fr]">
         <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
           <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
