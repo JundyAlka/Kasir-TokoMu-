@@ -531,11 +531,14 @@ export function AIAssistantPanel({
   open,
   onOpenChange,
   width = 420,
+  role = "pimpinan",
 }: {
   open: boolean;
   onOpenChange: (next: boolean) => void;
   width?: number;
+  role?: string;
 }) {
+  const canDeleteChat = role !== "kasir";
   const [chat, setChat] = useState<ChatRecord | null>(null);
   const [messages, setMessages] = useState<ServerMessage[]>([]);
   const [input, setInput] = useState("");
@@ -870,6 +873,7 @@ res = await api<{ newMessages: ServerMessage[] }>(
                   <div className="space-y-2">
                     {chatHistory
                       .filter((c) => c.title.toLowerCase().includes(searchHistory.toLowerCase()))
+                      .slice(0, 15)
                       .map((c) => (
                         <div key={c.id} className="flex items-center justify-between gap-2 rounded-xl bg-card p-3 shadow-sm ring-1 ring-border">
                           <div
@@ -895,25 +899,27 @@ res = await api<{ newMessages: ServerMessage[] }>(
                               {new Date(c.updatedAt).toLocaleDateString("id-ID", { dateStyle: "medium" })}
                             </p>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:bg-destructive/10 shrink-0"
-                            onClick={async () => {
-                              try {
-                                await api(`/api/ai/chats/${c.id}`, { method: "DELETE" });
-                                setChatHistory((prev) => prev.filter((item) => item.id !== c.id));
-                                if (chat?.id === c.id) {
-                                  handleNewChat();
+                          {canDeleteChat && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:bg-destructive/10 shrink-0"
+                              onClick={async () => {
+                                try {
+                                  await api(`/api/ai/chats/${c.id}`, { method: "DELETE" });
+                                  setChatHistory((prev) => prev.filter((item) => item.id !== c.id));
+                                  if (chat?.id === c.id) {
+                                    handleNewChat();
+                                  }
+                                  toast.success("Riwayat dihapus.");
+                                } catch (err) {
+                                  toast.error("Gagal menghapus riwayat.");
                                 }
-                                toast.success("Riwayat dihapus.");
-                              } catch (err) {
-                                toast.error("Gagal menghapus riwayat.");
-                              }
-                            }}
-                          >
-                            <Trash className="size-3.5" />
-                          </Button>
+                              }}
+                            >
+                              <Trash className="size-3.5" />
+                            </Button>
+                          )}
                         </div>
                       ))}
                     {chatHistory.length === 0 && (

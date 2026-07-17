@@ -67,6 +67,20 @@ export async function renameChatIfDefault(userId: string, chatId: string, newTit
   }
 }
 
+export async function deleteChat(userId: string, chatId: string) {
+  const chat = await getChat(userId, chatId);
+  if (!chat) return null;
+
+  // Delete messages first (child rows), then the chat itself
+  await db.delete(aiMessages).where(eq(aiMessages.chatId, chatId));
+  const [deleted] = await db
+    .delete(aiChats)
+    .where(and(eq(aiChats.id, chatId), eq(aiChats.userId, userId)))
+    .returning();
+
+  return deleted ?? null;
+}
+
 export async function listMessages(chatId: string): Promise<StoredMessage[]> {
   const rows = await db
     .select()

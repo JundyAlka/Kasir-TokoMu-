@@ -307,7 +307,7 @@ export function AppShell({
           </button>
         ) : null}
 
-        <AIAssistantPanel open={aiOpen} onOpenChange={handleAiOpenChange} width={aiWidth} />
+        <AIAssistantPanel open={aiOpen} onOpenChange={handleAiOpenChange} width={aiWidth} role={role} />
       </div>
     </div>
   );
