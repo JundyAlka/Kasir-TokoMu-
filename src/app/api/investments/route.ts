@@ -68,7 +68,7 @@ const InvestmentCreateSchema = z
 
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId } = await getRequestUser();
     const investorId = request.nextUrl.searchParams.get("investorId") ?? undefined;
     const investments = await listInvestments(workspaceOwnerId, investorId);
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { userId, workspaceOwnerId } = await getRequestUser();
     const body = InvestmentCreateSchema.parse(await request.json());
     const investment = await createInvestment(workspaceOwnerId, body.investorId, body);

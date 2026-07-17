@@ -16,7 +16,7 @@ export const runtime = "nodejs";
  */
 export async function GET() {
   try {
-    await requireRole(["pengelola_keuangan", "pimpinan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId } = await getRequestUser();
 
     const logs = await db

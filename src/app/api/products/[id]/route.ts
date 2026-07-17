@@ -13,7 +13,7 @@ export async function PATCH(
 ) {
   try {
     const draft = ProductUpdateSchema.parse(await request.json());
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId, userId } = await getRequestUser();
     const { id } = await context.params;
     const product = await updateProduct(workspaceOwnerId, id, draft);
@@ -38,7 +38,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId, userId } = await getRequestUser();
     const { id } = await context.params;
     const product = await deleteProduct(workspaceOwnerId, id);

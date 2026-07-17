@@ -1,0 +1,178 @@
+{
+  "project_name": "TokoMu (WarungOS)",
+  "source_truth": [
+    "src/lib/server/rbac.ts",
+    "src/lib/server/app-service.ts",
+    "src/app/(dashboard)/**/page.tsx",
+    "src/app/api/**/route.ts"
+  ],
+  "actors": [
+    {
+      "role": "pimpinan",
+      "label": "Pimpinan Toko / Super Admin / Workspace Owner",
+      "description": "Pemilik workspace dengan hak akses tertinggi. Memiliki kontrol penuh atas semua transaksi, inventaris, keuangan, konfigurasi warung, karyawan, laporan PCM, reset data, dan audit log."
+    },
+    {
+      "role": "pengelola_keuangan",
+      "label": "Bendahara / Pengelola Keuangan",
+      "description": "Bertanggung jawab atas administrasi keuangan, buku hutang, investor, bagi hasil, pengeluaran, serta pembuatan dan finalisasi laporan bulanan operasional. Dilarang mengakses laporan PCM, audit log, kelola karyawan, reset data, atur shift, dan edit pengaturan."
+    },
+    {
+      "role": "kasir",
+      "label": "Staff Kasir",
+      "description": "Staff operasional setingkat dengan izin sama dengan Bendahara: POS/kasir, buka/tutup sesi shift sendiri, kelola investor utuh/detail/akad, inventaris + restok + OCR/AI chat, buku hutang, pengeluaran, bagi hasil, dan laporan bulanan. Dilarang mengakses laporan PCM, audit log, kelola karyawan, reset data, atur shift, dan edit pengaturan."
+    }
+  ],
+  "matrix": [
+    {
+      "module": "Dashboard Utama",
+      "routes": ["/dashboard", "/api/dashboard"],
+      "evidence_file": "src/app/(dashboard)/dashboard/page.tsx",
+      "permissions": {
+        "pimpinan": "Akses penuh (Lihat ringkasan, grafik omzet, laba bersih, kasbon, restok)",
+        "pengelola_keuangan": "Akses penuh (Lihat ringkasan, grafik omzet, laba bersih, kasbon, restok)",
+        "kasir": "Akses penuh (Lihat ringkasan, grafik omzet, laba bersih, kasbon, restok)"
+      }
+    },
+    {
+      "module": "POS Kasir & Penjualan",
+      "routes": ["/kasir", "/api/transactions", "/api/bootstrap"],
+      "evidence_file": "src/app/(dashboard)/kasir/page.tsx & src/app/api/transactions/route.ts",
+      "permissions": {
+        "pimpinan": "Akses penuh (Buat transaksi penjualan, pilih metode bayar Tunai/QRIS/Transfer, cetak struk)",
+        "pengelola_keuangan": "Akses penuh (Buat transaksi penjualan, pilih metode bayar Tunai/QRIS/Transfer, cetak struk)",
+        "kasir": "Akses penuh (Buat transaksi penjualan, pilih metode bayar Tunai/QRIS/Transfer, cetak struk)"
+      }
+    },
+    {
+      "module": "Shift Kasir",
+      "routes": ["/api/shifts", "/api/shifts/[id]", "/api/shift-sessions", "/api/shift-sessions/[id]/close"],
+      "evidence_file": "src/app/api/shifts/route.ts & src/app/api/shifts/[id]/route.ts & src/app/api/shift-sessions/route.ts",
+      "permissions": {
+        "pimpinan": "Akses penuh (Kelola jadwal shift, tambah/edit/hapus shift, buka sesi shift, tutup sesi kasir dan hitung selisih)",
+        "pengelola_keuangan": "Buka/Tutup sesi shift sendiri & Lihat jadwal (Buka sesi shift kasir atas nama sendiri, tutup sesi shift sendiri, hitung kas aktual vs ekspektasi. Dilarang menambah/mengedit jadwal shift)",
+        "kasir": "Buka/Tutup sesi shift sendiri & Lihat jadwal (Buka sesi shift kasir atas nama sendiri, tutup sesi shift sendiri, hitung kas aktual vs ekspektasi. Dilarang menambah/mengedit jadwal shift)"
+      }
+    },
+    {
+      "module": "Katalog Produk & Inventaris",
+      "routes": ["/inventaris", "/api/products", "/api/products/[id]", "/api/restock"],
+      "evidence_file": "src/app/(dashboard)/inventaris/page.tsx & src/app/api/products/route.ts",
+      "permissions": {
+        "pimpinan": "Akses penuh (Lihat, tambah, edit, hapus produk, restok manual)",
+        "pengelola_keuangan": "Akses penuh (Lihat, tambah, edit, hapus produk, restok manual)",
+        "kasir": "Akses penuh (Lihat, tambah, edit, hapus produk, restok manual)"
+      }
+    },
+    {
+      "module": "Restok AI Chat & OCR Struk",
+      "routes": ["/api/ai/chats", "/api/ai/chats/[id]/messages", "/api/ai/scan-receipt"],
+      "evidence_file": "src/app/api/ai/scan-receipt/route.ts & src/lib/server/ai/vision.ts (Gemini 2.5 Flash)",
+      "permissions": {
+        "pimpinan": "Akses penuh (Upload gambar struk, parsing Gemini Vision OCR, konfirmasi restok/barang titip jual, chat AI Gemini 2.5 Flash)",
+        "pengelola_keuangan": "Akses penuh (Upload gambar struk, parsing Gemini Vision OCR, konfirmasi restok/barang titip jual, chat AI Gemini 2.5 Flash)",
+        "kasir": "Akses penuh (Upload gambar struk, parsing Gemini Vision OCR, konfirmasi restok/barang titip jual, chat AI Gemini 2.5 Flash)"
+      }
+    },
+    {
+      "module": "Buku Hutang / Kasbon",
+      "routes": ["/buku-hutang", "/api/debts", "/api/debts/[id]", "/api/debts/[id]/payments", "/api/debts/[id]/remind"],
+      "evidence_file": "src/app/(dashboard)/buku-hutang/page.tsx & src/app/api/debts/route.ts",
+      "permissions": {
+        "pimpinan": "Akses penuh (Lihat daftar kasbon, buat hutang baru dengan item, catat cicilan bayar, tandai lunas, kirim pengingat WA)",
+        "pengelola_keuangan": "Akses penuh (Lihat daftar kasbon, buat hutang baru dengan item, catat cicilan bayar, tandai lunas, kirim pengingat WA)",
+        "kasir": "Akses penuh (Lihat daftar kasbon, buat hutang baru dengan item, catat cicilan bayar, tandai lunas, kirim pengingat WA)"
+      }
+    },
+    {
+      "module": "Investor & Investasi",
+      "routes": ["/investor", "/investor/[id]", "/api/investors", "/api/investors/[id]", "/api/investments", "/api/investments/[id]"],
+      "evidence_file": "src/app/(dashboard)/investor/page.tsx & src/app/(dashboard)/investor/[id]/page.tsx & src/app/api/investors/route.ts",
+      "permissions": {
+        "pimpinan": "Akses penuh (Lihat investor, tambah investor via pop-up dialog, edit profil, buat akad investasi uang/barang titip jual, tutup investasi)",
+        "pengelola_keuangan": "Akses penuh (Lihat investor, tambah investor via pop-up dialog, edit profil, buat akad investasi uang/barang titip jual, tutup investasi)",
+        "kasir": "Akses penuh (Lihat investor, tambah investor via pop-up dialog, edit profil, buat akad investasi uang/barang titip jual, tutup investasi)"
+      }
+    },
+    {
+      "module": "Bagi Hasil Investor (Profit Sharing)",
+      "routes": ["/bagi-hasil", "/api/payouts", "/api/payouts/[id]"],
+      "evidence_file": "src/app/(dashboard)/bagi-hasil/page.tsx & src/app/api/payouts/route.ts",
+      "permissions": {
+        "pimpinan": "Akses penuh (Lihat kalkulasi laba periode, hitung bagi hasil per investasi, setujui/bayarkan payout, hapus draft)",
+        "pengelola_keuangan": "Akses penuh (Lihat kalkulasi laba periode, hitung bagi hasil per investasi, setujui/bayarkan payout, hapus draft)",
+        "kasir": "Akses penuh (Lihat kalkulasi laba periode, hitung bagi hasil per investasi, setujui/bayarkan payout, hapus draft)"
+      }
+    },
+    {
+      "module": "Pengeluaran Operasional",
+      "routes": ["/api/bootstrap"],
+      "evidence_file": "src/lib/server/app-service.ts (createExpense)",
+      "permissions": {
+        "pimpinan": "Akses penuh (Catat pengeluaran Operasional, Belanja, Utilitas)",
+        "pengelola_keuangan": "Akses penuh (Catat pengeluaran Operasional, Belanja, Utilitas)",
+        "kasir": "Akses penuh (Catat pengeluaran Operasional, Belanja, Utilitas)"
+      }
+    },
+    {
+      "module": "Laporan Keuangan Bulanan & Laba Rugi",
+      "routes": ["/laporan", "/api/reports/profit-loss", "/api/reports/profit-loss/pdf"],
+      "evidence_file": "src/app/(dashboard)/laporan/page.tsx & src/app/api/reports/profit-loss/route.ts & src/app/api/reports/profit-loss/pdf/route.ts",
+      "permissions": {
+        "pimpinan": "Akses penuh (Kelola kalkulasi laporan bulanan, simpan draft, finalisasi/kunci laporan, download PDF laba rugi resmi)",
+        "pengelola_keuangan": "Akses penuh (Kelola kalkulasi laporan bulanan, simpan draft, finalisasi/kunci laporan, download PDF laba rugi resmi)",
+        "kasir": "Akses penuh (Kelola kalkulasi laporan bulanan, simpan draft, finalisasi/kunci laporan, download PDF laba rugi resmi)"
+      }
+    },
+    {
+      "module": "Laporan PCM (Pimpinan Cabang Muhammadiyah)",
+      "routes": ["/laporan-pcm", "/api/reports/monthly-pcm", "/api/reports/monthly-pcm/[id]/pdf"],
+      "evidence_file": "src/app/(dashboard)/laporan-pcm/page.tsx & src/app/api/reports/monthly-pcm/route.ts",
+      "permissions": {
+        "pimpinan": "Akses eksklusif Pimpinan (Lihat rekap bagi hasil khusus PCM, hitung alokasi persentase PCM & cadangan, unduh PDF resmi)",
+        "pengelola_keuangan": "Dilarang / Tidak dapat mengakses (Diblokir oleh requireRole guard dan disembunyikan di sidebar)",
+        "kasir": "Dilarang / Tidak dapat mengakses (Diblokir oleh requireRole guard dan disembunyikan di sidebar)"
+      }
+    },
+    {
+      "module": "Pengaturan Warung & Profil",
+      "routes": ["/pengaturan", "/api/settings"],
+      "evidence_file": "src/app/(dashboard)/pengaturan/page.tsx & src/app/api/settings/route.ts",
+      "permissions": {
+        "pimpinan": "Akses penuh & Edit (Ubah nama warung, tagline, alamat, persentase bagi hasil PCM/Cadangan, threshold stok, metode bayar Tunai/QRIS/Transfer, info transfer)",
+        "pengelola_keuangan": "Hanya melihat (Dapat melihat profil dan informasi dasar warung, dilarang menyimpan atau mengubah pengaturan)",
+        "kasir": "Hanya melihat (Dapat melihat profil dan informasi dasar warung, dilarang menyimpan atau mengubah pengaturan)"
+      }
+    },
+    {
+      "module": "Kelola Karyawan & Undangan Workspace",
+      "routes": ["/pengaturan/karyawan", "/api/users", "/api/users/invite", "/api/users/invitations/[id]", "/api/users/[id]", "/api/users/[id]/role"],
+      "evidence_file": "src/app/(dashboard)/pengaturan/karyawan/page.tsx & src/app/api/users/route.ts",
+      "permissions": {
+        "pimpinan": "Akses eksklusif Pimpinan (Lihat daftar staf aktif, kirim undangan email/token untuk role pengelola_keuangan & kasir, batalkan undangan, nonaktifkan staf)",
+        "pengelola_keuangan": "Dilarang / Tidak dapat mengakses (Diblokir oleh requireRole guard dan disembunyikan di sidebar)",
+        "kasir": "Dilarang / Tidak dapat mengakses (Diblokir oleh requireRole guard dan disembunyikan di sidebar)"
+      }
+    },
+    {
+      "module": "Reset Data Workspace (DANGER ZONE)",
+      "routes": ["/api/bootstrap/reset"],
+      "evidence_file": "src/app/api/bootstrap/reset/route.ts",
+      "permissions": {
+        "pimpinan": "Akses eksklusif Pimpinan (Dapat mereset seluruh data transaksi, inventaris, hutang, dan laporan dalam workspace kembali ke kondisi awal)",
+        "pengelola_keuangan": "Dilarang / Tidak dapat mengakses (Diblokir oleh requireRole guard dan disembunyikan di tab Pengaturan)",
+        "kasir": "Dilarang / Tidak dapat mengakses (Diblokir oleh requireRole guard dan disembunyikan di tab Pengaturan)"
+      }
+    },
+    {
+      "module": "Audit Log Keamanan",
+      "routes": ["/pengaturan/audit-log", "/api/audit-log"],
+      "evidence_file": "src/app/(dashboard)/pengaturan/audit-log/page.tsx & src/app/api/audit-log/route.ts",
+      "permissions": {
+        "pimpinan": "Akses eksklusif Pimpinan (Lihat seluruh rekam jejak aktivitas, filter berdasarkan event_type, aktor, kategori, dan rentang tanggal)",
+        "pengelola_keuangan": "Dilarang / Tidak dapat mengakses (Diblokir oleh requireRole guard dan disembunyikan di sidebar)",
+        "kasir": "Dilarang / Tidak dapat mengakses (Diblokir oleh requireRole guard dan disembunyikan di sidebar)"
+      }
+    }
+  ]
+}

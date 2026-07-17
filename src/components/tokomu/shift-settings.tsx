@@ -62,7 +62,8 @@ async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T
   return data as T;
 }
 
-export function ShiftSettings() {
+export function ShiftSettings({ role }: { role: string }) {
+  const canEditShift = role === "pimpinan";
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [users, setUsers] = useState<ShiftUser[]>([]);
   const [draft, setDraft] = useState<ShiftDraft>(emptyDraft);
@@ -190,6 +191,7 @@ export function ShiftSettings() {
               onChange={(event) => setDraft({ ...draft, name: event.target.value })}
               placeholder="Pagi"
               className="h-11 rounded-2xl"
+              disabled={!canEditShift}
             />
           </div>
           <div className="grid gap-2">
@@ -200,6 +202,7 @@ export function ShiftSettings() {
               value={draft.startTime}
               onChange={(event) => setDraft({ ...draft, startTime: event.target.value })}
               className="h-11 rounded-2xl"
+              disabled={!canEditShift}
             />
           </div>
           <div className="grid gap-2">
@@ -210,11 +213,12 @@ export function ShiftSettings() {
               value={draft.endTime}
               onChange={(event) => setDraft({ ...draft, endTime: event.target.value })}
               className="h-11 rounded-2xl"
+              disabled={!canEditShift}
             />
           </div>
           <div className="grid gap-2">
             <Label>Kasir</Label>
-            <Select value={draft.assignedUserId} onValueChange={(value) => setDraft({ ...draft, assignedUserId: value ?? "none" })}>
+            <Select disabled={!canEditShift} value={draft.assignedUserId} onValueChange={(value) => setDraft({ ...draft, assignedUserId: value ?? "none" })}>
               <SelectTrigger className="h-11 w-full min-w-[180px] rounded-2xl bg-card">
                 <SelectValue placeholder="Pilih kasir">
                   {draft.assignedUserId === "none" ? "Belum ditugaskan" : users.find(u => u.id === draft.assignedUserId)?.name ?? "Pilih..."}
@@ -230,7 +234,7 @@ export function ShiftSettings() {
               </SelectContent>
             </Select>
           </div>
-          <Button type="button" className="h-11 rounded-2xl" onClick={() => void createShift()}>
+          <Button type="button" className="h-11 rounded-2xl" onClick={() => void createShift()} disabled={!canEditShift}>
             <Plus className="size-4" />
             Tambah
           </Button>
@@ -276,6 +280,7 @@ export function ShiftSettings() {
                           }))
                         }
                         className="h-10 min-w-36 rounded-2xl"
+                        disabled={!canEditShift}
                       />
                     </TableCell>
                     <TableCell>
@@ -290,6 +295,7 @@ export function ShiftSettings() {
                             }))
                           }
                           className="h-10 w-28 rounded-2xl"
+                          disabled={!canEditShift}
                         />
                         <Input
                           type="time"
@@ -301,11 +307,13 @@ export function ShiftSettings() {
                             }))
                           }
                           className="h-10 w-28 rounded-2xl"
+                          disabled={!canEditShift}
                         />
                       </div>
                     </TableCell>
                     <TableCell>
                       <Select
+                        disabled={!canEditShift}
                         value={row.assignedUserId}
                         onValueChange={(value) =>
                           setEditing((current) => ({
@@ -337,14 +345,20 @@ export function ShiftSettings() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" className="rounded-full" onClick={() => void saveShift(shift.id)}>
-                          <Save className="size-4" />
-                          Simpan
-                        </Button>
-                        <Button type="button" variant="destructive" className="rounded-full" onClick={() => void removeShift(shift.id)}>
-                          <Trash2 className="size-4" />
-                          Nonaktifkan
-                        </Button>
+                        {canEditShift ? (
+                          <>
+                            <Button type="button" variant="outline" className="rounded-full" onClick={() => void saveShift(shift.id)}>
+                              <Save className="size-4" />
+                              Simpan
+                            </Button>
+                            <Button type="button" variant="destructive" className="rounded-full" onClick={() => void removeShift(shift.id)}>
+                              <Trash2 className="size-4" />
+                              Nonaktifkan
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">Akses dibatasi</span>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

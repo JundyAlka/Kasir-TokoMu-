@@ -1,0 +1,286 @@
+{
+  "project_name": "TokoMu (WarungOS)",
+  "architecture_note": "Aplikasi lebih banyak memakai functional architecture sehingga class diagram akan dimodelkan sebagai conceptual class diagram berdasarkan entity dan service.",
+  "categories": [
+    {
+      "category": "1. Entity / Domain Model",
+      "modules": [
+        {
+          "name": "StoreProfileEntity",
+          "type": "Domain Model & Drizzle Schema",
+          "file": "src/db/schema.ts (storeProfiles)",
+          "attributes": ["userId: string (PK)", "storeName: string", "storeTagline: string", "storeAddress: string", "pcmName: string", "pcmChairmanName: string", "pcmAddress: string", "ownerName: string", "ownerWhatsapp: string", "city: string", "stockAlertThreshold: number", "profitSharePcmPct: number", "profitShareReservePct: number", "enabledPayments: PaymentMethod[]"],
+          "methods": [],
+          "depends_on": ["drizzle-orm/pg-core", "PaymentMethod type"],
+          "used_by": ["AppService", "ReportingService", "AuthService", "PDFGenerator"]
+        },
+        {
+          "name": "ProductEntity",
+          "type": "Domain Model & Drizzle Schema",
+          "file": "src/db/schema.ts (products)",
+          "attributes": ["id: string (PK)", "userId: string (FK)", "sku: string", "name: string", "category: string", "buyPrice: number", "sellPrice: number", "stock: number", "minimumStock: number", "description: string", "createdAt: string", "updatedAt: string"],
+          "methods": [],
+          "depends_on": ["drizzle-orm/pg-core"],
+          "used_by": ["AppService", "AIToolsService", "ReceiptMatcherService"]
+        },
+        {
+          "name": "TransactionEntity",
+          "type": "Domain Model & Drizzle Schema",
+          "file": "src/db/schema.ts (transactions & transactionItems)",
+          "attributes": ["id: string (PK)", "userId: string (FK)", "total: number", "paidAmount: number", "changeAmount: number", "paymentMethod: string", "recordedByUserId: string", "shiftSessionId: string (FK)", "createdAt: string", "items: TransactionItemEntity[]"],
+          "methods": [],
+          "depends_on": ["drizzle-orm/pg-core", "ProductEntity", "ShiftSessionEntity"],
+          "used_by": ["AppService", "ShiftService", "ProfitSharingService", "ReportingService"]
+        },
+        {
+          "name": "DebtEntity",
+          "type": "Domain Model & Drizzle Schema",
+          "file": "src/db/schema.ts (debts, debtItems, debtPayments)",
+          "attributes": ["id: string (PK)", "userId: string (FK)", "borrowerName: string", "whatsapp: string", "amount: number", "paidAmount: number", "status: 'aktif' | 'lunas' | 'lewat_tempo'", "dueDate: string", "isPaid: number", "lastReminderAt: string", "items: DebtItemEntity[]", "payments: DebtPaymentEntity[]"],
+          "methods": [],
+          "depends_on": ["drizzle-orm/pg-core"],
+          "used_by": ["AppService"]
+        },
+        {
+          "name": "InvestorEntity",
+          "type": "Domain Model & Drizzle Schema",
+          "file": "src/db/schema.ts (investors & investments & investorPayouts)",
+          "attributes": ["id: string (PK)", "workspaceOwnerId: string (FK)", "name: string", "whatsapp: string", "address: string", "notes: string", "isActive: number", "investments: InvestmentEntity[]", "payouts: InvestorPayoutEntity[]"],
+          "methods": [],
+          "depends_on": ["drizzle-orm/pg-core"],
+          "used_by": ["InvestorService", "ProfitSharingService"]
+        },
+        {
+          "name": "ShiftSessionEntity",
+          "type": "Domain Model & Drizzle Schema",
+          "file": "src/db/schema.ts (shifts & shiftSessions)",
+          "attributes": ["id: string (PK)", "workspaceOwnerId: string (FK)", "shiftId: string (FK)", "cashierUserId: string (FK)", "startedAt: string", "endedAt: string | null", "openingCash: number", "closingCash: number", "expectedCash: number", "difference: number"],
+          "methods": [],
+          "depends_on": ["drizzle-orm/pg-core"],
+          "used_by": ["ShiftService", "AppService"]
+        }
+      ]
+    },
+    {
+      "category": "2. Service / Business Logic",
+      "modules": [
+        {
+          "name": "AppService",
+          "type": "Business Logic Service Module",
+          "file": "src/lib/server/app-service.ts",
+          "attributes": ["initializationPromise: Promise<void> | null", "supportedPaymentMethods: PaymentMethod[]"],
+          "methods": [
+            { "name": "getBootstrapState(userId)", "purpose": "Mengambil seluruh initial state workspace (produk, transaksi, hutang, pengeluaran, profil) dalam satu pemanggilan terpadu" },
+            { "name": "createProduct(userId, draft)", "purpose": "Membuat produk baru dengan validasi Zod ProductCreateSchema dan insert ke tabel products" },
+            { "name": "updateProduct(userId, productId, draft)", "purpose": "Memperbarui atribut produk di tabel products berdasarkan kepemilikan workspace" },
+            { "name": "deleteProduct(userId, productId)", "purpose": "Menghapus produk dari katalog inventaris" },
+            { "name": "restockProduct(userId, productId, quantity)", "purpose": "Menambahkan kuantitas stok produk eksisting" },
+            { "name": "createTransaction(userId, payload)", "purpose": "Memulai transaksi database, memvalidasi stok tiap item, menyimpan transaksi dan item, serta mengurangkan stok secara atomik" },
+            { "name": "createDebt(userId, draft)", "purpose": "Membuat kasbon baru beserta rincian item barang di tabel debts dan debt_items" },
+            { "name": "recordDebtPayment(userId, debtId, draft, recordedByUserId)", "purpose": "Mencatat cicilan pembayaran hutang, memperbarui paid_amount, dan otomatis mengubah status menjadi lunas jika mencukupi" },
+            { "name": "createExpense(userId, draft)", "purpose": "Mencatat pengeluaran operasional warung" },
+            { "name": "updateStoreSettings(userId, settings)", "purpose": "Memperbarui profil dan konfigurasi bisnis warung" },
+            { "name": "resetWorkspace(userId)", "purpose": "Mereset seluruh data transaksi dan inventaris workspace kembali ke kondisi awal" }
+          ],
+          "depends_on": ["src/db/client.ts", "src/db/schema.ts", "src/lib/server/rbac.ts", "src/lib/server/validation.ts"],
+          "used_by": ["API Routes (/api/bootstrap, /api/products, /api/transactions, /api/debts, /api/settings)", "AIToolsService"]
+        },
+        {
+          "name": "InvestorService",
+          "type": "Business Logic Service Module",
+          "file": "src/lib/server/investor-service.ts",
+          "attributes": [],
+          "methods": [
+            { "name": "listInvestors(workspaceOwnerId)", "purpose": "Mengambil daftar investor beserta rekam investasi dan total bagi hasil yang telah dibayarkan" },
+            { "name": "createInvestor(workspaceOwnerId, draft)", "purpose": "Membuat profil investor baru di tabel investors" },
+            { "name": "updateInvestor(workspaceOwnerId, investorId, draft)", "purpose": "Memperbarui data kontak dan catatan investor" },
+            { "name": "deleteInvestor(workspaceOwnerId, investorId)", "purpose": "Menonaktifkan atau menghapus investor dari workspace" },
+            { "name": "createInvestment(workspaceOwnerId, draft)", "purpose": "Membuat akad investasi uang (murabahah/mudharabah) atau barang titip jual (konsinyasi) dan menyesuaikan stok produk" },
+            { "name": "closeInvestment(workspaceOwnerId, investmentId)", "purpose": "Menutup akad investasi yang telah selesai masa kontraknya" }
+          ],
+          "depends_on": ["src/db/client.ts", "src/db/schema.ts", "src/lib/server/audit.ts"],
+          "used_by": ["API Routes (/api/investors, /api/investments)"]
+        },
+        {
+          "name": "ShiftService",
+          "type": "Business Logic Service Module",
+          "file": "src/lib/server/shift-service.ts",
+          "attributes": [],
+          "methods": [
+            { "name": "listShifts(workspaceOwnerId)", "purpose": "Mengambil daftar jadwal shift aktif dalam workspace" },
+            { "name": "createShift(workspaceOwnerId, draft)", "purpose": "Membuat jadwal shift baru (nama, startTime, endTime)" },
+            { "name": "openShiftSession(workspaceOwnerId, cashierUserId, draft)", "purpose": "Membuka sesi shift kasir dengan modal awal kas (openingCash)" },
+            { "name": "closeShiftSession(workspaceOwnerId, sessionId, cashierUserId, draft)", "purpose": "Menutup sesi shift, menghitung total transaksi Tunai selama sesi (expectedCash), dan mengkalkulasi selisih (difference)" }
+          ],
+          "depends_on": ["src/db/client.ts", "src/db/schema.ts", "src/lib/server/audit.ts"],
+          "used_by": ["API Routes (/api/shifts, /api/shift-sessions)"]
+        },
+        {
+          "name": "ProfitSharingService",
+          "type": "Business Logic Service Module",
+          "file": "src/lib/server/profit-sharing.ts",
+          "attributes": [],
+          "methods": [
+            { "name": "calculateProfitSharing(workspaceOwnerId, year, month)", "purpose": "Menghitung laba bersih warung dan keuntungan produk konsinyasi pada periode bulan tertentu, lalu mengkalkulasi porsi bagi hasil tiap investor" },
+            { "name": "saveProfitPayouts(workspaceOwnerId, year, month, payouts)", "purpose": "Menyimpan atau memperbarui data pembagian hasil ke tabel investor_payouts" },
+            { "name": "approvePayout(workspaceOwnerId, payoutId)", "purpose": "Menyetujui dan mencatat pembayaran bagi hasil kepada investor (paidAt = now)" }
+          ],
+          "depends_on": ["src/db/client.ts", "src/db/schema.ts", "src/lib/server/audit.ts"],
+          "used_by": ["API Routes (/api/payouts)"]
+        }
+      ]
+    },
+    {
+      "category": "3. Repository / Data Access",
+      "modules": [
+        {
+          "name": "DatabasePoolClient",
+          "type": "Repository Infrastructure Module",
+          "file": "src/db/client.ts & src/db/pool-config.ts",
+          "attributes": ["pool: pg.Pool", "db: DrizzleClient"],
+          "methods": [
+            { "name": "pool.query(sql, params)", "purpose": "Eksekusi SQL raw query berkinerja tinggi untuk agregasi kompleks dan RBAC workspace list" },
+            { "name": "db.select().from().where()", "purpose": "Query builder ORM Drizzle berjenis type-safe untuk operasi CRUD harian" }
+          ],
+          "depends_on": ["pg (node-postgres)", "drizzle-orm/node-postgres"],
+          "used_by": ["Seluruh Service dan API Routes di TokoMu"]
+        }
+      ]
+    },
+    {
+      "category": "4. Authentication dan Authorization",
+      "modules": [
+        {
+          "name": "BetterAuthInstance",
+          "type": "Authentication Service Module",
+          "file": "src/lib/auth.ts",
+          "attributes": ["auth: BetterAuth"],
+          "methods": [
+            { "name": "auth.api.getSession(headers)", "purpose": "Memverifikasi token Bearer/cookie session pengguna saat ini" },
+            { "name": "auth.api.signInEmail()", "purpose": "Memvalidasi login email dan password" }
+          ],
+          "depends_on": ["better-auth", "better-auth/plugins/bearer", "pg.Pool"],
+          "used_by": ["RBACService (getCurrentRoleContext)", "API Route /api/auth/[...all]"]
+        },
+        {
+          "name": "RBACService",
+          "type": "Authorization & Role Management Module",
+          "file": "src/lib/server/rbac.ts",
+          "attributes": ["roles: Role[]", "staffRoles: StaffRole[]"],
+          "methods": [
+            { "name": "getUserRoleAssignment(userId)", "purpose": "Mengambil penugasan role dan ID workspace pemilik pengguna dari tabel user_roles" },
+            { "name": "requireRole(allowed)", "purpose": "Guard utama server-side yang memeriksa apakah role pengguna saat ini termasuk dalam daftar yang diizinkan (melempar FORBIDDEN jika tidak)" },
+            { "name": "assignRole(userId, role, workspaceOwnerId)", "purpose": "Mendaftarkan role baru atau memperbarui role pengguna dalam workspace" },
+            { "name": "listWorkspaceUsers(workspaceOwnerId)", "purpose": "Mengambil daftar seluruh pengguna dan role aktif dalam workspace pemilik" }
+          ],
+          "depends_on": ["src/db/client.ts", "src/db/schema.ts", "src/lib/auth.ts"],
+          "used_by": ["AppService (getRequestUser)", "Halaman Frontend Layout/Page (`requireRole`)", "API Routes"]
+        }
+      ]
+    },
+    {
+      "category": "5. Report Generator",
+      "modules": [
+        {
+          "name": "ReportingService",
+          "type": "Financial Reporting Logic Module",
+          "file": "src/lib/server/reporting.ts",
+          "attributes": [],
+          "methods": [
+            { "name": "getMonthlyReportData(workspaceOwnerId, year, month)", "purpose": "Mengagregasi total omzet, HPP, pengeluaran, laba kotor, dan laba bersih per bulan" },
+            { "name": "saveMonthlyReportDraft(workspaceOwnerId, year, month, data)", "purpose": "Menyimpan snapshot rekap keuangan dalam format JSON ke tabel monthly_reports dengan status = 'draft'" },
+            { "name": "finalizeMonthlyReport(workspaceOwnerId, reportId)", "purpose": "Mengunci laporan bulanan menjadi 'final' dan mencatat finalizedAt" }
+          ],
+          "depends_on": ["src/db/client.ts", "src/db/schema.ts", "src/lib/server/audit.ts"],
+          "used_by": ["API Routes (/api/reports/monthly)"]
+        },
+        {
+          "name": "PDFGeneratorModule",
+          "type": "PDF Rendering Component Module",
+          "file": "src/lib/server/pdf-profit-loss.tsx & src/lib/server/pdf-pcm.tsx",
+          "attributes": ["styles: StyleSheet.create()"],
+          "methods": [
+            { "name": "renderToStream(ProfitLossPDF({ data, profile }))", "purpose": "Mengonversi dokumen laporan laba rugi bulanan menjadi binary stream PDF resmi" },
+            { "name": "renderToStream(PcmReportPDF({ data, profile, pcmShare, reserveShare }))", "purpose": "Mengonversi laporan bagi hasil khusus PCM beserta persentase cadangan menjadi binary stream PDF" }
+          ],
+          "depends_on": ["@react-pdf/renderer"],
+          "used_by": ["API Routes (/api/reports/monthly/[id]/pdf, /api/reports/pcm/pdf)"]
+        }
+      ]
+    },
+    {
+      "category": "6. AI / OCR Service",
+      "modules": [
+        {
+          "name": "GeminiVisionOCRService",
+          "type": "AI Vision & OCR Engine Module",
+          "file": "src/lib/server/ai/vision.ts & src/lib/server/ai/receipt-matcher.ts",
+          "attributes": [],
+          "methods": [
+            { "name": "extractReceiptItemsFromImage(imageBuffer, mimeType)", "purpose": "Memanggil Google Gemini Vision API untuk mengekstrak teks gambar struk belanja menjadi array JSON berisi nama barang, kuantitas, dan harga" },
+            { "name": "matchReceiptItemsWithProducts(ocrItems, products)", "purpose": "Mencocokkan string nama barang dari OCR dengan daftar produk eksisting di database menggunakan algoritma string similarity" }
+          ],
+          "depends_on": ["src/lib/server/ai/gemini.ts (@google/genai)"],
+          "used_by": ["API Route /api/ai/scan-receipt"]
+        },
+        {
+          "name": "AIToolsService",
+          "type": "AI Function Tool Calling Module",
+          "file": "src/lib/server/ai/tools.ts & src/lib/server/ai/chat.ts",
+          "attributes": ["availableTools: ToolDefinition[]"],
+          "methods": [
+            { "name": "executeToolCall(toolName, args, userId)", "purpose": "Mengeksekusi fungsi backend yang diminta oleh model AI (misal: restock_product_tool, get_summary_tool, search_products_tool)" },
+            { "name": "processChatSession(chatId, userId, message)", "purpose": "Mengirim riwayat percakapan dan spesifikasi tool ke model Gemini, mengeksekusi tool yang dipanggil, dan mengembalikan jawaban akhir" }
+          ],
+          "depends_on": ["src/lib/server/app-service.ts", "src/lib/server/ai/gemini.ts"],
+          "used_by": ["API Route /api/ai/chats/[id]/messages"]
+        }
+      ]
+    },
+    {
+      "category": "7. Audit Service",
+      "modules": [
+        {
+          "name": "AuditLogService",
+          "type": "System Audit Logging Module",
+          "file": "src/lib/server/audit.ts",
+          "attributes": [],
+          "methods": [
+            { "name": "logEvent(context, eventTypeOrInput, entity, payload)", "purpose": "Mencatat setiap event perubahan data atau keamanan beserta snapshot before/after ke tabel audit_logs" },
+            { "name": "listAuditLogs(workspaceOwnerId, filters)", "purpose": "Mengambil daftar log audit dengan dukungan filter event_type, aktor, kategori, pencarian q, dan paginasi" },
+            { "name": "getAuditFacets(workspaceOwnerId)", "purpose": "Mengambil daftar event_type unik dan daftar aktor untuk mengisi dropdown filter di UI" }
+          ],
+          "depends_on": ["src/db/client.ts", "src/db/schema.ts"],
+          "used_by": ["Seluruh Service di TokoMu & API Route /api/audit-log"]
+        }
+      ]
+    },
+    {
+      "category": "8. UI Controller atau Server Action",
+      "modules": [
+        {
+          "name": "APIRoutesControllers",
+          "type": "Next.js Route Controllers",
+          "file": "src/app/api/**/route.ts",
+          "attributes": [],
+          "methods": [
+            { "name": "GET/POST/PUT/DELETE handlers", "purpose": "Menangani HTTP request, memvalidasi sesi dengan getRequestUser(), memvalidasi input, memanggil service, dan mengembalikan response JSON/PDF" }
+          ],
+          "depends_on": ["AppService", "ShiftService", "InvestorService", "ProfitSharingService", "ReportingService", "AuditLogService"],
+          "used_by": ["Frontend Client Components"]
+        },
+        {
+          "name": "InvestorFormDialog",
+          "type": "React Client Component UI Controller",
+          "file": "src/components/tokomu/investor-form-dialog.tsx",
+          "attributes": ["open: boolean", "formData: InvestorDraftState"],
+          "methods": [
+            { "name": "handleSubmit(e)", "purpose": "Mengirim data formulir penambahan investor ke /api/investors, menutup modal dialog pop-up, dan memperbarui daftar di halaman utama" }
+          ],
+          "depends_on": ["@base-ui/react/dialog", "src/app/(dashboard)/investor/page.tsx"],
+          "used_by": ["Halaman Investor (/investor)"]
+        }
+      ]
+    }
+  ]
+}

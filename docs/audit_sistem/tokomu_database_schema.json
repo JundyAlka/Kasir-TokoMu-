@@ -1,0 +1,566 @@
+{
+  "project_name": "TokoMu (WarungOS)",
+  "total_tables": 24,
+  "better_auth_tables": 4,
+  "business_tables": 20,
+  "foreign_keys_count": 29,
+  "one_to_one_relations": 3,
+  "one_to_many_relations": 26,
+  "tables": [
+    {
+      "table_name": "user",
+      "drizzle_model": "Better Auth Internal",
+      "source_file": "migrations/20260608134501_tokoku-schema.sql",
+      "purpose": "Menyimpan data pengguna aplikasi (akun login utama)",
+      "category": "Better Auth",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "name", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "email", "db_type": "text", "nullable": false, "primary_key": false, "unique": true, "default": null, "foreign_key": null },
+        { "name": "emailVerified", "db_type": "boolean", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "image", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "createdAt", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": "CURRENT_TIMESTAMP", "foreign_key": null },
+        { "name": "updatedAt", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": "CURRENT_TIMESTAMP", "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "id", "to_table": "session", "to_column": "userId", "cardinality": "one-to-many", "optional": false },
+        { "from_column": "id", "to_table": "account", "to_column": "userId", "cardinality": "one-to-many", "optional": false },
+        { "from_column": "id", "to_table": "store_profiles", "to_column": "user_id", "cardinality": "one-to-one", "optional": true },
+        { "from_column": "id", "to_table": "user_roles", "to_column": "user_id", "cardinality": "one-to-one", "optional": true }
+      ]
+    },
+    {
+      "table_name": "session",
+      "drizzle_model": "Better Auth Internal",
+      "source_file": "migrations/20260608134501_tokoku-schema.sql",
+      "purpose": "Menyimpan sesi aktif pengguna yang login melalui Better Auth",
+      "category": "Better Auth",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "expiresAt", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "token", "db_type": "text", "nullable": false, "primary_key": false, "unique": true, "default": null, "foreign_key": null },
+        { "name": "createdAt", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": "CURRENT_TIMESTAMP", "foreign_key": null },
+        { "name": "updatedAt", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "ipAddress", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "userAgent", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "userId", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id (CASCADE)" }
+      ],
+      "relationships": [
+        { "from_column": "userId", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false }
+      ]
+    },
+    {
+      "table_name": "account",
+      "drizzle_model": "Better Auth Internal",
+      "source_file": "migrations/20260608134501_tokoku-schema.sql",
+      "purpose": "Menyimpan kredensial atau akun provider autentikasi pengguna (termasuk password hash)",
+      "category": "Better Auth",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "accountId", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "providerId", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "userId", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id (CASCADE)" },
+        { "name": "accessToken", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "refreshToken", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "idToken", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "accessTokenExpiresAt", "db_type": "timestamptz", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "refreshTokenExpiresAt", "db_type": "timestamptz", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "scope", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "password", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "createdAt", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": "CURRENT_TIMESTAMP", "foreign_key": null },
+        { "name": "updatedAt", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "userId", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false }
+      ]
+    },
+    {
+      "table_name": "verification",
+      "drizzle_model": "Better Auth Internal",
+      "source_file": "migrations/20260608134501_tokoku-schema.sql",
+      "purpose": "Menyimpan token verifikasi email atau reset password dari Better Auth",
+      "category": "Better Auth",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "identifier", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "value", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "expiresAt", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "createdAt", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": "CURRENT_TIMESTAMP", "foreign_key": null },
+        { "name": "updatedAt", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": "CURRENT_TIMESTAMP", "foreign_key": null }
+      ],
+      "relationships": []
+    },
+    {
+      "table_name": "store_profiles",
+      "drizzle_model": "storeProfiles",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan profil warung, konfigurasi bisnis, persentase bagi hasil PCM & cadangan, threshold stok, dan metode pembayaran aktif",
+      "category": "Pengguna dan akses",
+      "columns": [
+        { "name": "user_id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": "user.id" },
+        { "name": "store_name", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "store_tagline", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "store_address", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "pcm_name", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": "''", "foreign_key": null },
+        { "name": "pcm_chairman_name", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": "''", "foreign_key": null },
+        { "name": "pcm_address", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": "''", "foreign_key": null },
+        { "name": "owner_name", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "owner_whatsapp", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "city", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "business_notes", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "stock_alert_threshold", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "profit_share_pcm_pct", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": "30", "foreign_key": null },
+        { "name": "profit_share_reserve_pct", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": "20", "foreign_key": null },
+        { "name": "enabled_payments", "db_type": "jsonb", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "qris_payload", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": "''", "foreign_key": null },
+        { "name": "qris_image_url", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": "''", "foreign_key": null },
+        { "name": "bank_transfer_info", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": "''", "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "updated_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "user_id", "to_table": "user", "to_column": "id", "cardinality": "one-to-one", "optional": false }
+      ]
+    },
+    {
+      "table_name": "user_roles",
+      "drizzle_model": "userRoles",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan penugasan role (RBAC) setiap pengguna dan relasi ke workspace pemilik (pimpinan)",
+      "category": "Pengguna dan akses",
+      "columns": [
+        { "name": "user_id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": "user.id" },
+        { "name": "role", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null, "check": "role IN ('pimpinan', 'pengelola_keuangan', 'kasir')" },
+        { "name": "workspace_owner_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "is_active", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": "1", "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "updated_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "user_id", "to_table": "user", "to_column": "id", "cardinality": "one-to-one", "optional": false },
+        { "from_column": "workspace_owner_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false }
+      ]
+    },
+    {
+      "table_name": "invitations",
+      "drizzle_model": "invitations",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan undangan bergabung ke workspace untuk calon staf (pengelola_keuangan atau kasir)",
+      "category": "Pengguna dan akses",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "workspace_owner_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "email", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "role", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null, "check": "role IN ('pengelola_keuangan', 'kasir')" },
+        { "name": "token", "db_type": "text", "nullable": false, "primary_key": false, "unique": true, "default": null, "foreign_key": null },
+        { "name": "status", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null, "check": "status IN ('pending', 'accepted', 'expired')" },
+        { "name": "invited_by_user_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "expires_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "accepted_at", "db_type": "timestamptz", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "workspace_owner_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "invited_by_user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false }
+      ]
+    },
+    {
+      "table_name": "products",
+      "drizzle_model": "products",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan data katalog produk, stok, harga beli (HPP), harga jual, dan batas minimal peringatan stok",
+      "category": "Produk dan inventaris",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "user_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "sku", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": "''", "foreign_key": null },
+        { "name": "name", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "category", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "buy_price", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "sell_price", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "stock", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "minimum_stock", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "description", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "updated_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "id", "to_table": "transaction_items", "to_column": "product_id", "cardinality": "one-to-many", "optional": true },
+        { "from_column": "id", "to_table": "debt_items", "to_column": "product_id", "cardinality": "one-to-many", "optional": true },
+        { "from_column": "id", "to_table": "investments", "to_column": "product_id", "cardinality": "one-to-many", "optional": true },
+        { "from_column": "id", "to_table": "restock_logs", "to_column": "product_id", "cardinality": "one-to-many", "optional": true }
+      ]
+    },
+    {
+      "table_name": "investors",
+      "drizzle_model": "investors",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan data profil investor (pemilik modal atau penitip barang jual)",
+      "category": "Investor dan bagi hasil",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "workspace_owner_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "name", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "whatsapp", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "address", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "notes", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "is_active", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "updated_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "workspace_owner_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "id", "to_table": "investments", "to_column": "investor_id", "cardinality": "one-to-many", "optional": true },
+        { "from_column": "id", "to_table": "investor_payouts", "to_column": "investor_id", "cardinality": "one-to-many", "optional": true }
+      ]
+    },
+    {
+      "table_name": "investments",
+      "drizzle_model": "investments",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan kesepakatan investasi modal uang (murabahah/mudharabah) atau barang titip jual (konsinyasi) dari investor",
+      "category": "Investor dan bagi hasil",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "investor_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "investors.id" },
+        { "name": "workspace_owner_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "type", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null, "check": "type IN ('uang', 'barang_titip_jual')" },
+        { "name": "akad_type", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": "'murabahah_bil_wakalah'", "foreign_key": null, "check": "akad_type IN ('murabahah_bil_wakalah', 'mudharabah', 'musyarakah', 'barang_titip_jual', 'sales_titipan', 'pinjaman_qardh')" },
+        { "name": "amount", "db_type": "integer", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "monthly_return_rate_pct", "db_type": "numeric", "nullable": false, "primary_key": false, "unique": false, "default": "2.5", "foreign_key": null },
+        { "name": "profit_share_pct", "db_type": "numeric", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "product_id", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": "products.id" },
+        { "name": "unit_count", "db_type": "integer", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "unit_cost", "db_type": "integer", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "profit_share_per_unit_pct", "db_type": "numeric", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "start_date", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "end_date", "db_type": "timestamptz", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "is_active", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "updated_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "investor_id", "to_table": "investors", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "workspace_owner_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "product_id", "to_table": "products", "to_column": "id", "cardinality": "many-to-one", "optional": true },
+        { "from_column": "id", "to_table": "investor_payouts", "to_column": "investment_id", "cardinality": "one-to-many", "optional": true }
+      ]
+    },
+    {
+      "table_name": "investor_payouts",
+      "drizzle_model": "investorPayouts",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan riwayat dan kalkulasi pembagian hasil (payout) kepada investor per periode bulanan",
+      "category": "Investor dan bagi hasil",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "investment_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "investments.id" },
+        { "name": "investor_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "investors.id" },
+        { "name": "workspace_owner_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "period_start", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "period_end", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "base_profit", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "share_pct", "db_type": "numeric", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "amount", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "status", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null, "check": "status IN ('draft', 'disetujui', 'dibayar')" },
+        { "name": "paid_at", "db_type": "timestamptz", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "note", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "updated_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "investment_id", "to_table": "investments", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "investor_id", "to_table": "investors", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "workspace_owner_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false }
+      ]
+    },
+    {
+      "table_name": "transactions",
+      "drizzle_model": "transactions",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan header transaksi penjualan di kasir (total, bayar, kembalian, metode bayar, dan pencatat)",
+      "category": "Kasir dan transaksi",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "user_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "total", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "paid_amount", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": "0", "foreign_key": null },
+        { "name": "change_amount", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": "0", "foreign_key": null },
+        { "name": "payment_method", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "recorded_by_user_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": "''", "foreign_key": "user.id" },
+        { "name": "recorded_by_name", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": "''", "foreign_key": null },
+        { "name": "shift_session_id", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": "shift_sessions.id" },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "recorded_by_user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "shift_session_id", "to_table": "shift_sessions", "to_column": "id", "cardinality": "many-to-one", "optional": true },
+        { "from_column": "id", "to_table": "transaction_items", "to_column": "transaction_id", "cardinality": "one-to-many", "optional": false }
+      ]
+    },
+    {
+      "table_name": "shifts",
+      "drizzle_model": "shifts",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan referensi jam kerja atau jadwal shift operasional kasir (Pagi, Siang, Malam)",
+      "category": "Kasir dan transaksi",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "workspace_owner_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "name", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "start_time", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "end_time", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "assigned_user_id", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "is_active", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": "1", "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "workspace_owner_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "assigned_user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": true },
+        { "from_column": "id", "to_table": "shift_sessions", "to_column": "shift_id", "cardinality": "one-to-many", "optional": true }
+      ]
+    },
+    {
+      "table_name": "shift_sessions",
+      "drizzle_model": "shiftSessions",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan sesi aktif shift kasir (waktu buka/tutup, kas awal, kas akhir aktual, kas ekspektasi, dan selisih)",
+      "category": "Kasir dan transaksi",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "workspace_owner_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "shift_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "shifts.id" },
+        { "name": "cashier_user_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "started_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "ended_at", "db_type": "timestamptz", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "opening_cash", "db_type": "integer", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "closing_cash", "db_type": "integer", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "expected_cash", "db_type": "integer", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "difference", "db_type": "integer", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "workspace_owner_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "shift_id", "to_table": "shifts", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "cashier_user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "id", "to_table": "transactions", "to_column": "shift_session_id", "cardinality": "one-to-many", "optional": true }
+      ]
+    },
+    {
+      "table_name": "transaction_items",
+      "drizzle_model": "transactionItems",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan rincian item atau barang dalam satu transaksi penjualan (quantity, harga jual, dan harga beli saat itu)",
+      "category": "Kasir dan transaksi",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "transaction_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "transactions.id" },
+        { "name": "product_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "products.id" },
+        { "name": "product_name", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "quantity", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "unit_price", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "cost_price", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "transaction_id", "to_table": "transactions", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "product_id", "to_table": "products", "to_column": "id", "cardinality": "many-to-one", "optional": false }
+      ]
+    },
+    {
+      "table_name": "debts",
+      "drizzle_model": "debts",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan data catatan hutang atau kasbon pelanggan warung beserta jatuh tempo dan status lunas",
+      "category": "Buku hutang",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "user_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "borrower_name", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "whatsapp", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "amount", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "paid_amount", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": "0", "foreign_key": null },
+        { "name": "status", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": "'aktif'", "foreign_key": null, "check": "status IN ('aktif', 'lunas', 'lewat_tempo')" },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "due_date", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "is_paid", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "last_reminder_at", "db_type": "timestamptz", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "id", "to_table": "debt_items", "to_column": "debt_id", "cardinality": "one-to-many", "optional": true },
+        { "from_column": "id", "to_table": "debt_payments", "to_column": "debt_id", "cardinality": "one-to-many", "optional": true }
+      ]
+    },
+    {
+      "table_name": "debt_items",
+      "drizzle_model": "debtItems",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan rincian barang atau produk yang dikasbon dalam satu pencatatan hutang",
+      "category": "Buku hutang",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "debt_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "debts.id" },
+        { "name": "product_id", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": "products.id" },
+        { "name": "name", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "quantity", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "unit_price", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "line_total", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "debt_id", "to_table": "debts", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "product_id", "to_table": "products", "to_column": "id", "cardinality": "many-to-one", "optional": true }
+      ]
+    },
+    {
+      "table_name": "debt_payments",
+      "drizzle_model": "debtPayments",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan riwayat pembayaran atau cicilan kasbon oleh pelanggan beserta tanggal dan pencatat",
+      "category": "Buku hutang",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "debt_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "debts.id" },
+        { "name": "amount", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "paid_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "note", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "recorded_by_user_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" }
+      ],
+      "relationships": [
+        { "from_column": "debt_id", "to_table": "debts", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "recorded_by_user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false }
+      ]
+    },
+    {
+      "table_name": "expenses",
+      "drizzle_model": "expenses",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan catatan pengeluaran operasional warung (Operasional, Belanja, Utilitas)",
+      "category": "Laporan dan pengeluaran",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "user_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "title", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "amount", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "category", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false }
+      ]
+    },
+    {
+      "table_name": "restock_logs",
+      "drizzle_model": "restockLogs",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan riwayat penambahan stok atau restok produk, baik manual, via AI Chat, maupun OCR struk",
+      "category": "AI dan OCR",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "workspace_owner_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "product_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "products.id" },
+        { "name": "performed_by_user_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "source", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null, "check": "source IN ('manual', 'ai_chat', 'ai_ocr')" },
+        { "name": "quantity", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "unit_cost", "db_type": "integer", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "receipt_image_url", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "ocr_raw", "db_type": "jsonb", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "note", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "workspace_owner_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "product_id", "to_table": "products", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "performed_by_user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false }
+      ]
+    },
+    {
+      "table_name": "monthly_reports",
+      "drizzle_model": "monthlyReports",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan snapshot rekap laporan bulanan dan laba rugi (baik draft maupun final yang telah dikunci/disetujui pimpinan)",
+      "category": "Laporan dan pengeluaran",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "workspace_owner_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "period_year", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "period_month", "db_type": "integer", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "data", "db_type": "jsonb", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "pdf_url", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "status", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null, "check": "status IN ('draft', 'final')" },
+        { "name": "finalized_at", "db_type": "timestamptz", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "updated_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "workspace_owner_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false }
+      ]
+    },
+    {
+      "table_name": "ai_chats",
+      "drizzle_model": "aiChats",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan sesi percakapan dengan AI Assistant (TokoMu AI) per pengguna/workspace",
+      "category": "AI dan OCR",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "user_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "title", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "updated_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "id", "to_table": "ai_messages", "to_column": "chat_id", "cardinality": "one-to-many", "optional": true }
+      ]
+    },
+    {
+      "table_name": "ai_messages",
+      "drizzle_model": "aiMessages",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan isi pesan percakapan, eksekusi tool calls, serta hasil pemanggilan alat AI (restok, produk, ringkasan)",
+      "category": "AI dan OCR",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "chat_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "ai_chats.id" },
+        { "name": "user_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "role", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "content", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "tool_name", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "tool_call_id", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "tool_calls", "db_type": "jsonb", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "tool_args", "db_type": "jsonb", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "tool_result", "db_type": "jsonb", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "chat_id", "to_table": "ai_chats", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false }
+      ]
+    },
+    {
+      "table_name": "audit_logs",
+      "drizzle_model": "auditLogs",
+      "source_file": "src/db/schema.ts",
+      "purpose": "Menyimpan log audit keamanan dan perubahan data (siapa melakukan apa, event_type, before/after snapshot)",
+      "category": "Audit dan konfigurasi",
+      "columns": [
+        { "name": "id", "db_type": "text", "nullable": false, "primary_key": true, "unique": true, "default": null, "foreign_key": null },
+        { "name": "workspace_owner_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "actor_user_id", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": "user.id" },
+        { "name": "event_type", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "entity_type", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "entity_id", "db_type": "text", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "category", "db_type": "text", "nullable": false, "primary_key": false, "unique": false, "default": "'system'", "foreign_key": null },
+        { "name": "payload", "db_type": "jsonb", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "before", "db_type": "jsonb", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "after", "db_type": "jsonb", "nullable": true, "primary_key": false, "unique": false, "default": null, "foreign_key": null },
+        { "name": "created_at", "db_type": "timestamptz", "nullable": false, "primary_key": false, "unique": false, "default": null, "foreign_key": null }
+      ],
+      "relationships": [
+        { "from_column": "workspace_owner_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false },
+        { "from_column": "actor_user_id", "to_table": "user", "to_column": "id", "cardinality": "many-to-one", "optional": false }
+      ]
+    }
+  ]
+}

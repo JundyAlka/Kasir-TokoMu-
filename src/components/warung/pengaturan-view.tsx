@@ -17,7 +17,8 @@ import { cn } from "@/lib/utils";
 
 const paymentMethods: PaymentMethod[] = ["Tunai", "QRIS", "Transfer"];
 
-export function PengaturanView() {
+export function PengaturanView({ role }: { role: string }) {
+  const canMutateSettings = role === "pimpinan";
   const { settings, lowStockProducts, resetWorkspace, updateSettings, products } = useAppState();
   const [form, setForm] = useState<Settings>(settings);
   const [isSaving, setIsSaving] = useState(false);
@@ -90,9 +91,11 @@ export function PengaturanView() {
         <TabsTrigger value="profil" className="rounded-full px-4">
           Profil Warung
         </TabsTrigger>
-        <TabsTrigger value="shift" className="rounded-full px-4">
-          Shift Kasir
-        </TabsTrigger>
+        {role === "pimpinan" ? (
+          <TabsTrigger value="shift" className="rounded-full px-4">
+            Shift Kasir
+          </TabsTrigger>
+        ) : null}
       </TabsList>
 
       <TabsContent value="profil">
@@ -136,6 +139,7 @@ export function PengaturanView() {
                   onChange={(event) => updateField("storeName", event.target.value)}
                   className="h-11 rounded-2xl"
                   placeholder="Contoh: Warung Berkah Bu Rani"
+                  disabled={!canMutateSettings}
                 />
               </div>
               <div className="grid gap-2">
@@ -146,6 +150,7 @@ export function PengaturanView() {
                   onChange={(event) => updateField("storeTagline", event.target.value)}
                   className="h-11 rounded-2xl"
                   placeholder="Contoh: Sembako, kopi, dan jajanan harian"
+                  disabled={!canMutateSettings}
                 />
               </div>
               <div className="grid gap-2">
@@ -156,6 +161,7 @@ export function PengaturanView() {
                   onChange={(event) => updateField("city", event.target.value)}
                   className="h-11 rounded-2xl"
                   placeholder="Contoh: Depok"
+                  disabled={!canMutateSettings}
                 />
               </div>
               <div className="grid gap-2 sm:col-span-2">
@@ -166,6 +172,7 @@ export function PengaturanView() {
                   onChange={(event) => updateField("storeAddress", event.target.value)}
                   className="min-h-24 rounded-[22px]"
                   placeholder="Contoh: Jl. Mawar No. 8, dekat mushola Al-Ikhlas"
+                  disabled={!canMutateSettings}
                 />
               </div>
             </div>
@@ -188,6 +195,7 @@ export function PengaturanView() {
                   onChange={(event) => updateField("ownerName", event.target.value)}
                   className="h-11 rounded-2xl"
                   placeholder="Contoh: Ibu Rani"
+                  disabled={!canMutateSettings}
                 />
               </div>
               <div className="grid gap-2">
@@ -198,6 +206,7 @@ export function PengaturanView() {
                   onChange={(event) => updateField("ownerWhatsapp", event.target.value)}
                   className="h-11 rounded-2xl"
                   placeholder="Contoh: 081234567890"
+                  disabled={!canMutateSettings}
                 />
               </div>
               <div className="grid gap-2 sm:col-span-2">
@@ -208,6 +217,7 @@ export function PengaturanView() {
                   onChange={(event) => updateField("businessNotes", event.target.value)}
                   className="min-h-28 rounded-[22px]"
                   placeholder="Contoh: Fokus belanja stok tiap Senin pagi, pelanggan ramai setelah magrib."
+                  disabled={!canMutateSettings}
                 />
               </div>
             </div>
@@ -231,6 +241,7 @@ export function PengaturanView() {
                   updateField("stockAlertThreshold", Number.isFinite(nextValue) ? nextValue : 0);
                 }}
                 className="h-11 rounded-2xl"
+                disabled={!canMutateSettings}
               />
               <div className="rounded-[20px] bg-muted/55 px-4 py-3 text-sm text-muted-foreground">
                 Saat ini ada {lowStockProducts.length} produk yang berada di area peringatan.
@@ -256,6 +267,7 @@ export function PengaturanView() {
                       active && "shadow-[0_20px_40px_-24px_rgba(186,92,35,0.75)]"
                     )}
                     onClick={() => togglePayment(method)}
+                    disabled={!canMutateSettings}
                   >
                     {method}
                   </Button>
@@ -275,6 +287,7 @@ export function PengaturanView() {
                   onChange={(event) => updateField("bankTransferInfo", event.target.value)}
                   className="min-h-24 rounded-[22px]"
                   placeholder="Contoh: BCA 1234567890 a/n TokoMu"
+                  disabled={!canMutateSettings}
                 />
               </div>
               <div className="grid gap-2">
@@ -285,6 +298,7 @@ export function PengaturanView() {
                   onChange={(event) => updateField("qrisPayload", event.target.value)}
                   className="min-h-24 rounded-[22px]"
                   placeholder="Paste string QRIS dari aplikasi (cth: 000201010211...)"
+                  disabled={!canMutateSettings}
                 />
                 <p className="text-xs text-muted-foreground">
                   Jika diisi, kasir bisa langsung generate QRIS otomatis sesuai nominal belanja pelanggan.
@@ -298,43 +312,54 @@ export function PengaturanView() {
                   onChange={(event) => updateField("qrisImageUrl", event.target.value)}
                   className="h-11 rounded-2xl"
                   placeholder="URL gambar QRIS (contoh: https://...)"
+                  disabled={!canMutateSettings}
                 />
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Button
-              type="button"
-              size="lg"
-              className="rounded-2xl"
-              onClick={() => void handleSave()}
-              disabled={isSaving}
-            >
-              <BadgeCheck className="size-4" />
-              {isSaving ? "Menyimpan..." : "Simpan pengaturan"}
-            </Button>
-            <Button
-              type="button"
-              size="lg"
-              variant="outline"
-              className="rounded-2xl"
-              onClick={() => setForm(settings)}
-              disabled={!hasUnsavedChanges || isSaving}
-            >
-              Kembalikan draft
-            </Button>
-            <Button
-              type="button"
-              size="lg"
-              variant="outline"
-              className="rounded-2xl"
-              onClick={() => void handleWorkspaceReset()}
-              disabled={isResetting}
-            >
-              <RotateCcw className="size-4" />
-              {isResetting ? "Mereset..." : "Reset workspace"}
-            </Button>
+            {canMutateSettings ? (
+              <>
+                <Button
+                  type="button"
+                  size="lg"
+                  className="rounded-2xl"
+                  onClick={() => void handleSave()}
+                  disabled={isSaving}
+                >
+                  <BadgeCheck className="size-4" />
+                  {isSaving ? "Menyimpan..." : "Simpan pengaturan"}
+                </Button>
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  className="rounded-2xl"
+                  onClick={() => setForm(settings)}
+                  disabled={!hasUnsavedChanges || isSaving}
+                >
+                  Kembalikan draft
+                </Button>
+                {role === "pimpinan" ? (
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant="outline"
+                    className="rounded-2xl"
+                    onClick={() => void handleWorkspaceReset()}
+                    disabled={isResetting}
+                  >
+                    <RotateCcw className="size-4" />
+                    {isResetting ? "Mereset..." : "Reset workspace"}
+                  </Button>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm italic text-muted-foreground bg-muted/40 p-4 rounded-xl border border-border/50">
+                Anda hanya memiliki akses untuk melihat pengaturan. Hubungi Pimpinan untuk mengubah data di halaman ini.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -425,9 +450,11 @@ export function PengaturanView() {
         </div>
       </TabsContent>
 
-      <TabsContent value="shift">
-        <ShiftSettings />
-      </TabsContent>
+      {role === "pimpinan" ? (
+        <TabsContent value="shift">
+          <ShiftSettings role={role} />
+        </TabsContent>
+      ) : null}
     </Tabs>
   );
 }

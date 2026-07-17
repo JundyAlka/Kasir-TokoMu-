@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/server/rbac";
 
 export default async function BagiHasilPage() {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
   } catch (error) {
     if (error instanceof Error && error.message === "FORBIDDEN") {
       forbidden();

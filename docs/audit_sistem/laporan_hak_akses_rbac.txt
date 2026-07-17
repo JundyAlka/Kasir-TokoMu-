@@ -1,0 +1,290 @@
+================================================================================
+                    LAPORAN RESMI AUDIT & STANDARDISASI
+               ROLE-BASED ACCESS CONTROL (RBAC) SISTEM TOKOMU
+================================================================================
+Tanggal Audit & Sinkronisasi : 16 Juli 2026
+Nama Aplikasi                : TokoMu (WarungOS) - Sistem Manajemen Warung & UMKM
+Sumber Kebenaran Kode (Truth): Source code langsung pada direktori warungos/src/
+================================================================================
+
+I. PENJELASAN ARSITEKTUR & KEBIJAKAN HAK AKSES (2 TINGKAT)
+--------------------------------------------------------------------------------
+Sistem TokoMu menerapkan arsitektur otorisasi berbasis peran (Role-Based Access
+Control / RBAC) yang terpusat dan konsisten di 3 lapisan pengamanan sistem:
+
+1. Layer 1: Server-Side API Controller Guard (src/app/api/**/route.ts)
+   Pengamanan rute backend menggunakan fungsi gatekeeper `requireRole(roles)`.
+   Setiap HTTP request (GET, POST, PUT, PATCH, DELETE) yang masuk diverifikasi
+   terlebih dahulu token sesi dan perannya sebelum mengeksekusi logika bisnis
+   atau operasi database.
+
+2. Layer 2: Route Page Guard (src/app/(dashboard)/**/page.tsx)
+   Pengamanan level halaman pada Next.js Server Components. Halaman administratif
+   yang sensitif secara langsung memanggil `requireRole()` saat rendering di
+   server. Jika peran pengguna tidak diizinkan, server langsung mengembalikan
+   status HTTP 403 (Forbidden) dan mengalihkan pengguna ke halaman penolakan.
+
+3. Layer 3: Dynamic Sidebar & UI Mutation Guard (src/components/**)
+   Pengamanan antarmuka pengguna di sisi client. Komponen navigasi (`app-shell.tsx`)
+   dan formulir (`pengaturan-view.tsx`) membatasi visibilitas menu dan tombol
+   simpan berdasarkan peran aktif pengguna untuk mencegah manipulasi visual.
+
+--------------------------------------------------------------------------------
+II. STRUKTUR DAN KLASIFIKASI PERAN (ROLES)
+--------------------------------------------------------------------------------
+Aplikasi memiliki 3 peran aktif yang dikelompokkan ke dalam 2 tingkat hak akses:
+
+[TINGKAT 1: EKSEKUTIF / ADMINISTRATOR PENUH]
+1. PIMPINAN (`pimpinan`)
+   - Merupakan pemilik workspace (Workspace Owner) atau Super Admin warung.
+   - Memiliki hak akses penuh (100%) ke seluruh modul operasional maupun modul
+     administratif tingkat tinggi.
+   - Eksklusif: Satu-satunya peran yang berhak mengelola karyawan, melihat audit
+     log, mereset data workspace, mengatur jadwal shift, melihat Laporan PCM,
+     dan mengubah konfigurasi/pengaturan warung.
+
+[TINGKAT 2: STAF OPERASIONAL & KEUANGAN (SETINGKAT / IZIN SAMA)]
+2. BENDAHARA (`pengelola_keuangan`)
+   - Bertanggung jawab atas pengelolaan arus kas, buku hutang, investasi, bagi
+     hasil, dan laporan operasional bulanan.
+3. KASIR (`kasir`)
+   - Bertanggung jawab atas transaksi kasir POS, inventaris, restok barang, dan
+     pelayanan harian warung.
+
+*Catatan Penting Tingkat 2:*
+Peran BENDAHARA (`pengelola_keuangan`) dan KASIR (`kasir`) disetarakan dalam
+hal izin operasional harian warung. Kedua peran ini DIBERIKAN AKSES PENUH ke
+modul transaksi, inventaris, hutang, investor, bagi hasil, dan laporan bulanan,
+tetapi SECARA EKSKLUSIF DILARANG mengakses modul administratif pimpinan.
+
+================================================================================
+III. MATRIKS DETAIL HAK AKSES PER MODUL SISTEM (15 MODUL)
+================================================================================
+
+--------------------------------------------------------------------------------
+1. MODUL DASHBOARD UTAMA
+--------------------------------------------------------------------------------
+- Rute Halaman : /dashboard
+- Rute API     : /api/dashboard
+- PIMPINAN     : [BOLEH] Akses penuh ringkasan omzet, laba bersih, kasbon, & stok.
+- BENDAHARA    : [BOLEH] Akses penuh ringkasan omzet, laba bersih, kasbon, & stok.
+- KASIR        : [BOLEH] Akses penuh ringkasan omzet, laba bersih, kasbon, & stok.
+- Keterangan   : Semua peran operasional berhak melihat monitoring dashboard.
+
+--------------------------------------------------------------------------------
+2. MODUL POS KASIR & PENJUALAN
+--------------------------------------------------------------------------------
+- Rute Halaman : /kasir
+- Rute API     : /api/transactions, /api/bootstrap
+- PIMPINAN     : [BOLEH] Buat transaksi, pilih bayar Tunai/QRIS/Transfer, cetak struk.
+- BENDAHARA    : [BOLEH] Buat transaksi, pilih bayar Tunai/QRIS/Transfer, cetak struk.
+- KASIR        : [BOLEH] Buat transaksi, pilih bayar Tunai/QRIS/Transfer, cetak struk.
+- Keterangan   : Fitur utama kasir terbuka untuk ketiga peran.
+
+--------------------------------------------------------------------------------
+3. MODUL SHIFT KASIR (OPERASIONAL SESI vs PENGATURAN JADWAL)
+--------------------------------------------------------------------------------
+- Rute Halaman : (Terintegrasi di Header POS & Pengaturan Tab Shift)
+- Rute API Sesi: /api/shift-sessions, /api/shift-sessions/[id]/close
+- Rute API Shift:/api/shifts, /api/shifts/[id]
+- PIMPINAN     : [BOLEH] Buka/tutup sesi shift DAN kelola/atur jadwal shift warung.
+- BENDAHARA    : [BOLEH] Buka & tutup sesi shift kasir atas nama sendiri.
+                 [TIDAK BOLEH] Atur, tambah, edit, atau hapus jadwal shift (403).
+- KASIR        : [BOLEH] Buka & tutup sesi shift kasir atas nama sendiri.
+                 [TIDAK BOLEH] Atur, tambah, edit, atau hapus jadwal shift (403).
+- Keterangan   : POST/PATCH/DELETE pada /api/shifts diproteksi eksklusif Pimpinan.
+
+--------------------------------------------------------------------------------
+4. MODUL KATALOG PRODUK & INVENTARIS + RESTOK
+--------------------------------------------------------------------------------
+- Rute Halaman : /inventaris
+- Rute API     : /api/products, /api/products/[id], /api/restock/**
+- PIMPINAN     : [BOLEH] Kelola penuh produk (lihat, tambah, edit, hapus, restok).
+- BENDAHARA    : [BOLEH] Kelola penuh produk (lihat, tambah, edit, hapus, restok).
+- KASIR        : [BOLEH] Kelola penuh produk (lihat, tambah, edit, hapus, restok).
+- Keterangan   : Keduanya dapat membantu pendataan barang masuk dan update stok.
+
+--------------------------------------------------------------------------------
+5. MODUL RESTOK AI CHAT & OCR STRUK (GOOGLE GEMINI 2.5 FLASH)
+--------------------------------------------------------------------------------
+- Rute Halaman : (Panel AI Asisten & Dialog Scan Struk)
+- Rute API     : /api/ai/chats, /api/ai/chats/[id]/messages, /api/ai/scan-receipt
+- PIMPINAN     : [BOLEH] Upload gambar struk, parsing Vision OCR, chat AI Gemini.
+- BENDAHARA    : [BOLEH] Upload gambar struk, parsing Vision OCR, chat AI Gemini.
+- KASIR        : [BOLEH] Upload gambar struk, parsing Vision OCR, chat AI Gemini.
+- Keterangan   : Mesin AI distandarkan menggunakan Google Gemini (`gemini-2.5-flash`).
+                 Tidak ada penyebutan Claude/Anthropic di kode dan antarmuka.
+
+--------------------------------------------------------------------------------
+6. MODUL BUKU HUTANG / KASBON
+--------------------------------------------------------------------------------
+- Rute Halaman : /buku-hutang
+- Rute API     : /api/debts, /api/debts/[id], /api/debts/[id]/payments
+- PIMPINAN     : [BOLEH] Kelola penuh buku hutang, catat kasbon, bayar cicilan.
+- BENDAHARA    : [BOLEH] Kelola penuh buku hutang, catat kasbon, bayar cicilan.
+- KASIR        : [BOLEH] Kelola penuh buku hutang, catat kasbon, bayar cicilan.
+- Keterangan   : Memungkinkan kasir dan bendahara mencatat piutang pelanggan.
+
+--------------------------------------------------------------------------------
+7. MODUL INVESTOR & AKAD INVESTASI (KELOLA UTUH)
+--------------------------------------------------------------------------------
+- Rute Halaman : /investor, /investor/[id]
+- Rute API     : /api/investors, /api/investors/[id], /api/investments/**
+- PIMPINAN     : [BOLEH] Kelola investor utuh (lihat daftar, detail, buat/edit akad).
+- BENDAHARA    : [BOLEH] Kelola investor utuh (lihat daftar, detail, buat/edit akad).
+- KASIR        : [BOLEH] Kelola investor utuh (lihat daftar, detail, buat/edit akad).
+- Keterangan   : Pembuatan investor baru di UI diarahkan via dialog modal di /investor.
+
+--------------------------------------------------------------------------------
+8. MODUL BAGI HASIL INVESTOR (PROFIT SHARING)
+--------------------------------------------------------------------------------
+- Rute Halaman : /bagi-hasil
+- Rute API     : /api/payouts, /api/payouts/[id], /api/payouts/calculate
+- PIMPINAN     : [BOLEH] Kelola penuh kalkulasi laba, hitung bagi hasil, bayarkan.
+- BENDAHARA    : [BOLEH] Kelola penuh kalkulasi laba, hitung bagi hasil, bayarkan.
+- KASIR        : [BOLEH] Kelola penuh kalkulasi laba, hitung bagi hasil, bayarkan.
+- Keterangan   : Kasir dan Bendahara berhak mengelola pembagian hasil investasi.
+
+--------------------------------------------------------------------------------
+9. MODUL PENGELUARAN OPERASIONAL
+--------------------------------------------------------------------------------
+- Rute Halaman : (Dialog Tambah Pengeluaran di Dashboard & POS)
+- Rute API     : /api/bootstrap (createExpense)
+- PIMPINAN     : [BOLEH] Catat pengeluaran operasional, belanja, dan utilitas.
+- BENDAHARA    : [BOLEH] Catat pengeluaran operasional, belanja, dan utilitas.
+- KASIR        : [BOLEH] Catat pengeluaran operasional, belanja, dan utilitas.
+- Keterangan   : Terbuka agar operasional harian warung tercatat secara rapi.
+
+--------------------------------------------------------------------------------
+10. MODUL LAPORAN KEUANGAN BULANAN & LABA RUGI
+--------------------------------------------------------------------------------
+- Rute Halaman : /laporan
+- Rute API     : /api/reports/profit-loss, /api/reports/profit-loss/pdf
+- PIMPINAN     : [BOLEH] Kelola penuh kalkulasi laporan, finalisasi, & unduh PDF.
+- BENDAHARA    : [BOLEH] Kelola penuh kalkulasi laporan, finalisasi, & unduh PDF.
+- KASIR        : [BOLEH] Kelola penuh kalkulasi laporan, finalisasi, & unduh PDF.
+- Keterangan   : Sesuai kebijakan, Kasir dan Bendahara berhak kelola & unduh PDF.
+
+--------------------------------------------------------------------------------
+11. MODUL LAPORAN PCM (PIMPINAN CABANG MUHAMMADIYAH) [RESTRICTED]
+--------------------------------------------------------------------------------
+- Rute Halaman : /laporan-pcm
+- Rute API     : /api/reports/monthly-pcm, /api/reports/monthly-pcm/[id]/pdf
+- PIMPINAN     : [BOLEH] Akses eksklusif kelola persentase PCM & unduh laporan PDF.
+- BENDAHARA    : [TIDAK BOLEH] Dilarang mengakses rute (403 Forbidden).
+- KASIR        : [TIDAK BOLEH] Dilarang mengakses rute (403 Forbidden).
+- Keterangan   : Menu disembunyikan otomatis dari sidebar non-pimpinan.
+
+--------------------------------------------------------------------------------
+12. MODUL AUDIT LOG KEAMANAN [RESTRICTED]
+--------------------------------------------------------------------------------
+- Rute Halaman : /pengaturan/audit-log
+- Rute API     : /api/audit-log
+- PIMPINAN     : [BOLEH] Akses eksklusif rekam jejak keamanan seluruh aktivitas.
+- BENDAHARA    : [TIDAK BOLEH] Dilarang mengakses rute (403 Forbidden).
+- KASIR        : [TIDAK BOLEH] Dilarang mengakses rute (403 Forbidden).
+- Keterangan   : Audit Log dikunci ketat hanya untuk pimpinan warung.
+
+--------------------------------------------------------------------------------
+13. MODUL KELOLA KARYAWAN & UNDANGAN WORKSPACE [RESTRICTED]
+--------------------------------------------------------------------------------
+- Rute Halaman : /pengaturan/karyawan
+- Rute API     : /api/users, /api/users/invite, /api/users/[id]/**
+- PIMPINAN     : [BOLEH] Akses eksklusif tambah/invite staf, ubah role, & nonaktifkan.
+- BENDAHARA    : [TIDAK BOLEH] Dilarang mengakses rute (403 Forbidden).
+- KASIR        : [TIDAK BOLEH] Dilarang mengakses rute (403 Forbidden).
+- Keterangan   : Manajemen kepegawaian sepenuhnya di bawah wewenang pimpinan.
+
+--------------------------------------------------------------------------------
+14. MODUL RESET DATA WORKSPACE (DANGER ZONE) [RESTRICTED]
+--------------------------------------------------------------------------------
+- Rute Halaman : (Bagian Danger Zone di Pengaturan)
+- Rute API     : /api/bootstrap/reset
+- PIMPINAN     : [BOLEH] Akses eksklusif mereset seluruh data workspace ke nol.
+- BENDAHARA    : [TIDAK BOLEH] Dilarang mengeksekusi reset data (403 Forbidden).
+- KASIR        : [TIDAK BOLEH] Dilarang mengeksekusi reset data (403 Forbidden).
+- Keterangan   : API route diproteksi langsung oleh `requireRole(["pimpinan"])`.
+
+--------------------------------------------------------------------------------
+15. MODUL PENGATURAN WARUNG & PROFIL (READ-ONLY vs MUTATION)
+--------------------------------------------------------------------------------
+- Rute Halaman : /pengaturan
+- Rute API     : GET /api/settings vs PUT /api/settings
+- PIMPINAN     : [BOLEH] Lihat informasi pengaturan DAN ubah/edit konfigurasi warung.
+- BENDAHARA    : [BOLEH LIHAT] Berhak masuk halaman untuk melihat info profil warung.
+                 [TIDAK BOLEH EDIT] Form input dimatikan (canMutateSettings = false)
+                 dan API PUT /api/settings mengembalikan status 403 Forbidden.
+- KASIR        : [BOLEH LIHAT] Berhak masuk halaman untuk melihat info profil warung.
+                 [TIDAK BOLEH EDIT] Form input dimatikan (canMutateSettings = false)
+                 dan API PUT /api/settings mengembalikan status 403 Forbidden.
+- Keterangan   : Memastikan Bendahara dan Kasir tahu informasi warung tanpa bisa
+                 mengubah parameter sensitif (seperti persentase atau nama toko).
+
+================================================================================
+IV. BUKTI VERIFIKASI IMPLEMENTASI SOURCE CODE (EVIDENCE FILE)
+================================================================================
+
+1. Gatekeeper Utama RBAC:
+   - Path: src/lib/server/rbac.ts
+   - Bukti: Fungsi `requireRole(allowedRoles)` memvalidasi bahwa `user.role`
+     harus berada dalam array `allowedRoles`. Jika tidak, melempar error `FORBIDDEN`.
+
+2. Pengaturan (Read-Only vs Edit):
+   - Path API: src/app/api/settings/route.ts -> PUT method menggunakan:
+     `await requireRole(["pimpinan"]);`
+   - Path UI: src/components/warung/pengaturan-view.tsx -> logika UI membatasi:
+     `const canMutateSettings = role === "pimpinan";`
+
+3. Laporan PCM (Restricted):
+   - Path Page: src/app/(dashboard)/laporan-pcm/page.tsx ->
+     `await requireRole(["pimpinan"]);`
+   - Path API: src/app/api/reports/monthly-pcm/route.ts (GET, POST, PATCH) &
+     src/app/api/reports/monthly-pcm/[id]/pdf/route.ts ->
+     `await requireRole(["pimpinan"]);`
+
+4. Audit Log (Restricted):
+   - Path Page: src/app/(dashboard)/pengaturan/audit-log/page.tsx ->
+     `await requireRole(["pimpinan"]);`
+   - Path API: src/app/api/audit-log/route.ts ->
+     `await requireRole(["pimpinan"]);`
+
+5. Kelola Karyawan (Restricted):
+   - Path Page: src/app/(dashboard)/pengaturan/karyawan/page.tsx ->
+     `await requireRole(["pimpinan"]);`
+   - Path API: src/app/api/users/route.ts & src/app/api/users/invite/route.ts ->
+     `await requireRole(["pimpinan"]);`
+
+6. Reset Workspace (Restricted):
+   - Path API: src/app/api/bootstrap/reset/route.ts ->
+     `await requireRole(["pimpinan"]);`
+
+7. Shift Kasir (Sesi Sendiri vs Atur Jadwal Shift):
+   - Path API Sesi (Buka/Tutup Sendiri): src/app/api/shift-sessions/route.ts ->
+     `await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);`
+   - Path API Jadwal (Kelola Shift): src/app/api/shifts/route.ts (POST) &
+     src/app/api/shifts/[id]/route.ts (PATCH, DELETE) ->
+     `await requireRole(["pimpinan"]);`
+
+8. Dynamic Sidebar Filtering:
+   - Path UI: src/components/app-shell.tsx -> Array navigasi memeriksa `item.roles`:
+     - Laporan PCM: `roles: ["pimpinan"]`
+     - Karyawan: `roles: ["pimpinan"]`
+     - Audit Log: `roles: ["pimpinan"]`
+
+9. AI Assistant Engine & Clean Models:
+   - Path API & Lib: src/lib/server/ai/gemini.ts & src/lib/server/ai/vision.ts ->
+     Model default diatur ke `"gemini-2.5-flash"`.
+   - Path UI: src/components/warung/ai-assistant-panel.tsx -> Teks label
+     menampilkan `"Asisten kontekstual · Gemini 2.5 Flash · Tool calling"`.
+
+================================================================================
+V. KESIMPULAN AUDIT & SINKRONISASI
+================================================================================
+Seluruh logika pengamanan rute (Route Guards), penanganan API (Controllers),
+penguncian formulir antarmuka (Mutation Flags), dan penyaringan navigasi (Sidebar
+Filtering) dalam aplikasi TokoMu (WarungOS) telah 100% konsisten, terverifikasi
+bebas dari referensi AI non-Gemini, dan selaras dengan kebijakan hak akses terbaru.
+
+Laporan ini dapat langsung dilampirkan atau dijadikan acuan dalam penyusunan
+Laporan Kerja Praktik maupun dokumentasi teknis resmi sistem informasi TokoMu.
+================================================================================

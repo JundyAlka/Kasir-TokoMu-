@@ -25,7 +25,7 @@ function parseBodyPeriod(body: unknown) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId } = await getRequestUser();
     const period = parseBodyPeriod(await request.json());
     const calculation = await calculatePayouts(workspaceOwnerId, period.year, period.month);

@@ -54,7 +54,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const draft = InvestmentUpdateSchema.parse(await request.json());
@@ -70,7 +70,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const investment = await deactivateInvestment(workspaceOwnerId, id);

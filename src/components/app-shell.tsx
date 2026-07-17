@@ -28,15 +28,15 @@ import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/server/rbac";
 
 const navigation = [
-  { href: "/dashboard", label: "Dashboard", icon: Gauge, roles: ["pimpinan", "pengelola_keuangan"] },
+  { href: "/dashboard", label: "Dashboard", icon: Gauge, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/kasir", label: "Kasir", icon: ShoppingBasket, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/inventaris", label: "Inventaris", icon: Package2, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/buku-hutang", label: "Buku Hutang", icon: Wallet, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
-  { href: "/investor", label: "Investor", icon: Landmark, roles: ["pimpinan", "pengelola_keuangan"] },
-  { href: "/bagi-hasil", label: "Bagi Hasil", icon: HandCoins, roles: ["pimpinan", "pengelola_keuangan"] },
-  { href: "/laporan", label: "Laporan", icon: FileChartColumn, roles: ["pimpinan", "pengelola_keuangan"] },
-  { href: "/laporan-pcm", label: "Laporan PCM", icon: ScrollText, roles: ["pimpinan", "pengelola_keuangan"] },
-  { href: "/pengaturan", label: "Pengaturan", icon: Settings2, roles: ["pimpinan", "pengelola_keuangan"] },
+  { href: "/investor", label: "Investor", icon: Landmark, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
+  { href: "/bagi-hasil", label: "Bagi Hasil", icon: HandCoins, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
+  { href: "/laporan", label: "Laporan", icon: FileChartColumn, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
+  { href: "/laporan-pcm", label: "Laporan PCM", icon: ScrollText, roles: ["pimpinan"] },
+  { href: "/pengaturan", label: "Pengaturan", icon: Settings2, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/pengaturan/karyawan", label: "Kelola Karyawan", icon: UserCog, roles: ["pimpinan"] },
   { href: "/pengaturan/audit-log", label: "Audit Log", icon: ListChecks, roles: ["pimpinan"] },
 ] satisfies Array<{ href: string; label: string; icon: typeof Gauge; roles: Role[] }>;
@@ -143,14 +143,14 @@ export function AppShell({
   }
 
   return (
-    <div className={cn("h-screen overflow-hidden bg-background", isResizing && "select-none cursor-col-resize")}>
-      <div className="mx-auto flex h-full w-[calc(100vw-24px)] max-w-none gap-1 p-2 sm:w-[calc(100vw-28px)] sm:p-3 lg:w-[calc(100vw-36px)] lg:gap-2 lg:p-4">
+    <div className={cn("flex flex-col h-full w-full overflow-hidden bg-background", isResizing && "select-none cursor-col-resize")}>
+      <div className="flex flex-1 min-h-0 w-full max-w-none gap-2 p-2 sm:gap-2.5 sm:p-2.5 lg:gap-3 lg:p-3">
         <aside
           className={cn(
-            "glass-panel hidden h-full shrink-0 flex-col overflow-hidden rounded-[30px] border border-border/60 shadow-[0_32px_80px_-50px_rgba(68,39,20,0.65)] transition-[width] duration-200 ease-out md:flex",
+            "glass-panel hidden h-full shrink-0 flex-col overflow-hidden rounded-[26px] border border-border/60 shadow-[0_32px_80px_-50px_rgba(68,39,20,0.65)] transition-[width] duration-200 ease-out md:flex",
             tabletSidebarExpanded
-              ? "w-[240px] items-stretch p-4"
-              : "w-[72px] items-center px-2 py-3",
+              ? "w-[180px] items-stretch p-3"
+              : "w-[60px] items-center px-1.5 py-2.5",
             leftCollapsed
               ? "2xl:w-[88px] 2xl:items-center 2xl:px-5 2xl:py-4"
               : "2xl:items-stretch 2xl:p-5 2xl:[width:var(--sidebar-width)]",
@@ -175,7 +175,7 @@ export function AppShell({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                className="rounded-xl"
+                className="h-8 w-8 rounded-xl"
                 onClick={() => setTabletSidebarExpanded((value) => !value)}
                 aria-label={tabletSidebarExpanded ? "Ringkas sidebar" : "Lebarkan sidebar"}
                 title={tabletSidebarExpanded ? "Ringkas sidebar" : "Lebarkan sidebar"}
@@ -192,19 +192,19 @@ export function AppShell({
           {!leftCollapsed ? (
             <div
               className={cn(
-                "rounded-[22px] border border-primary/20 bg-primary/10 px-4 py-3 text-foreground transition-all dark:border-sidebar-border dark:bg-sidebar dark:text-sidebar-foreground",
-                tabletSidebarExpanded ? "mt-3 block" : "hidden 2xl:block"
+                "rounded-[18px] border border-primary/20 bg-primary/10 px-3 py-2.5 text-foreground transition-all dark:border-sidebar-border dark:bg-sidebar dark:text-sidebar-foreground",
+                tabletSidebarExpanded ? "mt-2.5 block" : "hidden 2xl:block 2xl:rounded-[22px] 2xl:px-4 2xl:py-3"
               )}
             >
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
-                  <Store className="size-4" />
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground 2xl:size-10 2xl:rounded-xl">
+                  <Store className="size-3.5 2xl:size-4" />
                 </div>
-                <p className="truncate text-sm font-medium">
+                <p className="truncate text-xs font-medium sm:text-sm">
                   TokoMu
                 </p>
               </div>
-              <ThemeToggle className="mt-3" />
+              <ThemeToggle className="mt-2.5 2xl:mt-3" />
             </div>
           ) : null}
 
@@ -228,11 +228,11 @@ export function AppShell({
 
           <nav
             className={cn(
-              "mt-3 flex-1 overflow-y-auto",
+              "mt-2.5 flex-1 overflow-y-auto 2xl:mt-3",
               leftCollapsed
                 ? "flex flex-col items-center gap-1.5"
                 : tabletSidebarExpanded
-                  ? "space-y-2"
+                  ? "space-y-1.5"
                   : "flex flex-col items-center gap-1.5 2xl:block 2xl:space-y-2",
             )}
           >
@@ -248,12 +248,12 @@ export function AppShell({
                   href={item.href}
                   title={item.label}
                   className={cn(
-                    "flex items-center gap-3 rounded-2xl text-sm font-medium transition-colors",
+                    "flex items-center gap-2.5 rounded-xl text-xs font-medium transition-colors sm:text-sm 2xl:rounded-2xl",
                     leftCollapsed
                       ? "size-12 justify-center"
                       : tabletSidebarExpanded
-                        ? "w-full justify-start px-4 py-3"
-                        : "size-11 justify-center 2xl:size-auto 2xl:justify-start 2xl:px-4 2xl:py-3",
+                        ? "w-full justify-start px-3 py-2 2xl:px-4 2xl:py-3"
+                        : "size-10 justify-center 2xl:size-auto 2xl:justify-start 2xl:px-4 2xl:py-3",
                     isActive
                       ? "bg-primary text-primary-foreground shadow-[0_20px_45px_-28px_rgba(186,92,35,0.75)]"
                       : "text-foreground/70 hover:bg-card/50 hover:text-foreground",
@@ -271,7 +271,7 @@ export function AppShell({
           </nav>
 
           {!leftCollapsed && (
-            <div className={cn(tabletSidebarExpanded ? "block" : "hidden 2xl:block")}>
+            <div className={cn(tabletSidebarExpanded ? "mt-2 block" : "hidden 2xl:block")}>
               <AccountPanel />
             </div>
           )}
@@ -290,7 +290,7 @@ export function AppShell({
         ) : null}
 
         <RoleProvider role={role}>
-          <main className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto 2xl:min-w-[680px]">
+          <main className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto px-1 py-0.5 sm:px-2 sm:py-1 2xl:min-w-[680px]">
             {children}
           </main>
         </RoleProvider>

@@ -1,0 +1,453 @@
+{
+  "project_name": "TokoMu (WarungOS)",
+  "total_use_cases": 27,
+  "use_cases": [
+    {
+      "name": "Login dan Autentikasi",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/auth",
+      "preconditions": ["Pengguna memiliki akun terdaftar atau undangan valid"],
+      "main_flow": [
+        "Pengguna memasukkan alamat email dan kata sandi di form login",
+        "Sistem mengirim request kredensial ke Better Auth (/api/auth/sign-in/email)",
+        "Database memvalidasi password hash dan membuat record sesi baru di tabel session",
+        "Sistem menyimpan cookie token dan mengarahkan pengguna ke /dashboard"
+      ],
+      "alternative_flows": [
+        "Jika kredensial salah, sistem menampilkan pesan error kredensial tidak valid"
+      ],
+      "tables": ["user", "session", "account", "user_roles", "store_profiles"],
+      "relations": [],
+      "source_files": ["src/app/auth/page.tsx", "src/lib/auth.ts"]
+    },
+    {
+      "name": "Logout",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/dashboard",
+      "preconditions": ["Pengguna sedang dalam kondisi login/memiliki sesi aktif"],
+      "main_flow": [
+        "Pengguna menekan tombol keluar/logout pada sidebar navigasi",
+        "Client memanggil API Better Auth (/api/auth/sign-out)",
+        "Server menghapus record sesi aktif di tabel session dan menghapus cookie client",
+        "Sistem mengalihkan pengguna kembali ke halaman login (/auth)"
+      ],
+      "alternative_flows": [],
+      "tables": ["session"],
+      "relations": [],
+      "source_files": ["src/components/tokomu/app-sidebar.tsx", "src/lib/auth-client.ts"]
+    },
+    {
+      "name": "Lihat Dashboard",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/dashboard",
+      "preconditions": ["Pengguna sudah login dan terdaftar di user_roles"],
+      "main_flow": [
+        "Pengguna membuka rute /dashboard",
+        "Server melakukan verifikasi role melalui requireRole() dan mengambil data lewat /api/dashboard",
+        "Sistem menampilkan kartu statistik ringkasan (omzet hari ini, laba bersih, total kasbon aktif, produk menipis) serta grafik tren"
+      ],
+      "alternative_flows": [],
+      "tables": ["transactions", "debts", "products", "store_profiles", "user_roles"],
+      "relations": [],
+      "source_files": ["src/app/(dashboard)/dashboard/page.tsx", "src/app/api/dashboard/route.ts"]
+    },
+    {
+      "name": "Buka Sesi Kasir",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/kasir",
+      "preconditions": ["Pengguna sudah login", "Belum ada sesi shift kasir aktif atas nama pengguna tersebut di jadwal shift yang dipilih"],
+      "main_flow": [
+        "Pengguna memilih jadwal shift yang tersedia dan memasukkan nominal modal kas awal (openingCash)",
+        "Sistem mengirim request POST ke /api/shift-sessions",
+        "Server memvalidasi bahwa shift ada dan aktif, lalu menyimpan record baru ke tabel shift_sessions dengan timestamp started_at",
+        "Sistem mencatat audit log event SHIFT_SESSION_OPENED dan menampilkan antarmuka POS kasir"
+      ],
+      "alternative_flows": [],
+      "tables": ["shifts", "shift_sessions", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/shift-service.ts", "src/app/api/shift-sessions/route.ts"]
+    },
+    {
+      "name": "Tutup Sesi Kasir",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/kasir",
+      "preconditions": ["Pengguna memiliki sesi shift kasir aktif (startedAt ada, endedAt masih null)"],
+      "main_flow": [
+        "Pengguna menekan tombol tutup shift dan memasukkan nominal kas fisik aktual di laci (closingCash)",
+        "Sistem mengirim request POST ke /api/shift-sessions/[id]/close",
+        "Server menghitung total penerimaan Tunai dari tabel transactions selama sesi berlangsung (expectedCash = openingCash + totalTunai)",
+        "Server mengkalkulasi selisih (difference = closingCash - expectedCash) dan memperbarui ended_at di tabel shift_sessions",
+        "Sistem mencatat audit log event SHIFT_SESSION_CLOSED dan menutup sesi"
+      ],
+      "alternative_flows": [],
+      "tables": ["shift_sessions", "transactions", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/shift-service.ts", "src/app/api/shift-sessions/[id]/close/route.ts"]
+    },
+    {
+      "name": "Transaksi Penjualan",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/kasir",
+      "preconditions": ["Pengguna sudah login dan berada di halaman POS Kasir"],
+      "main_flow": [
+        "Pengguna memilih produk dari katalog dan menambahkannya ke keranjang belanja",
+        "Pengguna memilih metode pembayaran (Tunai, QRIS, atau Transfer) dan memasukkan nominal uang dibayar (jika Tunai)",
+        "Sistem mengirim request POST ke /api/transactions dengan payload keranjang dan metode bayar",
+        "Server memeriksa kecukupan stok di tabel products di dalam database transaction",
+        "Server menyimpan header transaksi ke tabel transactions (termasuk total, paid_amount, change_amount, shift_session_id)",
+        "Server menyimpan rincian barang ke tabel transaction_items dan mengurangkan stok produk di tabel products",
+        "Server mencatat audit log event TRANSACTION_CREATED dan mengembalikan data transaksi untuk struk"
+      ],
+      "alternative_flows": [
+        "Jika stok tidak cukup, sistem membatalkan transaksi dan menampilkan error 'Stok produk tidak cukup'",
+        "Jika uang dibayar kurang untuk Tunai, sistem menolak dan menampilkan error 'Uang dibayarkan kurang dari total tagihan'"
+      ],
+      "tables": ["transactions", "transaction_items", "products", "shift_sessions", "audit_logs"],
+      "relations": [
+        { "target": "Cetak Struk", "type": "extend", "evidence": "Opsional: Setelah transaksi selesai, pengguna dapat memilih tombol cetak atau melihat modal struk (src/components/tokomu/receipt-dialog.tsx)" }
+      ],
+      "source_files": ["src/lib/server/app-service.ts (createTransaction)", "src/app/api/transactions/route.ts"]
+    },
+    {
+      "name": "Cetak Struk",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/kasir",
+      "preconditions": ["Transaksi penjualan baru selesai atau dipilih dari riwayat transaksi"],
+      "main_flow": [
+        "Pengguna menekan tombol Lihat/Cetak Struk pada dialog konfirmasi transaksi atau riwayat",
+        "Sistem membuka ReceiptDialog yang merender detail warung, nomor transaksi, daftar item, metode bayar, dan QR Code (jika QRIS)",
+        "Pengguna menekan tombol Cetak, yang memanggil window.print() atau merender format cetak thermal 58mm/80mm"
+      ],
+      "alternative_flows": [],
+      "tables": ["transactions", "transaction_items", "store_profiles"],
+      "relations": [],
+      "source_files": ["src/components/tokomu/receipt-dialog.tsx"]
+    },
+    {
+      "name": "Kelola Produk",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/inventaris",
+      "preconditions": ["Pengguna sudah login dan membuka halaman Inventaris"],
+      "main_flow": [
+        "Untuk Tambah: Pengguna menekan tombol 'Tambah Produk', mengisi form (SKU, nama, kategori, harga beli/sell, stok, batas minimum), lalu submit POST ke /api/products",
+        "Untuk Edit: Pengguna menekan tombol edit pada tabel, mengubah atribut produk, lalu submit PUT ke /api/products/[id]",
+        "Untuk Hapus: Pengguna menekan tombol hapus, mengonfirmasi tindakan, lalu submit DELETE ke /api/products/[id]",
+        "Server menyimpan perubahan ke tabel products dan mencatat audit log (PRODUCT_CREATED, PRODUCT_UPDATED, atau PRODUCT_DELETED)"
+      ],
+      "alternative_flows": [],
+      "tables": ["products", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/app-service.ts", "src/app/api/products/route.ts", "src/app/api/products/[id]/route.ts"]
+    },
+    {
+      "name": "Restok Manual",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/inventaris",
+      "preconditions": ["Produk sudah terdaftar di database"],
+      "main_flow": [
+        "Pengguna memilih produk pada daftar inventaris dan menekan tombol 'Restok'",
+        "Pengguna memasukkan jumlah kuantitas tambahan pada modal dialog",
+        "Sistem mengirim request POST ke /api/restock dengan kuantitas dan catatan",
+        "Server menambahkan stok produk di tabel products dan menyimpan riwayat restok ke tabel restock_logs dengan source = 'manual'",
+        "Server mencatat audit log event PRODUCT_RESTOCKED"
+      ],
+      "alternative_flows": [],
+      "tables": ["products", "restock_logs", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/app-service.ts (restockProduct)", "src/app/api/restock/route.ts"]
+    },
+    {
+      "name": "Restok via OCR Struk",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/inventaris",
+      "preconditions": ["Pengguna memiliki foto atau scan struk belanja dari supplier atau penitip barang"],
+      "main_flow": [
+        "Pengguna membuka modal OCR/Scan Struk pada halaman inventaris dan mengunggah gambar struk",
+        "Sistem mengirim file gambar via POST ke /api/ai/scan-receipt",
+        "Server memanggil model Google Gemini Vision untuk memparsing teks gambar menjadi struktur JSON (nama barang, kuantitas, harga beli/jual)",
+        "Sistem mencocokkan item hasil OCR dengan produk eksisting menggunakan receipt-matcher.ts dan menampilkannya pada tabel preview di UI",
+        "Pengguna mengonfirmasi item yang akan direstok atau ditambah, dan sistem menyimpan perubahan stok serta restock_logs dengan source = 'ai_ocr'"
+      ],
+      "alternative_flows": [],
+      "tables": ["products", "restock_logs", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/app/api/ai/scan-receipt/route.ts", "src/lib/server/ai/vision.ts", "src/lib/server/ai/receipt-matcher.ts"]
+    },
+    {
+      "name": "Restok via AI Chat",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/inventaris",
+      "preconditions": ["Pengguna membuka panel AI Assistant"],
+      "main_flow": [
+        "Pengguna mengetikkan perintah pada AI Assistant, misalnya: 'Restok Indomie Goreng sebanyak 20 dus'",
+        "Sistem mengirim pesan ke /api/ai/chats/[id]/messages",
+        "Server memanggil Gemini function tool calling (restock_product_tool)",
+        "Model AI mendeteksi SKU/nama produk dan mengeksekusi fungsi restok di server",
+        "Server memperbarui tabel products dan menambahkan record di restock_logs dengan source = 'ai_chat'",
+        "AI Assistant merespons dengan konfirmasi bahwa stok telah berhasil diperbarui"
+      ],
+      "alternative_flows": [],
+      "tables": ["products", "restock_logs", "ai_messages", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/ai/tools.ts", "src/app/api/ai/chats/[id]/messages/route.ts"]
+    },
+    {
+      "name": "Kelola Buku Hutang",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/buku-hutang",
+      "preconditions": ["Pengguna sudah login"],
+      "main_flow": [
+        "Pengguna menekan 'Kasbon Baru', memasukkan nama penghutang, nomor WhatsApp, tanggal jatuh tempo, dan memilih barang/nominal",
+        "Sistem mengirim request POST ke /api/debts",
+        "Server menyimpan header hutang di tabel debts (status = 'aktif', is_paid = 0) dan rincian barang di tabel debt_items",
+        "Server mencatat audit log DEBT_CREATED"
+      ],
+      "alternative_flows": [],
+      "tables": ["debts", "debt_items", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/app-service.ts (createDebt)", "src/app/api/debts/route.ts"]
+    },
+    {
+      "name": "Catat Pembayaran Hutang",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/buku-hutang",
+      "preconditions": ["Hutang berstatus aktif atau lewat tempo (belum lunas)"],
+      "main_flow": [
+        "Pengguna menekan tombol bayar/cicil pada detail hutang dan memasukkan nominal yang dibayar beserta catatan",
+        "Sistem mengirim request POST ke /api/debts/[id]/payments",
+        "Server menambahkan riwayat pembayaran ke tabel debt_payments dan menambahkan nominal ke paid_amount di tabel debts",
+        "Jika paid_amount >= amount, server otomatis mengubah status hutang menjadi 'lunas' dan is_paid = 1",
+        "Server mencatat audit log DEBT_PAYMENT_RECORDED"
+      ],
+      "alternative_flows": [],
+      "tables": ["debts", "debt_payments", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/app-service.ts (recordDebtPayment)", "src/app/api/debts/[id]/payments/route.ts"]
+    },
+    {
+      "name": "Kelola Investor",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/investor",
+      "preconditions": ["Pengguna berada di halaman Investor"],
+      "main_flow": [
+        "Pengguna menekan tombol 'Tambah Investor' pada header halaman atau placeholder",
+        "Sistem membuka pop-up modal InvestorFormDialog langsung di atas daftar investor (tanpa pindah ke halaman /investor/baru)",
+        "Pengguna mengisi nama investor, nomor WhatsApp, alamat, dan catatan kerja sama, lalu menekan simpan",
+        "Sistem mengirim POST ke /api/investors, menyimpan record di tabel investors (is_active = 1), dan mencatat audit log INVESTOR_CREATED"
+      ],
+      "alternative_flows": [],
+      "tables": ["investors", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/components/tokomu/investor-form-dialog.tsx", "src/app/(dashboard)/investor/page.tsx", "src/lib/server/investor-service.ts"]
+    },
+    {
+      "name": "Kelola Investasi",
+      "actors": ["Bendahara", "Pimpinan"],
+      "route": "/investor/[id]",
+      "preconditions": ["Investor sudah terdaftar dan aktif"],
+      "main_flow": [
+        "Pengguna membuka detail investor dan menekan tombol 'Tambah Investasi'",
+        "Pengguna memilih tipe investasi: 'uang' (dengan akad_type seperti murabahah_bil_wakalah/mudharabah dan return bulanan) atau 'barang_titip_jual' (konsinyasi dengan pilihan produk, jumlah unit, dan persentase bagi hasil)",
+        "Sistem mengirim POST ke /api/investments, menyimpan data akad di tabel investments, dan mencatat audit log INVESTMENT_CREATED"
+      ],
+      "alternative_flows": [],
+      "tables": ["investments", "investors", "products", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/investor-service.ts (createInvestment)", "src/app/api/investments/route.ts"]
+    },
+    {
+      "name": "Hitung atau Proses Bagi Hasil",
+      "actors": ["Bendahara", "Pimpinan"],
+      "route": "/bagi-hasil",
+      "preconditions": ["Terdapat investasi aktif dan transaksi penjualan pada periode bulan yang dipilih"],
+      "main_flow": [
+        "Pengguna membuka halaman Bagi Hasil dan memilih periode tahun & bulan",
+        "Server menghitung laba bersih warung dan keuntungan dari produk titip jual yang laku terjual pada periode tersebut",
+        "Pengguna menekan tombol hitung/simpan payout untuk investasi tertentu atau secara massal via POST ke /api/payouts",
+        "Server membuat record di tabel investor_payouts dengan status 'draft' atau 'disetujui' dan mencatat audit log PAYOUT_CREATED/UPDATED"
+      ],
+      "alternative_flows": [],
+      "tables": ["investor_payouts", "investments", "transactions", "transaction_items", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/profit-sharing.ts", "src/app/api/payouts/route.ts"]
+    },
+    {
+      "name": "Kelola Pengeluaran",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "/dashboard",
+      "preconditions": ["Pengguna sudah login"],
+      "main_flow": [
+        "Pengguna menekan tombol 'Catat Pengeluaran' pada dashboard atau melalui API",
+        "Pengguna mengisi judul pengeluaran, nominal, dan kategori (Operasional, Belanja, atau Utilitas)",
+        "Server menyimpan record di tabel expenses dan mencatat audit log EXPENSE_CREATED"
+      ],
+      "alternative_flows": [],
+      "tables": ["expenses", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/app-service.ts (createExpense)"]
+    },
+    {
+      "name": "Kelola Laporan Bulanan",
+      "actors": ["Bendahara", "Pimpinan"],
+      "route": "/laporan",
+      "preconditions": ["Periode bulan memiliki data penjualan, HPP, atau pengeluaran"],
+      "main_flow": [
+        "Pengguna memilih tahun dan bulan pada halaman Laporan Keuangan",
+        "Server mengagregasi total omzet, total HPP (cost_price * quantity), total pengeluaran dari tabel expenses, dan menghitung laba bersih",
+        "Pengguna menekan tombol 'Simpan Draft', yang memanggil POST /api/reports/monthly untuk menyimpan struktur JSON kalkulasi di tabel monthly_reports dengan status = 'draft'",
+        "Server mencatat audit log MONTHLY_REPORT_CREATED atau UPDATED"
+      ],
+      "alternative_flows": [],
+      "tables": ["monthly_reports", "transactions", "transaction_items", "expenses", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/reporting.ts", "src/app/api/reports/monthly/route.ts"]
+    },
+    {
+      "name": "Finalisasi Laporan Bulanan",
+      "actors": ["Bendahara", "Pimpinan"],
+      "route": "/laporan",
+      "preconditions": ["Laporan bulanan sudah dibuat dalam format draft dan seluruh transaksi periode tersebut selesai dikonsolidasi"],
+      "main_flow": [
+        "Pengguna menekan tombol 'Finalisasi / Kunci Laporan' pada laporan bulan terkait",
+        "Sistem mengirim POST ke /api/reports/monthly/[id]/finalize",
+        "Server memperbarui status laporan di tabel monthly_reports menjadi 'final' dan mencatat timestamp finalized_at",
+        "Setelah dikunci, laporan menjadi permanen dan tidak dapat diubah lagi",
+        "Server mencatat audit log MONTHLY_REPORT_FINALIZED"
+      ],
+      "alternative_flows": [],
+      "tables": ["monthly_reports", "audit_logs"],
+      "relations": [
+        { "target": "Unduh PDF Laporan", "type": "extend", "evidence": "Setelah laporan difinalisasi, tombol unduh PDF resmi aktif" }
+      ],
+      "source_files": ["src/lib/server/reporting.ts (finalizeMonthlyReport)", "src/app/api/reports/monthly/[id]/finalize/route.ts"]
+    },
+    {
+      "name": "Buat Laporan PCM",
+      "actors": ["Bendahara", "Pimpinan"],
+      "route": "/laporan-pcm",
+      "preconditions": ["Terdapat data profil warung dengan nama PCM dan persentase bagi hasil PCM/Cadangan (misal 30% PCM, 20% Cadangan)"],
+      "main_flow": [
+        "Pengguna membuka rute /laporan-pcm dan memilih periode bulan yang diinginkan",
+        "Server mengagregasi laba bersih periode tersebut, lalu mengkalkulasi porsi bagi hasil khusus untuk Pimpinan Cabang Muhammadiyah (PCM) serta porsi cadangan kas warung berdasarkan konfigurasi di store_profiles",
+        "Sistem merender ringkasan tabel pembagian laba dan menyediakan tautan langsung untuk mencetak dokumen penyerahan hasil"
+      ],
+      "alternative_flows": [],
+      "tables": ["store_profiles", "monthly_reports", "transactions", "expenses"],
+      "relations": [
+        { "target": "Unduh PDF Laporan", "type": "include", "evidence": "Laporan PCM langsung menghasilkan output dokumen PDF melalui /api/reports/pcm/pdf" }
+      ],
+      "source_files": ["src/app/(dashboard)/laporan-pcm/page.tsx", "src/app/api/reports/pcm/pdf/route.ts", "src/lib/server/pdf-pcm.tsx"]
+    },
+    {
+      "name": "Unduh PDF Laporan",
+      "actors": ["Bendahara", "Pimpinan"],
+      "route": "/laporan & /laporan-pcm",
+      "preconditions": ["Data kalkulasi laporan tersedia di server"],
+      "main_flow": [
+        "Pengguna menekan tombol 'Unduh PDF' pada laporan bulanan (/api/reports/monthly/[id]/pdf) atau laporan PCM (/api/reports/pcm/pdf)",
+        "Server memanggil engine @react-pdf/renderer dengan komponen template (pdf-profit-loss.tsx atau pdf-pcm.tsx)",
+        "Server menghasilkan binary stream dokumen PDF secara dinamis dan mengirimkannya ke browser dengan header Content-Type: application/pdf"
+      ],
+      "alternative_flows": [],
+      "tables": ["monthly_reports", "store_profiles"],
+      "relations": [],
+      "source_files": ["src/lib/server/pdf-profit-loss.tsx", "src/lib/server/pdf-pcm.tsx", "src/app/api/reports/monthly/[id]/pdf/route.ts", "src/app/api/reports/pcm/pdf/route.ts"]
+    },
+    {
+      "name": "Kelola Shift",
+      "actors": ["Pimpinan", "Bendahara"],
+      "route": "/pengaturan",
+      "preconditions": ["Pengguna adalah Pimpinan atau Bendahara workspace"],
+      "main_flow": [
+        "Pengguna membuat jadwal shift baru (misal: Shift Pagi 07:00-15:00) via POST ke /api/shifts dengan nama shift dan rentang jam",
+        "Server menyimpan jadwal ke tabel shifts (is_active = 1) dan mencatat audit log SHIFT_CREATED",
+        "Pengguna dapat mengubah jam atau menonaktifkan shift jika tidak dibutuhkan lagi"
+      ],
+      "alternative_flows": [],
+      "tables": ["shifts", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/shift-service.ts", "src/app/api/shifts/route.ts"]
+    },
+    {
+      "name": "Kelola Pengguna",
+      "actors": ["Pimpinan"],
+      "route": "/pengaturan/karyawan",
+      "preconditions": ["Pengguna login dengan role 'pimpinan'"],
+      "main_flow": [
+        "Pengguna melihat daftar seluruh staf di workspace (dari tabel user_roles dan user) melalui GET /api/users",
+        "Jika ada staf yang resign, Pimpinan menekan tombol 'Nonaktifkan' pada staf tersebut",
+        "Sistem mengirim DELETE ke /api/users/[id], server mengubah is_active = 0 pada tabel user_roles dan mencatat audit log WORKSPACE_USER_DEACTIVATED"
+      ],
+      "alternative_flows": [],
+      "tables": ["user_roles", "user", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/rbac.ts (listWorkspaceUsers, deactivateWorkspaceUser)", "src/app/api/users/[id]/route.ts"]
+    },
+    {
+      "name": "Kirim Undangan Pengguna",
+      "actors": ["Pimpinan"],
+      "route": "/pengaturan/karyawan",
+      "preconditions": ["Pengguna login dengan role 'pimpinan'"],
+      "main_flow": [
+        "Pimpinan menekan tombol 'Undang Karyawan', memasukkan alamat email calon staf, dan memilih role ('pengelola_keuangan' atau 'kasir')",
+        "Sistem mengirim POST ke /api/users/invite",
+        "Server membuat token rahasia unik, menyimpan record ke tabel invitations (status = 'pending', expires_at = +7 hari), dan mencatat audit log INVITATION_CREATED",
+        "Calon pengguna membuka link undangan, login dengan akun Better Auth mereka, dan sistem memvalidasi token lalu menambahkan mereka ke tabel user_roles"
+      ],
+      "alternative_flows": [],
+      "tables": ["invitations", "user_roles", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/app/api/users/invite/route.ts", "src/app/api/users/invitations/accept/route.ts"]
+    },
+    {
+      "name": "Pengaturan Profil Toko",
+      "actors": ["Pimpinan"],
+      "route": "/pengaturan",
+      "preconditions": ["Pengguna login sebagai Pimpinan"],
+      "main_flow": [
+        "Pengguna mengubah identitas warung (nama, tagline, alamat, nama pemilik, WA), konfigurasi bagi hasil PCM/Cadangan, dan metode pembayaran aktif (Tunai/QRIS/Transfer)",
+        "Sistem mengirim PUT ke /api/settings",
+        "Server memvalidasi kelengkapan form dengan Zod SettingsUpdateSchema dan memperbarui record di tabel store_profiles",
+        "Server mencatat audit log SETTINGS_UPDATED"
+      ],
+      "alternative_flows": [],
+      "tables": ["store_profiles", "audit_logs"],
+      "relations": [],
+      "source_files": ["src/lib/server/app-service.ts (updateStoreSettings)", "src/app/api/settings/route.ts"]
+    },
+    {
+      "name": "Lihat Audit Log",
+      "actors": ["Pimpinan", "Bendahara", "Kasir"],
+      "route": "/pengaturan/audit-log",
+      "preconditions": ["Pengguna sudah login ke workspace"],
+      "main_flow": [
+        "Pengguna membuka rute /pengaturan/audit-log",
+        "Sistem mengambil data riwayat log dari GET /api/audit-log beserta facet opsi filter dari /api/audit-log/facets",
+        "Pengguna dapat memilih filter event_type, aktor, kategori, atau mencari kata kunci untuk menelusuri aktivitas dan melihat snapshot before/after"
+      ],
+      "alternative_flows": [],
+      "tables": ["audit_logs", "user"],
+      "relations": [],
+      "source_files": ["src/app/(dashboard)/pengaturan/audit-log/page.tsx", "src/lib/server/audit.ts", "src/app/api/audit-log/route.ts"]
+    },
+    {
+      "name": "Gunakan AI Assistant",
+      "actors": ["Kasir", "Bendahara", "Pimpinan"],
+      "route": "Semua halaman dashboard (via AI Panel Sidebar)",
+      "preconditions": ["Pengguna mengklik tombol toggle AI Assistant di pojok layar atau sidebar"],
+      "main_flow": [
+        "Pengguna membuat sesi percakapan baru atau memilih riwayat chat dari tabel ai_chats",
+        "Pengguna mengirim pertanyaan atau perintah (misal: 'Bagaimana kondisi keuangan bulan ini?' atau 'Restok barang')",
+        "Sistem memproses pesan via /api/ai/chats/[id]/messages, memanggil Google Gemini API dengan daftar tools yang tersedia di server",
+        "Jika tool dipanggil, server mengeksekusi fungsi dan menyimpan tool_calls serta tool_result ke tabel ai_messages",
+        "AI Assistant memberikan jawaban cerdas yang kontekstual dengan data nyata warung"
+      ],
+      "alternative_flows": [],
+      "tables": ["ai_chats", "ai_messages", "products", "transactions", "debts", "audit_logs"],
+      "relations": [
+        { "target": "Restok via AI Chat", "type": "include", "evidence": "Jika perintah pengguna meminta restock, AI memanggil tool restock_product_tool secara internal" }
+      ],
+      "source_files": ["src/components/warung/ai-assistant-panel.tsx", "src/lib/server/ai/chat.ts", "src/lib/server/ai/tools.ts"]
+    }
+  ]
+}

@@ -16,6 +16,7 @@ import { useAppState } from "@/components/providers/app-state-provider";
 import { useCurrentRole } from "@/components/role-gate";
 import { StatCard } from "@/components/stat-card";
 import { InfoHint } from "@/components/tokomu/info-hint";
+import { ImportProductDialog } from "@/components/tokomu/import-product-dialog";
 import {
   InventorySummaryDetailDialog,
   type InventorySummaryMetric,
@@ -103,7 +104,7 @@ export function InventarisView() {
   const visibleLowStockProducts = lowStockProducts.filter(
     (product) => !pendingDeletedIds.has(product.id)
   );
-  const canMutateInventory = currentRole !== "kasir";
+  const canMutateInventory = true;
 
   function validateProduct(nextDraft: ProductDraft) {
     return (
@@ -268,53 +269,57 @@ export function InventarisView() {
             </CardDescription>
           </div>
 
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
-            <div className="relative min-w-[260px]">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative w-full min-w-[240px] flex-1 lg:w-auto">
               <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Cari nama, kategori, atau catatan"
-                className="h-11 rounded-2xl bg-card/85 pl-9"
+                className="h-11 w-full rounded-2xl bg-card/85 pl-9"
               />
             </div>
             {canMutateInventory ? (
-              <>
+              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                 <Button
                   render={<Link href="/inventaris/restok-ai" />}
                   nativeButton={false}
                   variant="outline"
                   size="lg"
-                  className="h-11 rounded-2xl"
+                  className="h-11 shrink-0 rounded-2xl"
                 >
                   <Camera className="size-4" />
                   Restok via Scan Struk
                 </Button>
+                <ImportProductDialog onImportComplete={() => window.location.reload()} />
                 <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                   <DialogTrigger
-                    render={<Button size="lg" className="h-11 rounded-2xl" />}
+                    render={<Button size="lg" className="h-11 shrink-0 rounded-2xl" />}
                   >
                     <PackagePlus className="size-4" />
                     Tambah barang
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl rounded-[28px] p-0">
-                    <DialogHeader className="p-6 pb-0">
+                  <DialogContent className="max-h-[92vh] w-full max-w-2xl sm:max-w-2xl md:max-w-3xl overflow-y-auto overflow-x-hidden rounded-[28px] p-0">
+                    <DialogHeader className="p-6 pb-2">
                       <DialogTitle className="font-heading text-2xl">Tambah produk baru</DialogTitle>
                       <DialogDescription>
                         Isi data minimum supaya kasir bisa langsung menjual barang ini.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="p-6 pt-4">
+                    <div className="p-6 pt-2">
                       <ProductForm draft={draft} onChange={setDraft} existingSkus={existingSkus} />
                     </div>
-                    <DialogFooter className="rounded-b-[28px]" showCloseButton>
+                    <DialogFooter
+                      className="m-0 flex flex-col-reverse gap-2 rounded-b-[28px] border-t bg-muted/50 px-6 py-4 sm:flex-row sm:justify-end"
+                      showCloseButton
+                    >
                       <Button type="button" onClick={() => void handleCreateProduct()}>
                         Simpan produk
                       </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-              </>
+              </div>
             ) : null}
           </div>
         </CardHeader>
@@ -452,19 +457,22 @@ export function InventarisView() {
       </Card>
 
       <Dialog open={Boolean(editingProduct)} onOpenChange={(open) => !open && setEditingProduct(null)}>
-        <DialogContent className="max-w-2xl rounded-[28px] p-0">
-          <DialogHeader className="p-6 pb-0">
+        <DialogContent className="max-h-[92vh] w-full max-w-2xl sm:max-w-2xl md:max-w-3xl overflow-y-auto overflow-x-hidden rounded-[28px] p-0">
+          <DialogHeader className="p-6 pb-2">
             <DialogTitle className="font-heading text-2xl">Edit produk</DialogTitle>
             <DialogDescription>Perbarui stok, harga, atau posisi minimum sebelum notifikasi muncul.</DialogDescription>
           </DialogHeader>
-          <div className="p-6 pt-4">
+          <div className="p-6 pt-2">
             <ProductForm
               draft={editDraft}
               onChange={setEditDraft}
               existingSkus={existingSkus.filter((sku) => sku !== editingProduct?.sku)}
             />
           </div>
-          <DialogFooter className="rounded-b-[28px]" showCloseButton>
+          <DialogFooter
+            className="m-0 flex flex-col-reverse gap-2 rounded-b-[28px] border-t bg-muted/50 px-6 py-4 sm:flex-row sm:justify-end"
+            showCloseButton
+          >
             <Button type="button" onClick={() => void handleUpdateProduct()}>
               Simpan perubahan
             </Button>
@@ -473,14 +481,14 @@ export function InventarisView() {
       </Dialog>
 
       <Dialog open={Boolean(restockTarget)} onOpenChange={(open) => !open && setRestockTarget(null)}>
-        <DialogContent className="max-w-md rounded-[28px] p-0">
-          <DialogHeader className="p-6 pb-0">
+        <DialogContent className="max-h-[90vh] w-full max-w-md sm:max-w-md md:max-w-lg overflow-y-auto overflow-x-hidden rounded-[28px] p-0">
+          <DialogHeader className="p-6 pb-2">
             <DialogTitle className="font-heading text-2xl">Restok barang</DialogTitle>
             <DialogDescription>
               Tambahkan stok untuk {restockTarget?.name ?? "produk terpilih"}.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 p-6 pt-4">
+          <div className="space-y-4 p-6 pt-2">
             <div className="rounded-[22px] border border-border/70 bg-card/75 p-4">
               <p className="text-sm text-muted-foreground">Stok sekarang</p>
               <p className="mt-2 font-heading text-3xl font-semibold">
@@ -499,7 +507,10 @@ export function InventarisView() {
               />
             </div>
           </div>
-          <DialogFooter className="rounded-b-[28px]" showCloseButton>
+          <DialogFooter
+            className="m-0 flex flex-col-reverse gap-2 rounded-b-[28px] border-t bg-muted/50 px-6 py-4 sm:flex-row sm:justify-end"
+            showCloseButton
+          >
             <Button type="button" onClick={() => void handleRestock()}>
               Simpan restok
             </Button>

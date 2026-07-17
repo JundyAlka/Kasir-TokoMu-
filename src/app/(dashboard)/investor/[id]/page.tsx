@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { InvestmentFormDialog } from "@/components/tokomu/investment-form";
+import { InvestmentEditDialog, InvestmentFormDialog } from "@/components/tokomu/investment-form";
 import { InvestorDeactivateButton, InvestorDeleteButton } from "@/components/tokomu/investor-actions";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { getRequestUser } from "@/lib/server/app-service";
@@ -58,7 +58,7 @@ export default async function InvestorDetailPage({
 }: Readonly<{
   params: Promise<{ id: string }>;
 }>) {
-  await requireRole(["pimpinan", "pengelola_keuangan"]);
+  await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
   const { workspaceOwnerId } = await getRequestUser();
   const { id } = await params;
   const [{ investor, payouts }, investmentRows, productRows] = await Promise.all([
@@ -208,27 +208,28 @@ export default async function InvestorDetailPage({
                     <TableHead>Produk</TableHead>
                     <TableHead>Mulai</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {investmentRows.map((investment) => (
                     <TableRow key={investment.id}>
                       <TableCell>
-                        <Badge variant="outline">
+                        <Badge variant="outline" className="gap-1 font-normal">
                           {investment.type === "uang" ? (
                             <>
-                              <WalletCards className="size-3" />
+                              <WalletCards className="size-3 text-primary" />
                               {akadLabels[investment.akadType as AkadType] ?? investment.akadType}
                             </>
                           ) : (
                             <>
-                              <PackageOpen className="size-3" />
+                              <PackageOpen className="size-3 text-amber-600" />
                               {akadLabels[investment.akadType as AkadType] ?? investment.akadType}
                             </>
                           )}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="font-medium">
                         {investment.type === "uang"
                           ? formatCurrency(investment.amount ?? 0)
                           : `${investment.unitCount ?? 0} unit - ${formatCurrency(investment.unitCost ?? 0)}/unit`}
@@ -240,6 +241,29 @@ export default async function InvestorDetailPage({
                         <Badge variant={investment.isActive === 1 ? "default" : "secondary"}>
                           {investment.isActive === 1 ? "Aktif" : "Nonaktif"}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <InvestmentEditDialog
+                          investment={{
+                            id: investment.id,
+                            investorId: investment.investorId,
+                            investorName: investment.investorName,
+                            type: investment.type,
+                            akadType: investment.akadType ?? "murabahah_bil_wakalah",
+                            amount: investment.amount,
+                            monthlyReturnRatePct: investment.monthlyReturnRatePct,
+                            profitSharePct: investment.profitSharePct,
+                            productId: investment.productId,
+                            productName: investment.productName,
+                            unitCount: investment.unitCount,
+                            unitCost: investment.unitCost,
+                            profitSharePerUnitPct: investment.profitSharePerUnitPct,
+                            startDate: investment.startDate,
+                            endDate: investment.endDate,
+                            isActive: investment.isActive,
+                          }}
+                          products={productRows}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}

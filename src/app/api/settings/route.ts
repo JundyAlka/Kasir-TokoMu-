@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export async function PUT(request: NextRequest) {
   try {
     const settings = SettingsUpdateSchema.parse(await request.json());
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan"]);
     const { workspaceOwnerId } = await getRequestUser();
     const nextSettings = await updateStoreSettings(workspaceOwnerId, settings);
     return NextResponse.json({ settings: nextSettings });

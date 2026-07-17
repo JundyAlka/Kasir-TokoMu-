@@ -91,13 +91,18 @@ function earlierIso(left: string, right: string) {
 }
 
 function resolveAkadType(investment: InvestmentRow): AkadType {
+  if (investment.type === "barang_titip_jual") {
+    if (investment.akadType === "sales_titipan") {
+      return "sales_titipan";
+    }
+    return "barang_titip_jual";
+  }
+
   if (investment.akadType) {
     return investment.akadType;
   }
 
-  return investment.type === "barang_titip_jual"
-    ? "barang_titip_jual"
-    : "murabahah_bil_wakalah";
+  return "murabahah_bil_wakalah";
 }
 
 function parsePeriod(

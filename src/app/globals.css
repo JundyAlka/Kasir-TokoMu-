@@ -217,3 +217,32 @@
     opacity: 1;
   }
 }
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar,
+  ::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb,
+  ::-webkit-scrollbar-thumb {
+    background: rgba(186, 92, 35, 0.32);
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(186, 92, 35, 0.6);
+  }
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb,
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 189, 123, 0.32);
+  }
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 189, 123, 0.6);
+  }
+}

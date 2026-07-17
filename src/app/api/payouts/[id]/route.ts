@@ -20,7 +20,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { userId, workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const body = (await request.json()) as { status?: unknown; paidAt?: string | null };

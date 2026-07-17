@@ -120,7 +120,7 @@ export function TransactionDetailDialog({
                   <div className="rounded-xl border border-border/60 p-3">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <UserRoundCheck className="size-3.5 text-primary" />
-                      Pencatat
+                      Dicatat oleh
                     </div>
                     <p className="mt-2 text-sm font-medium">
                       {transaction.recordedByName || "Kasir"}

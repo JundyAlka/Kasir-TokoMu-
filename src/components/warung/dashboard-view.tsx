@@ -80,182 +80,221 @@ export function DashboardView() {
         />
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr] xl:grid-cols-[1.05fr_0.95fr]">
-        <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
-          <CardHeader>
-            <CardTitle className="font-heading text-2xl">Aktivitas terbaru</CardTitle>
-            <CardDescription>
-              Semua ringkasan yang sebelumnya membuat layar kasir terasa penuh dipindahkan ke sini.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="rounded-[26px] border border-primary/20 bg-primary/10 px-5 py-5 text-foreground dark:border-primary/25 dark:bg-muted/55">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <ReceiptText className="size-4 text-primary" />
-                <p className="text-sm font-medium">Transaksi terakhir</p>
+      <div className="space-y-4">
+        {/* Row 2: Highlights - Transaksi Terakhir, Stok Perlu Perhatian, SKU Aktif */}
+        <div className="grid gap-4 lg:grid-cols-12">
+          {/* Transaksi Terakhir */}
+          <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] lg:col-span-5 xl:col-span-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 font-heading text-xl">
+                <ReceiptText className="size-5 text-primary" />
+                Transaksi Terakhir
+              </CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Ringkasan cepat dari aktivitas penjualan paling baru.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-[22px] border border-primary/20 bg-primary/10 p-4 text-foreground dark:border-primary/25 dark:bg-muted/55">
+                {latestTransaction ? (
+                  <>
+                    <p className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
+                      {formatCurrency(latestTransaction.total)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+                      {latestTransaction.paymentMethod} • {formatTime(latestTransaction.createdAt)}
+                    </p>
+                    <div className="mt-3.5 space-y-2 border-t border-primary/15 pt-3">
+                      {latestTransaction.items.slice(0, 3).map((item) => (
+                        <div
+                          key={`${latestTransaction.id}-${item.productId}`}
+                          className="flex items-center justify-between text-xs sm:text-sm"
+                        >
+                          <span className="truncate pr-2 font-medium">
+                            {item.productName} × {item.quantity}
+                          </span>
+                          <span className="shrink-0 font-semibold">
+                            {formatCurrency(item.unitPrice * item.quantity)}
+                          </span>
+                        </div>
+                      ))}
+                      {latestTransaction.items.length > 3 ? (
+                        <p className="text-right text-[11px] italic text-muted-foreground">
+                          + {latestTransaction.items.length - 3} produk lainnya
+                        </p>
+                      ) : null}
+                    </div>
+                  </>
+                ) : (
+                  <p className="py-4 text-center text-xs text-muted-foreground sm:text-sm">
+                    Belum ada transaksi yang tersimpan.
+                  </p>
+                )}
               </div>
+            </CardContent>
+          </Card>
 
-              {latestTransaction ? (
-                <>
-                  <p className="mt-3 font-heading text-4xl font-semibold">
-                    {formatCurrency(latestTransaction.total)}
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {latestTransaction.paymentMethod} - {formatTime(latestTransaction.createdAt)}
-                  </p>
-                  <div className="mt-5 space-y-3">
-                    {latestTransaction.items.map((item) => (
-                      <div
-                        key={`${latestTransaction.id}-${item.productId}`}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span>
-                          {item.productName} x{item.quantity}
-                        </span>
-                        <span className="font-medium">
-                          {formatCurrency(item.unitPrice * item.quantity)}
-                        </span>
+          {/* Stok & SKU Aktif */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:col-span-7 xl:col-span-8">
+            <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 font-heading text-xl">
+                  <AlertTriangle className="size-5 text-primary" />
+                  Stok Perlu Perhatian
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  Barang rawan kosong sebelum restok.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2.5">
+                {lowStockProducts.length > 0 ? (
+                  lowStockProducts.slice(0, 3).map((product) => (
+                    <div
+                      key={product.id}
+                      className="flex items-center justify-between rounded-[18px] border border-border/70 bg-card/80 px-3.5 py-2.5"
+                    >
+                      <div className="flex items-center gap-2.5 truncate pr-2">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
+                          <AlertTriangle className="size-3.5" />
+                        </div>
+                        <div className="truncate">
+                          <p className="truncate text-xs font-medium sm:text-sm">{product.name}</p>
+                          <p className="text-[11px] text-muted-foreground sm:text-xs">{product.category}</p>
+                        </div>
                       </div>
-                    ))}
+                      <Badge className="shrink-0 rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                        {product.stock} / min {product.minimumStock}
+                      </Badge>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex h-[116px] items-center justify-center rounded-[20px] bg-accent/80 p-4 text-center text-xs font-medium text-accent-foreground sm:text-sm">
+                    Semua stok aman. Belum ada produk yang menyentuh batas minimum.
                   </div>
-                </>
-              ) : (
-                <p className="mt-4 text-sm text-muted-foreground">
-                  Belum ada transaksi yang tersimpan.
-                </p>
-              )}
-            </div>
+                )}
+              </CardContent>
+            </Card>
 
-            <div className="rounded-[26px] border border-border/70 bg-card/82 p-5">
+            <Card className="flex flex-col justify-between border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 font-heading text-xl">
+                  <Clock3 className="size-5 text-primary" />
+                  SKU Aktif
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  Katalog produk terdaftar dalam inventaris toko.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between gap-4 pb-6 pt-3">
+                <div>
+                  <p className="font-heading text-3xl font-bold sm:text-4xl">{products.length}</p>
+                  <p className="mt-1 text-xs text-muted-foreground sm:text-sm">Produk siap jual di POS</p>
+                </div>
+                <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                  <Clock3 className="size-6" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Row 3: Timeline & Kasbon - Equal height and tight list */}
+        <div className="grid gap-4 lg:grid-cols-12">
+          {/* Timeline Transaksi */}
+          <Card className="flex flex-col justify-between border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] lg:col-span-7">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 font-heading text-xl">
+                  <ArrowRightLeft className="size-5 text-primary" />
+                  Timeline Transaksi
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  Aktivitas penjualan kasir terkini.
+                </CardDescription>
+              </div>
               <button
                 type="button"
-                aria-label="Buka timeline 10 transaksi terakhir"
                 onClick={() => setTimelineOpen(true)}
-                className="group flex w-full items-center justify-between gap-3 rounded-2xl px-1 py-1 text-left transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+                className="flex items-center gap-1.5 rounded-xl bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20"
               >
-                <span className="flex items-center gap-2">
-                  <ArrowRightLeft className="size-4 text-primary" />
-                  <span className="font-medium">Timeline transaksi</span>
-                </span>
-                <span className="flex items-center gap-1 text-xs text-muted-foreground transition group-hover:text-primary">
-                  {recentTransactions.length} terakhir
-                  <Eye className="size-3.5" />
-                </span>
+                <span>Lihat Semua ({recentTransactions.length})</span>
+                <Eye className="size-3.5" />
               </button>
-              <div className="mt-5 max-h-[348px] space-y-3 overflow-y-auto pr-1">
+            </CardHeader>
+            <CardContent className="flex-1">
+              <div className="min-h-[340px] max-h-[580px] space-y-2.5 overflow-y-auto pr-1">
                 {recentTransactions.length > 0 ? (
-                  recentTransactions.map((transaction) => (
+                  recentTransactions.slice(0, 10).map((transaction) => (
                     <button
                       type="button"
                       key={transaction.id}
                       aria-label={`Lihat detail transaksi ${formatCurrency(transaction.total)}`}
                       onClick={() => setSelectedTransaction(transaction)}
-                      className="group flex w-full items-start justify-between gap-3 rounded-[20px] bg-muted/50 px-4 py-3 text-left transition hover:bg-muted/75 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+                      className="group flex w-full items-center justify-between gap-3 rounded-[18px] bg-muted/50 px-3.5 py-2.5 text-left transition hover:bg-muted/75 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
                     >
-                      <div>
-                        <p className="font-medium">{formatCurrency(transaction.total)}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {transaction.items.length} produk - {transaction.paymentMethod}
+                      <div className="truncate pr-2">
+                        <p className="font-semibold text-foreground text-xs sm:text-sm">{formatCurrency(transaction.total)}</p>
+                        <p className="truncate text-[11px] text-muted-foreground sm:text-xs">
+                          {transaction.items.length} produk • {transaction.paymentMethod}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                         <span>{formatDateTime(transaction.createdAt)}</span>
-                        <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-card/70 text-muted-foreground transition group-hover:border-primary/50 group-hover:text-primary">
-                          <Eye className="size-4" />
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-card/70 text-muted-foreground transition group-hover:border-primary/50 group-hover:text-primary">
+                          <Eye className="size-3.5" />
                         </span>
                       </div>
                     </button>
                   ))
                 ) : (
-                  <div className="rounded-[20px] bg-muted/45 px-4 py-8 text-center text-sm text-muted-foreground">
+                  <div className="flex h-[340px] items-center justify-center rounded-[18px] bg-muted/45 px-4 py-8 text-center text-xs text-muted-foreground sm:text-sm">
                     Belum ada transaksi yang tersimpan.
                   </div>
                 )}
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4">
-          <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
-            <CardHeader>
-              <CardTitle className="font-heading text-2xl">Stok perlu perhatian</CardTitle>
-              <CardDescription>
-                Cocok dibuka sebelum restok atau saat mau tutup toko.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {lowStockProducts.length > 0 ? (
-                lowStockProducts.slice(0, 5).map((product) => (
-                  <div
-                    key={product.id}
-                    className="flex items-center justify-between rounded-[20px] border border-border/70 bg-card/80 px-4 py-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/12 text-primary">
-                        <AlertTriangle className="size-4" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{product.name}</p>
-                        <p className="text-sm text-muted-foreground">{product.category}</p>
-                      </div>
-                    </div>
-                    <Badge className="rounded-full bg-primary text-primary-foreground">
-                      {product.stock} / min {product.minimumStock}
-                    </Badge>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-[20px] bg-accent px-4 py-5 text-sm text-accent-foreground">
-                  Semua stok aman. Belum ada produk yang menyentuh batas minimum.
-                </div>
-              )}
             </CardContent>
           </Card>
 
-          <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
-            <CardHeader>
-              <CardTitle className="font-heading text-2xl">Kasbon terbaru</CardTitle>
-              <CardDescription>
-                Ringkas untuk follow-up pelanggan tanpa masuk ke halaman penuh buku hutang.
+          {/* Kasbon Terbaru */}
+          <Card className="flex flex-col justify-between border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] lg:col-span-5">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 font-heading text-xl">
+                <WalletCards className="size-5 text-primary" />
+                Kasbon Terbaru
+              </CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Ringkas untuk follow-up piutang pelanggan.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {latestDebts.map((debt) => (
-                <div
-                  key={debt.id}
-                  className="flex items-start justify-between gap-3 rounded-[20px] border border-border/70 bg-card/80 px-4 py-3"
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <WalletCards className="size-4 text-primary" />
-                      <p className="font-medium">{debt.borrowerName}</p>
+            <CardContent className="flex-1">
+              <div className="min-h-[340px] max-h-[580px] space-y-2.5 overflow-y-auto pr-1">
+                {latestDebts.length > 0 ? (
+                  latestDebts.slice(0, 8).map((debt) => (
+                    <div
+                      key={debt.id}
+                      className="flex items-center justify-between gap-3 rounded-[18px] border border-border/70 bg-card/80 px-3.5 py-2.5"
+                    >
+                      <div className="truncate pr-2">
+                        <p className="truncate font-semibold text-xs sm:text-sm">{debt.borrowerName}</p>
+                        <p className="truncate text-[11px] text-muted-foreground sm:text-xs">{debt.whatsapp}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="font-semibold text-xs sm:text-sm">{formatCurrency(debt.remainingAmount)}</p>
+                        <p className="text-[11px] text-muted-foreground sm:text-xs">
+                          {debt.status === "lunas"
+                            ? "Lunas"
+                            : debt.status === "lewat_tempo"
+                              ? "Lewat tempo"
+                              : "Aktif"}
+                        </p>
+                      </div>
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{debt.whatsapp}</p>
+                  ))
+                ) : (
+                  <div className="flex h-[340px] items-center justify-center rounded-[18px] bg-muted/45 px-4 py-8 text-center text-xs text-muted-foreground sm:text-sm">
+                    Belum ada kasbon aktif.
                   </div>
-                  <div className="text-right">
-                    <p className="font-medium">{formatCurrency(debt.remainingAmount)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {debt.status === "lunas"
-                        ? "Lunas"
-                        : debt.status === "lewat_tempo"
-                          ? "Lewat tempo"
-                          : "Aktif"}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
-            <CardContent className="flex items-center justify-between gap-4 p-5">
-              <div>
-                <p className="text-sm text-muted-foreground">SKU aktif</p>
-                <p className="mt-2 font-heading text-3xl font-semibold">{products.length} produk</p>
-              </div>
-              <div className="flex size-12 items-center justify-center rounded-2xl bg-foreground text-background">
-                <Clock3 className="size-5" />
+                )}
               </div>
             </CardContent>
           </Card>

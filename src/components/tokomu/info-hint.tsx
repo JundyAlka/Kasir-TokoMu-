@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -162,28 +163,31 @@ export function InfoHint({
         <Info className="size-3.5" />
       </button>
 
-      {open ? (
-        <span
-          id={descriptionId}
-          role="tooltip"
-          style={
-            position
-              ? position
-              : {
-                  left: -9999,
-                  top: -9999,
-                  width: tooltipWidth,
-                }
-          }
-          className={cn(
-            "fixed z-[80] rounded-xl border border-border bg-popover px-3 py-2 text-left text-[11px] leading-snug whitespace-normal text-popover-foreground opacity-0 shadow-lg shadow-black/10 transition-opacity duration-75",
-            position && "opacity-100",
-            position?.side === "top" && "-translate-y-full"
-          )}
-        >
-          {text}
-        </span>
-      ) : null}
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <span
+              id={descriptionId}
+              role="tooltip"
+              style={
+                position
+                  ? position
+                  : {
+                      left: -9999,
+                      top: -9999,
+                      width: tooltipWidth,
+                    }
+              }
+              className={cn(
+                "fixed z-[9999] rounded-xl border border-border bg-popover px-3 py-2 text-left text-[11px] leading-snug whitespace-normal text-popover-foreground opacity-0 shadow-xl shadow-black/20 transition-opacity duration-75",
+                position && "opacity-100",
+                position?.side === "top" && "-translate-y-full"
+              )}
+            >
+              {text}
+            </span>,
+            document.body
+          )
+        : null}
     </span>
   );
 }

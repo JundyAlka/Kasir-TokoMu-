@@ -12,7 +12,7 @@ export async function POST(
 ) {
   try {
     const body = RestockBodySchema.parse(await request.json());
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const product = await restockProduct(workspaceOwnerId, id, body.quantity);

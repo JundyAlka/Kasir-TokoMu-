@@ -74,7 +74,7 @@ async function getExpenseCategories(workspaceOwnerId: string, periodStart: strin
 
 export async function GET(request: Request) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId } = await getRequestUser();
     const url = new URL(request.url);
     const period = parsePeriod(url.searchParams.get("period"));

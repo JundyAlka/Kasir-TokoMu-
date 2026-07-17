@@ -19,7 +19,7 @@ const InvestorCreateSchema = z
 
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId } = await getRequestUser();
     const statusParam = request.nextUrl.searchParams.get("status");
     const status =
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { userId, workspaceOwnerId } = await getRequestUser();
     const draft = InvestorCreateSchema.parse(await request.json());
     const investor = await createInvestor(workspaceOwnerId, draft);

@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   try {
     const draft = ProductCreateSchema.parse(await request.json());
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId, userId } = await getRequestUser();
     const product = await createProduct(workspaceOwnerId, draft);
     await logEvent(

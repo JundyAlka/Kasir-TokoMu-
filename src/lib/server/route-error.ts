@@ -18,10 +18,10 @@ function friendlyAiError(message: string) {
     };
   }
 
-  if (message.includes("Claude API") || message.includes("authorization failed")) {
+  if (message.includes("Gemini Proxy")) {
     return {
       status: 502,
-      message: "API key Claude/Gemini Anda bermasalah atau kehabisan saldo (authorization failed). Silakan isi ulang saldo di dashboard Claude atau ganti API key Anda.",
+      message: "API key Gemini Proxy Anda bermasalah. Silakan ganti API key Anda.",
     };
   }
 

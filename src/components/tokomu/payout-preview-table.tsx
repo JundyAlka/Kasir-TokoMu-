@@ -167,7 +167,7 @@ export function PayoutPreviewTable({
         {rows.length === 0 ? (
           <TableRow>
             <TableCell colSpan={mode === "saved" ? 7 : 6} className="h-28 text-center text-muted-foreground">
-              Belum ada payout untuk periode ini.
+              Belum ada data payout yang ditampilkan. Klik tombol 'Hitung Preview' di atas untuk menghitung simulasi terkini.
             </TableCell>
           </TableRow>
         ) : null}
@@ -183,10 +183,13 @@ export function BagiHasilClient() {
   const [historyRows, setHistoryRows] = useState<PayoutRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLivePreview, setIsLivePreview] = useState(false);
 
   const periodPayload = useMemo(() => parseMonthValue(period), [period]);
   const hasSavedDraft = savedRows.length > 0;
-  const visibleRows = hasSavedDraft ? savedRows : calculation?.payouts ?? [];
+  const showLive = isLivePreview || !hasSavedDraft;
+  const visibleRows = showLive && calculation ? calculation.payouts : (hasSavedDraft ? savedRows : (calculation?.payouts ?? []));
+  const tableMode: "preview" | "saved" = showLive && calculation && !hasSavedDraft ? "preview" : (hasSavedDraft && !isLivePreview ? "saved" : "preview");
   const selectedMonthLabel = getRecentMonths().find((m) => m.value === period)?.label ?? period;
 
   async function loadSavedRows() {
@@ -199,19 +202,29 @@ export function BagiHasilClient() {
 
   useEffect(() => {
     let mounted = true;
-    requestJson<{ payouts: PayoutRow[] }>(
-      `/api/payouts?year=${periodPayload.year}&month=${periodPayload.month}`
-    )
-      .then((data) => {
-        if (mounted) setSavedRows(data.payouts);
+    setIsLoading(true);
+
+    Promise.all([
+      requestJson<{ payouts: PayoutRow[] }>(
+        `/api/payouts?year=${periodPayload.year}&month=${periodPayload.month}`
+      ).catch(() => ({ payouts: [] as PayoutRow[] })),
+      requestJson<{ calculation: PayoutCalculation }>("/api/payouts/calculate", {
+        method: "POST",
+        body: JSON.stringify(periodPayload),
+      }).catch(() => null),
+      requestJson<{ payouts: PayoutRow[] }>("/api/payouts").catch(() => ({
+        payouts: [] as PayoutRow[],
+      })),
+    ])
+      .then(([savedData, calcData, historyData]) => {
+        if (!mounted) return;
+        setSavedRows(savedData.payouts);
+        if (calcData) setCalculation(calcData.calculation);
+        setHistoryRows(historyData.payouts);
       })
-      .catch(() => undefined);
-      
-    requestJson<{ payouts: PayoutRow[] }>("/api/payouts")
-      .then((data) => {
-        if (mounted) setHistoryRows(data.payouts);
-      })
-      .catch(() => undefined);
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
 
     return () => {
       mounted = false;
@@ -232,9 +245,10 @@ export function BagiHasilClient() {
         body: JSON.stringify(periodPayload),
       });
       setCalculation(data.calculation);
+      setIsLivePreview(true);
       toast.success(
         existing.length > 0
-          ? "Periode ini sudah punya draft. Preview tetap diperbarui."
+          ? "Periode ini sudah punya draft. Menampilkan simulasi live terbaru."
           : "Preview bagi hasil berhasil dihitung."
       );
     } catch (error) {
@@ -252,6 +266,7 @@ export function BagiHasilClient() {
         body: JSON.stringify(periodPayload),
       });
       const rows = await loadSavedRows();
+      setIsLivePreview(false);
       toast.success(`${rows.length} draft payout berhasil disimpan.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal menyimpan draft payout.");
@@ -292,6 +307,7 @@ export function BagiHasilClient() {
                 value={period}
                 onValueChange={(value) => {
                   setPeriod(value || "");
+                  setIsLivePreview(false);
                   setCalculation(null);
                   setSavedRows([]);
                 }}
@@ -316,72 +332,131 @@ export function BagiHasilClient() {
         </CardHeader>
       </Card>
 
-      {calculation ? (
-        <section className="grid gap-3 md:grid-cols-4">
-          <Card>
-            <CardHeader>
-              <CardDescription>Laba bersih</CardDescription>
-              <CardTitle>{formatCurrency(calculation.baseProfit)}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardDescription>Total bagi hasil investor</CardDescription>
-              <CardTitle>{formatCurrency(calculation.totalInvestorPayout)}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardDescription>Bagian PCM (30%)</CardDescription>
-              <CardTitle>{formatCurrency(calculation.pcmShare)}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardDescription>Bagian toko (70%)</CardDescription>
-              <CardTitle>{formatCurrency(calculation.storeShare)}</CardTitle>
-            </CardHeader>
-          </Card>
-        </section>
-      ) : null}
+      {(() => {
+        const displayProfit = calculation?.baseProfit;
+        const displayTotalPayout = calculation
+          ? calculation.totalInvestorPayout
+          : hasSavedDraft
+          ? savedRows.reduce((sum, r) => sum + (r.amount || 0), 0)
+          : undefined;
+        const displayPcm = calculation?.pcmShare;
+        const displayStore = calculation?.storeShare;
 
-      {calculation || hasSavedDraft ? (
-        <Card className="border-border/60 bg-card/80">
-          <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <WalletCards className="size-5" />
-                {hasSavedDraft ? `Draft payout tersimpan (${selectedMonthLabel})` : `Preview payout (${selectedMonthLabel})`}
-              </CardTitle>
-              <CardDescription>
-                {hasSavedDraft
-                  ? "Periode ini sudah tersimpan. Gunakan aksi status per baris."
-                  : "Preview tidak menyimpan data sampai tombol draft ditekan."}
-              </CardDescription>
-            </div>
+        return (
+          <section className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+            <Card className="border-border/60 bg-card/80">
+              <CardHeader className="pb-3">
+                <CardDescription>Laba bersih</CardDescription>
+                <CardTitle className="text-xl font-bold">
+                  {displayProfit !== undefined ? formatCurrency(displayProfit) : "-"}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card className="border-border/60 bg-card/80">
+              <CardHeader className="pb-3">
+                <CardDescription>Total bagi hasil investor</CardDescription>
+                <CardTitle className="text-xl font-bold">
+                  {displayTotalPayout !== undefined ? formatCurrency(displayTotalPayout) : "-"}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card className="border-border/60 bg-card/80">
+              <CardHeader className="pb-3">
+                <CardDescription>Bagian PCM (30%)</CardDescription>
+                <CardTitle className="text-xl font-bold">
+                  {displayPcm !== undefined ? formatCurrency(displayPcm) : "-"}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card className="border-border/60 bg-card/80">
+              <CardHeader className="pb-3">
+                <CardDescription>Bagian toko (70%)</CardDescription>
+                <CardTitle className="text-xl font-bold">
+                  {displayStore !== undefined ? formatCurrency(displayStore) : "-"}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+          </section>
+        );
+      })()}
+
+      <Card className="border-border/60 bg-card/80">
+        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <WalletCards className="size-5" />
+              {showLive && calculation
+                ? `Preview payout (${selectedMonthLabel})`
+                : hasSavedDraft
+                ? `Draft payout tersimpan (${selectedMonthLabel})`
+                : `Preview payout (${selectedMonthLabel})`}
+            </CardTitle>
+            <CardDescription>
+              {showLive && calculation && !hasSavedDraft
+                ? "Preview bagi hasil bersifat dinamis. Anda dapat menghitung ulang simulasi dan menyimpannya ke draft kapan saja sesuai kebutuhan pengambilan payout."
+                : hasSavedDraft && !isLivePreview
+                ? "Periode ini sudah tersimpan dalam draft. Anda tetap dapat menghitung ulang simulasi terbaru atau mengelola status per baris."
+                : "Menampilkan simulasi preview live terbaru untuk periode ini. Jika ada perubahan transaksi, nilai ini mengikuti data terkini."}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            {hasSavedDraft && isLivePreview ? (
+              <Button size="sm" variant="outline" className="rounded-2xl" onClick={() => setIsLivePreview(false)}>
+                Lihat Draft Tersimpan
+              </Button>
+            ) : null}
             {calculation && !hasSavedDraft ? (
-              <Button className="rounded-2xl" onClick={() => void handleSaveDraft()} disabled={isSaving}>
+              <Button className="rounded-2xl shrink-0" onClick={() => void handleSaveDraft()} disabled={isSaving}>
                 {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                 Simpan sebagai Draft
               </Button>
             ) : null}
-          </CardHeader>
-          <CardContent>
-            <PayoutPreviewTable
-              rows={visibleRows}
-              mode={hasSavedDraft ? "saved" : "preview"}
-              onApprove={(id) => void updateStatus(id, "disetujui")}
-              onPaid={(id) => void updateStatus(id, "dibayar")}
-            />
-            {hasSavedDraft ? (
-              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-primary/20 bg-primary/8 p-3 text-sm">
-                <CheckCircle2 className="size-4 text-primary" />
-                Draft periode ini sudah ada, sehingga tombol simpan dinonaktifkan.
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!calculation && !hasSavedDraft && !isLoading ? (
+            <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/10 p-4 text-sm text-foreground shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <WalletCards className="mt-0.5 size-5 shrink-0 text-primary" />
+                <div>
+                  <p className="font-semibold text-primary">
+                    Belum ada perhitungan atau draft tersimpan untuk periode {selectedMonthLabel}
+                  </p>
+                  <p className="mt-1 text-muted-foreground leading-relaxed">
+                    Perhitungan bagi hasil dapat dilakukan kapan pun karena laba bersih serta margin produk titipan bersifat dinamis sesuai transaksi terkini. Jika sewaktu-waktu ada investor yang ingin mengambil payout, klik tombol &quot;Hitung Preview&quot; untuk melihat kalkulasi real-time lalu simpan sebagai draft kapan saja.
+                  </p>
+                </div>
               </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
+              <Button
+                size="sm"
+                className="rounded-2xl shrink-0 shadow-sm"
+                onClick={() => void handleCalculate()}
+                disabled={isLoading}
+              >
+                {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
+                Hitung Sekarang
+              </Button>
+            </div>
+          ) : null}
+          <PayoutPreviewTable
+            rows={visibleRows}
+            mode={tableMode}
+            onApprove={(id) => void updateStatus(id, "disetujui")}
+            onPaid={(id) => void updateStatus(id, "dibayar")}
+          />
+          {hasSavedDraft && !isLivePreview ? (
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/8 p-3 text-sm">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="size-4 text-primary shrink-0" />
+                <span>Draft periode ini sudah ada. Jika ada perubahan transaksi terbaru, Anda dapat memperbarui simulasi.</span>
+              </div>
+              <Button size="sm" variant="ghost" className="h-8 rounded-xl text-primary font-semibold hover:bg-primary/10 shrink-0" onClick={() => void handleCalculate()}>
+                Hitung Ulang Preview Live
+              </Button>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {historyRows.length > 0 ? (
         <div className="space-y-4">

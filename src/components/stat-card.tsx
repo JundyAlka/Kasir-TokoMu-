@@ -44,9 +44,9 @@ export function StatCard({
           "cursor-pointer select-none transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_24px_68px_-32px_rgba(65,35,18,0.55)] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
       )}
     >
-      <CardContent className="space-y-3 p-5">
+      <CardContent className="space-y-2 p-4 sm:space-y-3 sm:p-5">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium opacity-80">{title}</p>
+          <p className="text-xs font-medium opacity-80 sm:text-sm">{title}</p>
           <div className="flex items-center gap-1">
             {isClickable && (
               <Info className="size-3.5 opacity-50 transition-opacity group-hover:opacity-80" />
@@ -54,8 +54,8 @@ export function StatCard({
             <ArrowUpRight className="size-4 opacity-70" />
           </div>
         </div>
-        <p className="font-heading text-3xl font-semibold tracking-tight">{value}</p>
-        <p className="text-sm opacity-75">{description}</p>
+        <p className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl xl:text-4xl">{value}</p>
+        <p className="line-clamp-2 text-xs opacity-75 sm:text-sm">{description}</p>
       </CardContent>
     </Card>
   );

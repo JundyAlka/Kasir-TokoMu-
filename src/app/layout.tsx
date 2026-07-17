@@ -35,9 +35,9 @@ export default function RootLayout({
     <html
       lang="id"
       suppressHydrationWarning
-      className={`${plusJakartaSans.variable} ${bricolageGrotesque.variable} ${ibmPlexMono.variable} h-full antialiased`}
+      className={`${plusJakartaSans.variable} ${bricolageGrotesque.variable} ${ibmPlexMono.variable} h-full w-full overflow-hidden antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="h-full w-full flex flex-col overflow-hidden bg-background">
         <ThemeProvider defaultTheme="dark">
           <AppStateProvider>
             {children}

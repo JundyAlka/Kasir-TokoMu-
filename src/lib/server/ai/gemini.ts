@@ -80,7 +80,7 @@ function geminiErrorMessage(text: string) {
 
 const DEFAULT_MODEL =
   process.env.GEMINI_TEXT_MODEL ??
-  "gemini-2.0-flash";
+  "gemini-2.5-flash";
 const FALLBACK_TEXT_MODEL =
   process.env.GEMINI_FALLBACK_TEXT_MODEL ??
   "gemini-2.0-flash-lite";
@@ -91,9 +91,9 @@ const DEFAULT_BASE_URL =
   process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai/";
 const PROVIDER_NAME = process.env.GEMINI_BASE_URL
   ? process.env.GEMINI_BASE_URL.includes("iamhc.cn") || process.env.GEMINI_BASE_URL.includes("hcnsec.cn")
-    ? "Claude API"
-    : "Claude API"
-  : "Claude API";
+    ? "Gemini Proxy"
+    : "Custom API"
+  : "Gemini API";
 
 export async function callGemini(input: {
   messages: GeminiMessage[];
@@ -128,6 +128,12 @@ export async function callGemini(input: {
         tool_choice: input.tools ? input.toolChoice ?? "auto" : undefined,
         temperature: input.temperature ?? 0.2,
       }),
+      signal: AbortSignal.timeout(15000),
+    }).catch((err) => {
+      if (err.name === 'TimeoutError') {
+        throw new Error(`Koneksi ke penyedia AI (${model}) terputus karena terlalu lama merespons (Timeout).`);
+      }
+      throw err;
     });
 
     if (response.ok) {

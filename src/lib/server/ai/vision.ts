@@ -24,7 +24,7 @@ const USER_PROMPTS = [
   "Transkrip baris barang saja dari gambar ini, lalu ubah menjadi JSON array. Format umum: nama barang di satu baris, baris berikutnya jumlah satuan X harga. Jangan sertakan subtotal atau pembayaran.",
 ];
 
-const DEFAULT_VISION_MODEL = process.env.GEMINI_VISION_MODEL ?? "gemini-2.0-flash";
+const DEFAULT_VISION_MODEL = process.env.GEMINI_VISION_MODEL ?? "gemini-2.5-flash";
 const FALLBACK_VISION_MODEL =
   process.env.GEMINI_FALLBACK_VISION_MODEL ?? "gemini-2.0-flash-lite";
 

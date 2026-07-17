@@ -90,7 +90,7 @@ function legacyToReportData(
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan"]);
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const [report] = await db

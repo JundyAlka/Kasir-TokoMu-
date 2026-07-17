@@ -161,7 +161,7 @@ async function buildReportData(
 
 export async function GET() {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan"]);
     const { workspaceOwnerId } = await getRequestUser();
     const reports = await db
       .select()
@@ -177,7 +177,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan"]);
     const { workspaceOwnerId } = await getRequestUser();
     const { periodYear, periodMonth, note, range } = parsePeriodPayload(await request.json());
     const data = await buildReportData(workspaceOwnerId, periodYear, periodMonth, note, range);
@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan"]);
     const { userId, workspaceOwnerId } = await getRequestUser();
     const body = (await request.json()) as { id?: unknown; status?: unknown };
 

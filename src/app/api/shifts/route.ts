@@ -17,7 +17,7 @@ const ShiftSchema = z
 
 export async function GET() {
   try {
-    const { workspaceOwnerId } = await requireRole(["pimpinan", "pengelola_keuangan"]);
+    const { workspaceOwnerId } = await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const data = await listShiftSettings(workspaceOwnerId);
     return NextResponse.json(data);
   } catch (error) {
@@ -28,7 +28,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = ShiftSchema.parse(await request.json());
-    const { workspaceOwnerId } = await requireRole(["pimpinan", "pengelola_keuangan"]);
+    const { workspaceOwnerId } = await requireRole(["pimpinan"]);
     const shift = await createShift(workspaceOwnerId, body);
     return NextResponse.json({ shift });
   } catch (error) {

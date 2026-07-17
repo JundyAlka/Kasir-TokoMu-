@@ -53,39 +53,41 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-2">
-        <FieldLabel htmlFor="product-sku" help={FIELD_HELP.sku}>
-          SKU
-        </FieldLabel>
-        <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="grid gap-4 md:grid-cols-12">
+        <div className="grid gap-2 md:col-span-6">
+          <FieldLabel htmlFor="product-sku" help={FIELD_HELP.sku}>
+            SKU
+          </FieldLabel>
+          <div className="flex gap-2">
+            <Input
+              id="product-sku"
+              value={draft.sku ?? ""}
+              onChange={(event) => onChange({ ...draft, sku: event.target.value.toUpperCase() })}
+              placeholder="Contoh: MIG-MKN-001"
+              className="h-11 flex-1 rounded-2xl"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 shrink-0 rounded-2xl px-3 text-xs font-medium"
+              onClick={makeSku}
+            >
+              <Sparkles className="mr-1 size-3.5" />
+              Otomatis
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-2 md:col-span-6">
+          <Label htmlFor="product-name">Nama barang</Label>
           <Input
-            id="product-sku"
-            value={draft.sku ?? ""}
-            onChange={(event) => onChange({ ...draft, sku: event.target.value.toUpperCase() })}
-            placeholder="Contoh: MIG-MKN-001"
+            id="product-name"
+            value={draft.name}
+            onChange={(event) => onChange({ ...draft, name: event.target.value })}
+            placeholder="Contoh: Mi Instan Goreng"
             className="h-11 rounded-2xl"
           />
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 shrink-0 rounded-2xl"
-            onClick={makeSku}
-          >
-            <Sparkles className="size-4" />
-            Buatkan otomatis
-          </Button>
         </div>
-      </div>
-
-      <div className="grid gap-2">
-        <Label htmlFor="product-name">Nama barang</Label>
-        <Input
-          id="product-name"
-          value={draft.name}
-          onChange={(event) => onChange({ ...draft, name: event.target.value })}
-          placeholder="Contoh: Mi Instan Goreng"
-          className="h-11 rounded-2xl"
-        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

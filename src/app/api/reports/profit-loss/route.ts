@@ -18,7 +18,7 @@ function parsePeriod(value: string | null) {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId } = await getRequestUser();
     const range = parsePeriod(request.nextUrl.searchParams.get("period"));
     const summary = await calculatePeriodProfit(workspaceOwnerId, range.start, range.end);

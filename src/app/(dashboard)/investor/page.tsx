@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { InactiveInvestorManager } from "@/components/tokomu/inactive-investor-manager";
 import { InvestorCard, type InvestorSummary } from "@/components/tokomu/investor-card";
+import { InvestorFormDialog } from "@/components/tokomu/investor-form-dialog";
 import { getRequestUser } from "@/lib/server/app-service";
 import { listInvestors } from "@/lib/server/investor-service";
 import { requireRole } from "@/lib/server/rbac";
@@ -26,7 +27,7 @@ export default async function InvestorPage({
 }: Readonly<{
   searchParams?: Promise<{ status?: string }>;
 }>) {
-  await requireRole(["pimpinan", "pengelola_keuangan"]);
+  await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
   const { workspaceOwnerId } = await getRequestUser();
   const params = searchParams ? await searchParams : {};
   const status = parseStatus(params.status);
@@ -52,15 +53,7 @@ export default async function InvestorPage({
           ))}
         </div>
         {status !== "inactive" ? (
-          <Button
-            render={<Link href="/investor/baru" />}
-            nativeButton={false}
-            size="lg"
-            className="rounded-2xl"
-          >
-            <Plus className="size-4" />
-            Investor Baru
-          </Button>
+          <InvestorFormDialog />
         ) : null}
       </div>
 
@@ -84,14 +77,7 @@ export default async function InvestorPage({
                 : "Tambahkan investor baru untuk mulai mencatat modal uang atau barang titip jual."}
             </p>
             {status !== "inactive" ? (
-              <Button
-                render={<Link href="/investor/baru" />}
-                nativeButton={false}
-                className="mt-4 rounded-2xl"
-              >
-                <Plus className="size-4" />
-                Investor Baru
-              </Button>
+              <InvestorFormDialog />
             ) : null}
           </CardContent>
         </Card>

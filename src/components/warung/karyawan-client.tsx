@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Loader2, Trash2, UserPlus } from "lucide-react";
+import { Copy, Eye, EyeOff, Loader2, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +29,7 @@ import type { Role, StaffRole, WorkspaceUser } from "@/lib/server/rbac";
 
 const roleLabels: Record<Role, string> = {
   pimpinan: "Pimpinan",
-  pengelola_keuangan: "Pengelola Keuangan",
+  pengelola_keuangan: "Bendahara / Pengelola Keuangan",
   kasir: "Kasir",
 };
 
@@ -66,6 +66,7 @@ export function KaryawanClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<InviteCredentials | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [confirmDeactivateUser, setConfirmDeactivateUser] = useState<WorkspaceUser | null>(null);
 
   async function refreshUsers() {
@@ -357,8 +358,19 @@ export function KaryawanClient({
               </div>
               <div className="grid gap-1.5">
                 <Label>Password sementara</Label>
-                <div className="rounded-xl border bg-background px-3 py-2 font-mono text-sm">
-                  {credentials.temporaryPassword}
+                <div className="flex items-center justify-between rounded-xl border bg-background px-3 py-2">
+                  <span className="font-mono text-sm">
+                    {showPassword ? credentials.temporaryPassword : "•".repeat(credentials.temporaryPassword.length)}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </Button>
                 </div>
               </div>
             </div>

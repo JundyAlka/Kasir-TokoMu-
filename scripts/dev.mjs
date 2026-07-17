@@ -39,7 +39,10 @@ async function waitForPort(port, timeoutMs = 20_000) {
 function startChild(command, args) {
   const child = spawn(command, args, {
     cwd: process.cwd(),
-    env: process.env,
+    env: {
+      ...process.env,
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --dns-result-order=ipv4first`.trim(),
+    },
     stdio: "inherit",
   });
   children.add(child);

@@ -68,7 +68,7 @@ function parseItems(value: unknown) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pengelola_keuangan", "pimpinan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { userId, workspaceOwnerId } = await getRequestUser();
     const body = (await request.json()) as {
       items?: unknown;

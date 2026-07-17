@@ -36,7 +36,7 @@ function parseSearchPeriod(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { workspaceOwnerId } = await getRequestUser();
     const range = parseSearchPeriod(request);
     let result;
@@ -48,7 +48,12 @@ export async function GET(request: NextRequest) {
             p.investment_id as "investmentId",
             p.investor_id as "investorId",
             inv.name as "investorName",
-            coalesce(i.akad_type, case when i.type = 'barang_titip_jual' then 'barang_titip_jual' else 'murabahah_bil_wakalah' end) as "akadType",
+            case 
+              when i.type = 'barang_titip_jual' then 
+                case when i.akad_type = 'sales_titipan' then 'sales_titipan' else 'barang_titip_jual' end
+              else 
+                coalesce(i.akad_type, 'murabahah_bil_wakalah')
+            end as "akadType",
             p.period_start as "periodStart",
             p.period_end as "periodEnd",
             p.base_profit as "baseAmount",
@@ -81,7 +86,12 @@ export async function GET(request: NextRequest) {
             p.investment_id as "investmentId",
             p.investor_id as "investorId",
             inv.name as "investorName",
-            coalesce(i.akad_type, case when i.type = 'barang_titip_jual' then 'barang_titip_jual' else 'murabahah_bil_wakalah' end) as "akadType",
+            case 
+              when i.type = 'barang_titip_jual' then 
+                case when i.akad_type = 'sales_titipan' then 'sales_titipan' else 'barang_titip_jual' end
+              else 
+                coalesce(i.akad_type, 'murabahah_bil_wakalah')
+            end as "akadType",
             p.period_start as "periodStart",
             p.period_end as "periodEnd",
             p.base_profit as "baseAmount",
@@ -118,7 +128,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan"]);
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
     const { userId, workspaceOwnerId } = await getRequestUser();
     const period = parseBodyPeriod(await request.json());
     const calculation = await saveDraftPayouts(workspaceOwnerId, period.year, period.month);

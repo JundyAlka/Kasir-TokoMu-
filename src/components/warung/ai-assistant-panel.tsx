@@ -14,6 +14,12 @@ import {
   TrendingUp,
   Wallet,
   X,
+  Settings2,
+  Power,
+  Trash,
+  Search,
+  History,
+  Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -539,6 +545,42 @@ export function AIAssistantPanel({
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasBootstrappedRef = useRef(false);
 
+  const [chatHistory, setChatHistory] = useState<ChatRecord[]>([]);
+  const [view, setView] = useState<"chat" | "settings">("chat");
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [searchHistory, setSearchHistory] = useState("");
+  const [usage, setUsage] = useState({ totalRequests: 0, estimatedTokens: 0, costRp: 0 });
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("warungos_ai_settings");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (typeof parsed.aiEnabled === "boolean") setAiEnabled(parsed.aiEnabled);
+        if (parsed.usage) setUsage(parsed.usage);
+      }
+    } catch (err) {}
+  }, []);
+
+  function saveUsage(addTokens: number) {
+    setUsage((prev) => {
+      const next = {
+        totalRequests: prev.totalRequests + 1,
+        estimatedTokens: prev.estimatedTokens + addTokens,
+        costRp: prev.costRp + Math.ceil(addTokens * 0.05),
+      };
+      localStorage.setItem("warungos_ai_settings", JSON.stringify({ aiEnabled, usage: next }));
+      return next;
+    });
+  }
+
+  function toggleAiEnabled() {
+    const next = !aiEnabled;
+    setAiEnabled(next);
+    localStorage.setItem("warungos_ai_settings", JSON.stringify({ aiEnabled: next, usage }));
+    toast.success(next ? "AI Assistant diaktifkan." : "AI Assistant dinonaktifkan.");
+  }
+
   const bootstrap = useCallback(async () => {
     if (hasBootstrappedRef.current) return;
     hasBootstrappedRef.current = true;
@@ -546,6 +588,7 @@ export function AIAssistantPanel({
     setError(null);
     try {
       const list = await api<{ chats: ChatRecord[] }>("/api/ai/chats");
+      setChatHistory(list.chats);
       let active = list.chats[0] ?? null;
       if (!active) {
         const created = await api<{ chat: ChatRecord }>("/api/ai/chats", {
@@ -553,6 +596,7 @@ export function AIAssistantPanel({
           body: JSON.stringify({ title: "Percakapan baru" }),
         });
         active = created.chat;
+        setChatHistory(prev => [active, ...prev]);
       }
       setChat(active);
       try {
@@ -567,7 +611,8 @@ export function AIAssistantPanel({
             body: JSON.stringify({ title: "Percakapan baru" }),
           });
           setChat(created.chat);
-          setMessages([]);
+      setChatHistory(prev => [created.chat, ...prev]);
+      setMessages([]);
           return;
         }
         throw err;
@@ -591,6 +636,10 @@ export function AIAssistantPanel({
   }, [open, messages, isThinking]);
 
   async function handleSend(text: string) {
+    if (!aiEnabled) {
+      toast.error("AI Assistant sedang dinonaktifkan. Silakan aktifkan di Pengaturan.");
+      return;
+    }
     const trimmed = text.trim();
     if (!trimmed || !chat || isThinking) return;
 
@@ -630,7 +679,8 @@ export function AIAssistantPanel({
         });
         activeChat = created.chat;
         setChat(activeChat);
-        res = await api<{ newMessages: ServerMessage[] }>(
+        setChatHistory(prev => [activeChat, ...prev]);
+res = await api<{ newMessages: ServerMessage[] }>(
           `/api/ai/chats/${activeChat.id}/messages`,
           { method: "POST", body: JSON.stringify({ text: trimmed }) }
         );
@@ -639,6 +689,7 @@ export function AIAssistantPanel({
         ...prev.filter((m) => m.id !== optimistic.id),
         ...res.newMessages,
       ]);
+      saveUsage(trimmed.length * 2 + 350);
     } catch (err) {
       const message = friendlyErrorMessage(err, "Gagal mengirim pesan.");
       setError(message);
@@ -685,7 +736,7 @@ export function AIAssistantPanel({
   return (
     <aside
       className={cn(
-        "flex h-full shrink-0 flex-col overflow-hidden rounded-[28px] border border-white/60 bg-card/85 shadow-[0_38px_90px_-50px_rgba(68,39,20,0.7)] backdrop-blur-xl transition-[width] duration-200 ease-out",
+        "flex h-full shrink-0 flex-col overflow-hidden rounded-[26px] border border-white/60 bg-card/85 shadow-[0_38px_90px_-50px_rgba(68,39,20,0.7)] backdrop-blur-xl transition-[width] duration-200 ease-out",
         open ? "" : "w-[52px]"
       )}
       style={open ? { width } : undefined}
@@ -722,18 +773,27 @@ export function AIAssistantPanel({
                 {chat?.title ?? "WarungOS AI"}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                Asisten kontekstual · Claude · Tool calling
+                Asisten kontekstual · Gemini 2.5 Flash · Tool calling
               </p>
             </div>
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={handleNewChat}
-              disabled={isLoading || isThinking}
+              disabled={isLoading || isThinking || view === "settings"}
               aria-label="Reset chat"
               title="Reset chat"
             >
               <ArrowRight className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setView(view === "settings" ? "chat" : "settings")}
+              aria-label="Pengaturan"
+              title="Pengaturan"
+            >
+              <Settings2 className="size-4" />
             </Button>
             <Button
               variant="ghost"
@@ -746,9 +806,128 @@ export function AIAssistantPanel({
             </Button>
           </header>
 
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="space-y-3 px-4 py-4">
-              {visibleMessages.length === 0 && !isLoading ? (
+                    {view === "settings" ? (
+            <div className="flex-1 min-h-0 overflow-y-auto bg-card/40 p-4">
+              <div className="space-y-6">
+                <section>
+                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                    <Power className="size-4 text-primary" />
+                    Status Layanan AI
+                  </h3>
+                  <div className="flex items-center justify-between rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
+                    <div>
+                      <p className="text-sm font-medium">Asisten Cerdas</p>
+                      <p className="text-xs text-muted-foreground">Aktifkan untuk menggunakan chat AI</p>
+                    </div>
+                    <Button
+                      variant={aiEnabled ? "default" : "secondary"}
+                      size="sm"
+                      className="rounded-xl"
+                      onClick={toggleAiEnabled}
+                    >
+                      {aiEnabled ? "Aktif" : "Nonaktif"}
+                    </Button>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                    <Activity className="size-4 text-emerald-600" />
+                    Penggunaan API (Estimasi)
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
+                      <p className="text-[10px] uppercase text-muted-foreground">Total Request</p>
+                      <p className="mt-1 text-lg font-bold">{usage.totalRequests}</p>
+                    </div>
+                    <div className="rounded-2xl bg-card p-3 shadow-sm ring-1 ring-border">
+                      <p className="text-[10px] uppercase text-muted-foreground">Estimasi Biaya</p>
+                      <p className="mt-1 text-lg font-bold text-amber-700">
+                        Rp {usage.costRp.toLocaleString("id-ID")}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[10px] text-muted-foreground">
+                    *Biaya dihitung dari kisaran ~{usage.estimatedTokens.toLocaleString("id-ID")} token tercatat secara lokal.
+                  </p>
+                </section>
+
+                <section className="pb-4">
+                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                    <History className="size-4 text-primary" />
+                    Riwayat Percakapan
+                  </h3>
+                  <div className="mb-3 relative">
+                    <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      placeholder="Cari riwayat..."
+                      value={searchHistory}
+                      onChange={(e) => setSearchHistory(e.target.value)}
+                      className="w-full rounded-xl border-none bg-card py-2 pl-9 pr-3 text-sm ring-1 ring-border focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    {chatHistory
+                      .filter((c) => c.title.toLowerCase().includes(searchHistory.toLowerCase()))
+                      .map((c) => (
+                        <div key={c.id} className="flex items-center justify-between gap-2 rounded-xl bg-card p-3 shadow-sm ring-1 ring-border">
+                          <div
+                            className="flex-1 cursor-pointer truncate"
+                            onClick={async () => {
+                              try {
+                                setIsLoading(true);
+                                setChat(c);
+                                const detail = await api<{ messages: ServerMessage[] }>(
+                                  `/api/ai/chats/${c.id}/messages`
+                                );
+                                setMessages(detail.messages);
+                                setView("chat");
+                              } catch (err) {
+                                toast.error("Gagal memuat riwayat ini.");
+                              } finally {
+                                setIsLoading(false);
+                              }
+                            }}
+                          >
+                            <p className="truncate text-sm font-medium">{c.title}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {new Date(c.updatedAt).toLocaleDateString("id-ID", { dateStyle: "medium" })}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:bg-destructive/10 shrink-0"
+                            onClick={async () => {
+                              try {
+                                await api(`/api/ai/chats/${c.id}`, { method: "DELETE" });
+                                setChatHistory((prev) => prev.filter((item) => item.id !== c.id));
+                                if (chat?.id === c.id) {
+                                  handleNewChat();
+                                }
+                                toast.success("Riwayat dihapus.");
+                              } catch (err) {
+                                toast.error("Gagal menghapus riwayat.");
+                              }
+                            }}
+                          >
+                            <Trash className="size-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    {chatHistory.length === 0 && (
+                      <p className="text-center text-xs text-muted-foreground py-4">Belum ada riwayat percakapan.</p>
+                    )}
+                  </div>
+                </section>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="space-y-3 px-4 py-4">
+              {!isLoading ? (
                 <MessageBubble role="assistant">
                   <AssistantTextBubble
                     text={
@@ -856,6 +1035,8 @@ export function AIAssistantPanel({
               Aksi AI yang mengubah data butuh konfirmasi sebelum disimpan.
             </p>
           </div>
+            </>
+          )}
         </>
       )}
     </aside>

@@ -1,0 +1,670 @@
+{
+  "project_name": "TokoMu (WarungOS)",
+  "total_activities": 22,
+  "activities": [
+    {
+      "name": "Login",
+      "actor": "Pengguna (Kasir / Bendahara / Pimpinan)",
+      "trigger": "Pengguna membuka halaman /auth dan mensubmit form",
+      "precondition": "Pengguna berada di halaman login dan memiliki akun",
+      "postcondition": "Sesi aktif terbentuk dan pengguna dialihkan ke /dashboard",
+      "nodes": [
+        { "type": "Start", "label": "Start: Pengguna membuka /auth" },
+        { "type": "Activity", "label": "Input email dan kata sandi" },
+        { "type": "Activity", "label": "Submit POST ke /api/auth/sign-in/email" },
+        { "type": "Decision", "label": "Decision: Apakah kredensial valid (hash password & email cocok)?",
+          "branches": [
+            { "condition": "Ya", "next": "Simpan sesi di tabel session & set cookie JWT/Bearer" },
+            { "condition": "Tidak", "next": "Tampilkan pesan error 'Kredensial tidak valid' & kembali ke form" }
+          ]
+        },
+        { "type": "Activity", "label": "Simpan sesi di tabel session & set cookie JWT/Bearer" },
+        { "type": "Activity", "label": "Redirect client ke /dashboard" },
+        { "type": "End", "label": "End: Sesi login aktif" }
+      ],
+      "validations": {
+        "frontend": "Email wajib diisi format valid, password tidak boleh kosong",
+        "backend": "Pengecekan di tabel user dan pencocokan password bcrypt/argon di tabel account"
+      },
+      "database_changes": {
+        "insert": "Tabel session (id, userId, token, expiresAt)",
+        "update": "Tabel user (updatedAt jika ada refresh)",
+        "delete": "Sesi lama yang kadaluwarsa (opsional)"
+      },
+      "files_involved": ["src/app/auth/page.tsx", "src/lib/auth.ts", "src/lib/auth-client.ts"]
+    },
+    {
+      "name": "Buka Sesi Kasir",
+      "actor": "Kasir / Bendahara / Pimpinan",
+      "trigger": "Tombol 'Buka Shift / Sesi Baru' pada POS /kasir diklik",
+      "precondition": "Pengguna sudah login dan jadwal shift tersedia",
+      "postcondition": "Record shift_sessions dengan opening_cash tersimpan dan POS siap digunakan",
+      "nodes": [
+        { "type": "Start", "label": "Start: Pengguna membuka /kasir" },
+        { "type": "Decision", "label": "Decision: Apakah pengguna sudah memiliki sesi shift aktif (endedAt null)?",
+          "branches": [
+            { "condition": "Ya", "next": "Langsung tampilkan antarmuka POS penjualan" },
+            { "condition": "Tidak", "next": "Tampilkan modal/dialog Pilih Shift dan Input Modal Awal Kas" }
+          ]
+        },
+        { "type": "Activity", "label": "Tampilkan modal/dialog Pilih Shift dan Input Modal Awal Kas" },
+        { "type": "Activity", "label": "Input openingCash dan submit POST /api/shift-sessions" },
+        { "type": "Activity", "label": "Server memvalidasi shift aktif dan menyimpan shift_sessions baru" },
+        { "type": "Activity", "label": "Catat audit log SHIFT_SESSION_OPENED" },
+        { "type": "End", "label": "End: POS aktif dengan sesi shift" }
+      ],
+      "validations": {
+        "frontend": "Nominal modal awal kas harus angka >= 0",
+        "backend": "Memeriksa keberadaan dan keaktifan shiftId di tabel shifts"
+      },
+      "database_changes": {
+        "insert": "Tabel shift_sessions (id, workspaceOwnerId, shiftId, cashierUserId, startedAt, openingCash), tabel audit_logs",
+        "update": "Tidak ada",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/app/(dashboard)/kasir/page.tsx", "src/lib/server/shift-service.ts", "src/app/api/shift-sessions/route.ts"]
+    },
+    {
+      "name": "Tutup Sesi Kasir",
+      "actor": "Kasir / Bendahara / Pimpinan",
+      "trigger": "Tombol 'Tutup Shift' diklik di akhir jam kerja",
+      "precondition": "Sesi shift kasir sedang aktif",
+      "postcondition": "Sesi ditutup dengan kalkulasi kas akhir, kas ekspektasi, dan selisih",
+      "nodes": [
+        { "type": "Start", "label": "Start: Tombol Tutup Shift diklik" },
+        { "type": "Activity", "label": "Tampilkan dialog input kas fisik aktual di laci (closingCash)" },
+        { "type": "Activity", "label": "Submit POST ke /api/shift-sessions/[id]/close dengan closingCash" },
+        { "type": "Activity", "label": "Server mengagregasi total penerimaan Tunai dari tabel transactions selama sesi berlangsung" },
+        { "type": "Activity", "label": "Kalkulasi expectedCash = openingCash + totalTunai dan difference = closingCash - expectedCash" },
+        { "type": "Activity", "label": "Update shift_sessions (endedAt = now, closingCash, expectedCash, difference)" },
+        { "type": "Activity", "label": "Catat audit log SHIFT_SESSION_CLOSED" },
+        { "type": "End", "label": "End: Sesi shift selesai direkap" }
+      ],
+      "validations": {
+        "frontend": "Nominal kas akhir wajib diisi angka valid",
+        "backend": "Pengecekan kepemilikan sesi shift dan status endedAt yang masih null sebelum ditutup"
+      },
+      "database_changes": {
+        "insert": "Tabel audit_logs",
+        "update": "Tabel shift_sessions (endedAt, closingCash, expectedCash, difference)",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/shift-service.ts (closeShiftSession)", "src/app/api/shift-sessions/[id]/close/route.ts"]
+    },
+    {
+      "name": "Transaksi Penjualan",
+      "actor": "Kasir / Bendahara / Pimpinan",
+      "trigger": "Kasir menekan tombol 'Bayar / Checkout' setelah item dipilih",
+      "precondition": "Keranjang belanja memiliki minimal 1 item produk",
+      "postcondition": "Stok produk berkurang, transaksi tersimpan, kembalian dihitung",
+      "nodes": [
+        { "type": "Start", "label": "Start: Item dimasukkan ke keranjang" },
+        { "type": "Activity", "label": "Pilih metode bayar (Tunai / QRIS / Transfer)" },
+        { "type": "Decision", "label": "Decision: Metode bayar yang dipilih?",
+          "branches": [
+            { "condition": "Tunai", "next": "Input nominal uang yang dibayarkan oleh pembeli" },
+            { "condition": "QRIS/Transfer", "next": "Set paidAmount = total tagihan otomatis" }
+          ]
+        },
+        { "type": "Decision", "label": "Decision: (Khusus Tunai) Apakah uang dibayar < total tagihan?",
+          "branches": [
+            { "condition": "Ya (Kurang)", "next": "Tolak transaksi & tampilkan error 'Uang dibayarkan kurang dari total tagihan'" },
+            { "condition": "Tidak (Cukup)", "next": "Kalkulasi changeAmount = paidAmount - total" }
+          ]
+        },
+        { "type": "Activity", "label": "Submit POST /api/transactions" },
+        { "type": "Activity", "label": "Server memulai database transaction & memvalidasi stok tiap produk" },
+        { "type": "Decision", "label": "Decision: Apakah stok setiap barang >= quantity keranjang?",
+          "branches": [
+            { "condition": "Tidak", "next": "Rollback transaksi & return error 'Stok [nama] tidak cukup'" },
+            { "condition": "Ya", "next": "Simpan header transactions & transaction_items, lalu kurangi stock di products" }
+          ]
+        },
+        { "type": "Activity", "label": "Simpan audit log TRANSACTION_CREATED & return data ke UI" },
+        { "type": "End", "label": "End: Transaksi sukses & modal konfirmasi/struk muncul" }
+      ],
+      "validations": {
+        "frontend": "Keranjang tidak boleh kosong, nominal uang tunai minimal sebesar total belanja",
+        "backend": "Pengecekan stok real-time di tabel products menggunakan inArray query di dalam database transaction"
+      },
+      "database_changes": {
+        "insert": "Tabel transactions (id, userId, total, paidAmount, changeAmount, paymentMethod, shiftSessionId, recordedByUserId), tabel transaction_items (id, transactionId, productId, productName, quantity, unitPrice, costPrice), tabel audit_logs",
+        "update": "Tabel products (stock = stock - quantity, updatedAt)",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/app-service.ts (createTransaction)", "src/app/api/transactions/route.ts"]
+    },
+    {
+      "name": "Cetak Struk",
+      "actor": "Kasir / Bendahara / Pimpinan",
+      "trigger": "Tombol 'Lihat Struk' / 'Cetak' diklik pada modal setelah transaksi",
+      "precondition": "Transaksi berhasil dibuat dan data struk tersedia",
+      "postcondition": "Dialog struk terbuka dan proses print browser (window.print) dijalankan",
+      "nodes": [
+        { "type": "Start", "label": "Start: Tombol Lihat Struk diklik" },
+        { "type": "Activity", "label": "Buka komponen ReceiptDialog dengan data transaksi dan profil warung" },
+        { "type": "Activity", "label": "Render informasi toko (nama, tagline, alamat), nomor ID, waktu, kasir yang mencatat, rincian barang, total, dibayar, dan kembalian" },
+        { "type": "Decision", "label": "Decision: Apakah metode pembayaran QRIS & toko memiliki QRIS aktif?",
+          "branches": [
+            { "condition": "Ya", "next": "Render QR Code / gambar QRIS di bagian bawah struk" },
+            { "condition": "Tidak", "next": "Skip render QRIS" }
+          ]
+        },
+        { "type": "Activity", "label": "Pengguna menekan tombol 'Cetak Struk (Print)'" },
+        { "type": "Activity", "label": "Jalankan dialog print OS/Browser untuk pencetakan ke printer thermal" },
+        { "type": "End", "label": "End: Struk berhasil dicetak" }
+      ],
+      "validations": {
+        "frontend": "Memastikan objek transaksi valid sebelum merender dialog",
+        "backend": "Mengambil identitas warung terbaru dari store_profiles saat initial load/state"
+      },
+      "database_changes": {
+        "insert": "Tidak ada",
+        "update": "Tidak ada",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/components/tokomu/receipt-dialog.tsx"]
+    },
+    {
+      "name": "Tambah Produk",
+      "actor": "Kasir / Bendahara / Pimpinan",
+      "trigger": "Tombol 'Tambah Produk' pada halaman Inventaris diklik",
+      "precondition": "Pengguna berada di /inventaris",
+      "postcondition": "Produk baru tersimpan di tabel products dan siap dijual di POS",
+      "nodes": [
+        { "type": "Start", "label": "Start: Buka form Tambah Produk" },
+        { "type": "Activity", "label": "Input SKU, Nama, Kategori, Harga Beli, Harga Jual, Stok Awal, dan Batas Minimum" },
+        { "type": "Activity", "label": "Submit POST ke /api/products" },
+        { "type": "Decision", "label": "Decision: Validasi skema Zod (ProductCreateSchema)?",
+          "branches": [
+            { "condition": "Gagal", "next": "Tampilkan error validasi kolom (misal harga jual <= 0 atau nama kosong)" },
+            { "condition": "Sukses", "next": "Insert record ke tabel products & catat audit log PRODUCT_CREATED" }
+          ]
+        },
+        { "type": "Activity", "label": "Insert record ke tabel products & catat audit log PRODUCT_CREATED" },
+        { "type": "End", "label": "End: Produk baru muncul di katalog inventaris dan POS" }
+      ],
+      "validations": {
+        "frontend": "Nama produk wajib diisi, harga beli/jual dan stok harus angka >= 0",
+        "backend": "Validasi Zod ProductCreateSchema di src/lib/server/validation.ts"
+      },
+      "database_changes": {
+        "insert": "Tabel products (id, userId, sku, name, category, buyPrice, sellPrice, stock, minimumStock, description), tabel audit_logs",
+        "update": "Tidak ada",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/app-service.ts (createProduct)", "src/app/api/products/route.ts"]
+    },
+    {
+      "name": "Edit Produk",
+      "actor": "Kasir / Bendahara / Pimpinan",
+      "trigger": "Tombol 'Edit' pada tabel produk diklik",
+      "precondition": "Produk sudah ada di database dengan ID valid",
+      "postcondition": "Atribut produk diperbarui di tabel products",
+      "nodes": [
+        { "type": "Start", "label": "Start: Buka form Edit Produk" },
+        { "type": "Activity", "label": "Ubah data produk pada modal form (SKU, Harga, Stok, Kategori)" },
+        { "type": "Activity", "label": "Submit PUT ke /api/products/[id]" },
+        { "type": "Activity", "label": "Server memeriksa kepemilikan produk dan memvalidasi Zod ProductUpdateSchema" },
+        { "type": "Activity", "label": "Update tabel products dengan nilai baru & updatedAt" },
+        { "type": "Activity", "label": "Catat audit log PRODUCT_UPDATED" },
+        { "type": "End", "label": "End: Data produk diperbarui" }
+      ],
+      "validations": {
+        "frontend": "Semua field harga dan stok tidak boleh negatif",
+        "backend": "Memastikan productId milik userId/workspace yang sedang request sebelum melakukan update"
+      },
+      "database_changes": {
+        "insert": "Tabel audit_logs",
+        "update": "Tabel products (name, sku, category, buyPrice, sellPrice, stock, minimumStock, description, updatedAt)",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/app-service.ts (updateProduct)", "src/app/api/products/[id]/route.ts"]
+    },
+    {
+      "name": "Restok Manual",
+      "actor": "Kasir / Bendahara / Pimpinan",
+      "trigger": "Tombol 'Restok' pada baris tabel produk diklik",
+      "precondition": "Produk sudah ada di katalog",
+      "postcondition": "Stok bertambah dan riwayat restok tersimpan dengan source = 'manual'",
+      "nodes": [
+        { "type": "Start", "label": "Start: Buka modal Restok produk" },
+        { "type": "Activity", "label": "Input jumlah kuantitas tambahan stok (quantity > 0)" },
+        { "type": "Activity", "label": "Submit POST ke /api/restock dengan productId dan quantity" },
+        { "type": "Activity", "label": "Server memproses penambahan stok: stock = existing.stock + quantity" },
+        { "type": "Activity", "label": "Insert ke restock_logs dengan source = 'manual'" },
+        { "type": "Activity", "label": "Catat audit log PRODUCT_RESTOCKED" },
+        { "type": "End", "label": "End: Stok diperbarui" }
+      ],
+      "validations": {
+        "frontend": "Kuantitas restok harus angka bulat positif (> 0)",
+        "backend": "Zod RestockBodySchema memvalidasi quantity dan memastikan produk ada"
+      },
+      "database_changes": {
+        "insert": "Tabel restock_logs (id, workspaceOwnerId, productId, performedByUserId, source='manual', quantity, note), tabel audit_logs",
+        "update": "Tabel products (stock = stock + quantity, updatedAt)",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/app-service.ts (restockProduct)", "src/app/api/restock/route.ts"]
+    },
+    {
+      "name": "Restok OCR",
+      "actor": "Kasir / Bendahara / Pimpinan",
+      "trigger": "Tombol 'Scan / Upload Struk OCR' diklik pada modal restok/inventaris",
+      "precondition": "Pengguna memiliki file gambar struk (.jpg / .png)",
+      "postcondition": "Stok produk yang dicocokkan otomatis bertambah berdasarkan hasil parsing gambar Gemini",
+      "nodes": [
+        { "type": "Start", "label": "Start: Upload gambar struk ke /api/ai/scan-receipt" },
+        { "type": "Activity", "label": "Server memanggil Google Gemini Vision (gemini-2.5-flash / vision tool) dengan instruksi ekstraksi tabel belanja" },
+        { "type": "Decision", "label": "Decision: Apakah Gemini berhasil mengekstrak JSON struk (items dengan nama & qty)?",
+          "branches": [
+            { "condition": "Gagal / Gambar buram", "next": "Kembalikan error 'Gagal membaca struk. Pastikan gambar jelas.'" },
+            { "condition": "Sukses", "next": "Jalankan receipt-matcher.ts untuk mencocokkan nama item OCR dengan katalog produk di tabel products" }
+          ]
+        },
+        { "type": "Activity", "label": "Tampilkan tabel pratinjau (Preview) item hasil OCR dan produk yang cocok/kurang cocok di UI" },
+        { "type": "Activity", "label": "Pengguna memeriksa dan mengklik konfirmasi restok/input" },
+        { "type": "Activity", "label": "Server menambahkan stok untuk item konfirmasi & menyimpan restock_logs (source = 'ai_ocr')" },
+        { "type": "Activity", "label": "Catat audit log PRODUCT_RESTOCKED via OCR" },
+        { "type": "End", "label": "End: Stok diperbarui via AI OCR" }
+      ],
+      "validations": {
+        "frontend": "Ukuran gambar tidak melebihi batas upload dan bertipe image/*",
+        "backend": "Validasi struktur JSON kembalian dari model Gemini sebelum diparsing oleh receipt-matcher"
+      },
+      "database_changes": {
+        "insert": "Tabel restock_logs (source = 'ai_ocr', ocrRaw = hasil JSON vision, receiptImageUrl), tabel audit_logs",
+        "update": "Tabel products (stock = stock + quantity)",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/app/api/ai/scan-receipt/route.ts", "src/lib/server/ai/vision.ts", "src/lib/server/ai/receipt-matcher.ts"]
+    },
+    {
+      "name": "Restok AI Chat",
+      "actor": "Kasir / Bendahara / Pimpinan",
+      "trigger": "Perintah teks di panel AI Assistant (misal: 'Restok sabun mandi 15 pcs')",
+      "precondition": "Sesi chat AI terbuka dan produk yang dimaksud sudah ada di katalog",
+      "postcondition": "AI mengeksekusi tool calling server dan stok produk bertambah",
+      "nodes": [
+        { "type": "Start", "label": "Start: Pengguna mengirim pesan restok ke AI Assistant" },
+        { "type": "Activity", "label": "Server memproses pesan di /api/ai/chats/[id]/messages bersama daftar tools (restock_product_tool)" },
+        { "type": "Activity", "label": "Model Gemini memutuskan untuk memanggil function restock_product_tool(productId/search, quantity)" },
+        { "type": "Activity", "label": "Server menjalankan fungsi restockProduct di database" },
+        { "type": "Activity", "label": "Update tabel products dan simpan ke restock_logs (source = 'ai_chat')" },
+        { "type": "Activity", "label": "Simpan riwayat tool_calls dan tool_result ke tabel ai_messages" },
+        { "type": "Activity", "label": "AI merespons dengan konfirmasi teks ke pengguna" },
+        { "type": "End", "label": "End: Stok diperbarui via percakapan AI" }
+      ],
+      "validations": {
+        "frontend": "Input pesan tidak boleh kosong",
+        "backend": "Pengecekan di dalam tool handler apakah produk dengan nama/SKU tersebut ditemukan"
+      },
+      "database_changes": {
+        "insert": "Tabel ai_messages, tabel restock_logs (source = 'ai_chat'), tabel audit_logs",
+        "update": "Tabel products (stock = stock + quantity)",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/ai/tools.ts", "src/app/api/ai/chats/[id]/messages/route.ts"]
+    },
+    {
+      "name": "Pencatatan Hutang",
+      "actor": "Kasir / Bendahara / Pimpinan",
+      "trigger": "Tombol 'Kasbon Baru' diklik di halaman Buku Hutang (/buku-hutang)",
+      "precondition": "Pelanggan berbelanja dengan metode kasbon atau meminjam barang/uang",
+      "postcondition": "Data hutang tersimpan dengan status 'aktif'",
+      "nodes": [
+        { "type": "Start", "label": "Start: Buka modal form Kasbon Baru" },
+        { "type": "Activity", "label": "Input nama peminjam, nomor WhatsApp, tanggal jatuh tempo, serta item barang/nominal" },
+        { "type": "Activity", "label": "Submit POST ke /api/debts" },
+        { "type": "Decision", "label": "Decision: Apakah form memenuhi Zod DebtCreateSchema?",
+          "branches": [
+            { "condition": "Gagal", "next": "Tampilkan pesan error pada field yang tidak valid" },
+            { "condition": "Sukses", "next": "Hitung total amount dari item atau nominal langsung" }
+          ]
+        },
+        { "type": "Activity", "label": "Insert header hutang ke tabel debts (status = 'aktif', is_paid = 0, paid_amount = 0)" },
+        { "type": "Decision", "label": "Decision: Apakah ada rincian item barang?",
+          "branches": [
+            { "condition": "Ya", "next": "Insert rincian item ke tabel debt_items" },
+            { "condition": "Tidak", "next": "Skip insert debt_items" }
+          ]
+        },
+        { "type": "Activity", "label": "Catat audit log DEBT_CREATED" },
+        { "type": "End", "label": "End: Kasbon aktif tercatat" }
+      ],
+      "validations": {
+        "frontend": "Nama penghutang dan nomor WhatsApp wajib diisi, tanggal jatuh tempo tidak boleh kosong",
+        "backend": "Validasi Zod DebtCreateSchema di src/lib/server/validation.ts"
+      },
+      "database_changes": {
+        "insert": "Tabel debts (id, userId, borrowerName, whatsapp, amount, paidAmount, status='aktif', dueDate, isPaid=0), tabel debt_items, tabel audit_logs",
+        "update": "Tidak ada",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/app-service.ts (createDebt)", "src/app/api/debts/route.ts"]
+    },
+    {
+      "name": "Pembayaran Hutang",
+      "actor": "Kasir / Bendahara / Pimpinan",
+      "trigger": "Tombol 'Bayar / Cicil' atau 'Tandai Lunas' pada detail hutang diklik",
+      "precondition": "Hutang berstatus aktif atau lewat tempo (belum lunas)",
+      "postcondition": "Paid amount bertambah, riwayat pembayaran tercatat, dan jika lunas status berubah menjadi 'lunas'",
+      "nodes": [
+        { "type": "Start", "label": "Start: Klik tombol bayar pada detail hutang" },
+        { "type": "Activity", "label": "Input nominal cicilan bayar dan catatan (atau pilih bayar lunas penuh)" },
+        { "type": "Activity", "label": "Submit POST ke /api/debts/[id]/payments" },
+        { "type": "Decision", "label": "Decision: Apakah hutang saat ini sudah lunas sebelumnya?",
+          "branches": [
+            { "condition": "Ya (Sudah Lunas)", "next": "Tolak request & return error 'Kasbon sudah lunas'" },
+            { "condition": "Belum Lunas", "next": "Kalkulasi paymentAmount = min(inputAmount, sisaHutang)" }
+          ]
+        },
+        { "type": "Activity", "label": "Insert riwayat pembayaran ke tabel debt_payments" },
+        { "type": "Activity", "label": "Hitung nextPaidAmount = existing.paidAmount + paymentAmount" },
+        { "type": "Decision", "label": "Decision: Apakah nextPaidAmount >= existing.amount?",
+          "branches": [
+            { "condition": "Ya (Lunas)", "next": "Update debts dengan status = 'lunas' dan is_paid = 1" },
+            { "condition": "Tidak (Masih Cicil)", "next": "Update debts dengan paidAmount baru dan status = 'aktif' atau 'lewat_tempo'" }
+          ]
+        },
+        { "type": "Activity", "label": "Catat audit log DEBT_PAYMENT_RECORDED" },
+        { "type": "End", "label": "End: Pembayaran kasbon tersimpan" }
+      ],
+      "validations": {
+        "frontend": "Nominal pembayaran harus angka > 0 dan tidak melebih-lebihi batas yang tidak logis",
+        "backend": "Pengecekan status hutang dan sisa hutang (remaining) di dalam database transaction sebelum insert payment"
+      },
+      "database_changes": {
+        "insert": "Tabel debt_payments (id, debtId, amount, paidAt, note, recordedByUserId), tabel audit_logs",
+        "update": "Tabel debts (paidAmount, status, isPaid)",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/app-service.ts (recordDebtPayment, markDebtPaid)", "src/app/api/debts/[id]/payments/route.ts"]
+    },
+    {
+      "name": "Tambah Investor",
+      "actor": "Pimpinan / Bendahara / Kasir",
+      "trigger": "Tombol 'Tambah Investor' pada halaman /investor diklik",
+      "precondition": "Pengguna berada di halaman Investor",
+      "postcondition": "Data investor baru tersimpan dan pop-up dialog tertutup",
+      "nodes": [
+        { "type": "Start", "label": "Start: Tombol Tambah Investor diklik" },
+        { "type": "Activity", "label": "Buka overlay modal InvestorFormDialog di atas daftar investor (tanpa navigasi ke /investor/baru)" },
+        { "type": "Activity", "label": "Input Nama Investor, WhatsApp, Alamat, dan Catatan kerja sama" },
+        { "type": "Activity", "label": "Submit POST ke /api/investors" },
+        { "type": "Decision", "label": "Decision: Apakah input memenuhi validasi?",
+          "branches": [
+            { "condition": "Gagal", "next": "Tampilkan error pada form di dalam pop-up" },
+            { "condition": "Sukses", "next": "Insert record ke tabel investors dengan is_active = 1" }
+          ]
+        },
+        { "type": "Activity", "label": "Insert record ke tabel investors dengan is_active = 1" },
+        { "type": "Activity", "label": "Catat audit log INVESTOR_CREATED, tutup pop-up modal, dan refresh daftar investor" },
+        { "type": "End", "label": "End: Investor baru ditambahkan via pop-up" }
+      ],
+      "validations": {
+        "frontend": "Nama dan WhatsApp investor wajib diisi",
+        "backend": "Memastikan data bersih dan mengasosiasikan ke workspaceOwnerId yang aktif"
+      },
+      "database_changes": {
+        "insert": "Tabel investors (id, workspaceOwnerId, name, whatsapp, address, notes, isActive=1), tabel audit_logs",
+        "update": "Tidak ada",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/components/tokomu/investor-form-dialog.tsx", "src/app/(dashboard)/investor/page.tsx", "src/lib/server/investor-service.ts"]
+    },
+    {
+      "name": "Tambah Investasi Uang",
+      "actor": "Pimpinan / Bendahara",
+      "trigger": "Tombol 'Tambah Investasi' pada detail investor diklik dengan tipe 'uang'",
+      "precondition": "Investor sudah terdaftar",
+      "postcondition": "Akad investasi modal uang (murabahah/mudharabah) tersimpan di tabel investments",
+      "nodes": [
+        { "type": "Start", "label": "Start: Buka form Tambah Investasi tipe 'uang'" },
+        { "type": "Activity", "label": "Pilih tipe = 'uang', pilih akad_type (misal: murabahah_bil_wakalah / mudharabah), input nominal amount, dan persentase return bulanan (monthlyReturnRatePct)" },
+        { "type": "Activity", "label": "Submit POST ke /api/investments" },
+        { "type": "Activity", "label": "Server memvalidasi dan menyimpan ke tabel investments (type = 'uang', is_active = 1)" },
+        { "type": "Activity", "label": "Catat audit log INVESTMENT_CREATED" },
+        { "type": "End", "label": "End: Investasi uang tercatat" }
+      ],
+      "validations": {
+        "frontend": "Nominal amount dan return bulanan harus angka positif",
+        "backend": "Check constraint di tabel investments: type IN ('uang', 'barang_titip_jual') dan akad_type IN ('murabahah_bil_wakalah', ...)"
+      },
+      "database_changes": {
+        "insert": "Tabel investments (id, investorId, workspaceOwnerId, type='uang', akadType, amount, monthlyReturnRatePct, startDate, isActive=1), tabel audit_logs",
+        "update": "Tidak ada",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/investor-service.ts (createInvestment)", "src/app/api/investments/route.ts"]
+    },
+    {
+      "name": "Tambah Investasi Barang Titip Jual",
+      "actor": "Pimpinan / Bendahara",
+      "trigger": "Tombol 'Tambah Investasi' diklik dengan tipe 'barang_titip_jual' (Konsinyasi)",
+      "precondition": "Investor dan Produk yang akan dititipkan sudah terdaftar di katalog",
+      "postcondition": "Akad investasi konsinyasi tersimpan dan stok produk otomatis disesuaikan/bertambah sesuai unit yang dititipkan",
+      "nodes": [
+        { "type": "Start", "label": "Start: Pilih tipe 'barang_titip_jual' pada modal investasi" },
+        { "type": "Activity", "label": "Pilih produk terkait (productId), input jumlah unit titipan (unitCount), harga modal per unit (unitCost), dan persentase bagi hasil per unit (profitSharePerUnitPct)" },
+        { "type": "Activity", "label": "Submit POST ke /api/investments" },
+        { "type": "Activity", "label": "Server menyimpan akad ke tabel investments (type = 'barang_titip_jual', is_active = 1)" },
+        { "type": "Decision", "label": "Decision: Apakah unitCount > 0?",
+          "branches": [
+            { "condition": "Ya", "next": "Update stock produk di tabel products (stock = stock + unitCount) & catat restock_logs" },
+            { "condition": "Tidak", "next": "Skip penambahan stok produk" }
+          ]
+        },
+        { "type": "Activity", "label": "Catat audit log INVESTMENT_CREATED untuk barang titipan" },
+        { "type": "End", "label": "End: Barang titip jual masuk ke inventaris dan akad tercatat" }
+      ],
+      "validations": {
+        "frontend": "Produk wajib dipilih dari dropdown, jumlah unit dan bagi hasil tidak boleh kosong",
+        "backend": "Memastikan productId valid dan milik workspace saat ini sebelum mencatat titip jual"
+      },
+      "database_changes": {
+        "insert": "Tabel investments (type='barang_titip_jual', productId, unitCount, unitCost, profitSharePerUnitPct), tabel restock_logs, tabel audit_logs",
+        "update": "Tabel products (stock = stock + unitCount)",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/investor-service.ts (createInvestment)", "src/app/api/investments/route.ts"]
+    },
+    {
+      "name": "Perhitungan Bagi Hasil Investor",
+      "actor": "Pimpinan / Bendahara",
+      "trigger": "Tombol 'Hitung / Simpan Bagi Hasil' pada halaman /bagi-hasil diklik",
+      "precondition": "Periode tahun & bulan dipilih dan memiliki transaksi penjualan yang sudah terjadi",
+      "postcondition": "Porsi bagi hasil untuk setiap investasi terhitung dan tersimpan di tabel investor_payouts",
+      "nodes": [
+        { "type": "Start", "label": "Start: Pengguna membuka /bagi-hasil untuk bulan tertentu" },
+        { "type": "Activity", "label": "Server menghitung laba kotor, pengeluaran, dan laba bersih warung dari tabel transactions & expenses pada rentang waktu bulan tersebut" },
+        { "type": "Activity", "label": "Untuk investasi tipe 'uang': Hitung payout berdasarkan nominal modal * monthlyReturnRatePct" },
+        { "type": "Activity", "label": "Untuk investasi tipe 'barang_titip_jual': Hitung jumlah item produk yang terjual dari tabel transaction_items selama periode * profitSharePerUnitPct * unitPrice" },
+        { "type": "Activity", "label": "Pengguna menekan tombol Simpan Payout via POST /api/payouts" },
+        { "type": "Activity", "label": "Server menyimpan atau memperbarui record di tabel investor_payouts (baseProfit, sharePct, amount, status='draft')" },
+        { "type": "Decision", "label": "Decision: Apakah Pimpinan menyetujui / membayarkan payout?",
+          "branches": [
+            { "condition": "Setujui / Bayar", "next": "Update status menjadi 'dibayar' dan set paidAt = now" },
+            { "condition": "Simpan Draft", "next": "Biarkan status = 'draft' untuk dievaluasi ulang" }
+          ]
+        },
+        { "type": "Activity", "label": "Catat audit log PAYOUT_CREATED atau PAYOUT_UPDATED" },
+        { "type": "End", "label": "End: Bagi hasil investor selesai diproses" }
+      ],
+      "validations": {
+        "frontend": "Tahun dan bulan harus valid angka rentang waktu",
+        "backend": "Pencegahan duplikasi payout periode yang sama atau memastikan kalkulasi akurat dengan timestamp query"
+      },
+      "database_changes": {
+        "insert": "Tabel investor_payouts (id, investmentId, investorId, workspaceOwnerId, periodStart, periodEnd, baseProfit, sharePct, amount, status, note), tabel audit_logs",
+        "update": "Tabel investor_payouts (status, paidAt jika disetujui)",
+        "delete": "Payout draft lama jika dihitung ulang"
+      },
+      "files_involved": ["src/lib/server/profit-sharing.ts", "src/app/api/payouts/route.ts"]
+    },
+    {
+      "name": "Pencatatan Pengeluaran",
+      "actor": "Kasir / Bendahara / Pimpinan",
+      "trigger": "Tombol 'Catat Pengeluaran' diklik di UI",
+      "precondition": "Pengguna sudah login",
+      "postcondition": "Pengeluaran operasional tersimpan di tabel expenses dan mengurangi laba periode",
+      "nodes": [
+        { "type": "Start", "label": "Start: Buka form Catat Pengeluaran" },
+        { "type": "Activity", "label": "Input Judul/Keterangan, Nominal Amount, dan pilih Kategori (Operasional / Belanja / Utilitas)" },
+        { "type": "Activity", "label": "Submit POST ke /api/bootstrap atau endpoint pengeluaran" },
+        { "type": "Activity", "label": "Server menyimpan record ke tabel expenses dengan createdAt saat ini" },
+        { "type": "Activity", "label": "Catat audit log EXPENSE_CREATED" },
+        { "type": "End", "label": "End: Pengeluaran operasional tercatat" }
+      ],
+      "validations": {
+        "frontend": "Judul tidak boleh kosong dan nominal harus angka positif",
+        "backend": "Kategori dibatasi pada nilai enum: 'Operasional', 'Belanja', 'Utilitas'"
+      },
+      "database_changes": {
+        "insert": "Tabel expenses (id, userId, title, amount, category, createdAt), tabel audit_logs",
+        "update": "Tidak ada",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/app-service.ts (createExpense)"]
+    },
+    {
+      "name": "Penyusunan Laporan Bulanan",
+      "actor": "Bendahara / Pimpinan",
+      "trigger": "Tombol 'Simpan Draft Laporan' diklik di /laporan",
+      "precondition": "Periode tahun dan bulan dipilih dan perhitungan laba rugi sudah di-generate oleh server",
+      "postcondition": "Record rekap laporan tersimpan di tabel monthly_reports dengan status = 'draft'",
+      "nodes": [
+        { "type": "Start", "label": "Start: Pilih periode bulan di halaman Laporan" },
+        { "type": "Activity", "label": "Server mengagregasi data dari transactions, transaction_items, dan expenses" },
+        { "type": "Activity", "label": "Hitung omzet, HPP, laba kotor, total pengeluaran, dan laba bersih warung" },
+        { "type": "Activity", "label": "Pengguna menekan 'Simpan Draft Laporan'" },
+        { "type": "Activity", "label": "Submit POST ke /api/reports/monthly dengan struktur JSON data rekap" },
+        { "type": "Activity", "label": "Simpan atau update tabel monthly_reports (data = JSON rekap, status = 'draft')" },
+        { "type": "Activity", "label": "Catat audit log MONTHLY_REPORT_CREATED" },
+        { "type": "End", "label": "End: Draft laporan bulanan tersimpan" }
+      ],
+      "validations": {
+        "frontend": "Tahun dan bulan harus dipilih sebelum menyimpan",
+        "backend": "Membuat snapshot struktur JSON yang konsisten agar perhitungan draft tidak terpengaruh perubahan harga di masa depan"
+      },
+      "database_changes": {
+        "insert": "Tabel monthly_reports (id, workspaceOwnerId, periodYear, periodMonth, data, status='draft'), tabel audit_logs",
+        "update": "Tabel monthly_reports jika draft untuk bulan tersebut sudah pernah disimpan sebelumnya",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/reporting.ts", "src/app/api/reports/monthly/route.ts"]
+    },
+    {
+      "name": "Finalisasi Laporan PCM",
+      "actor": "Pimpinan / Bendahara",
+      "trigger": "Tombol 'Finalisasi / Kunci Laporan' pada halaman Laporan diklik",
+      "precondition": "Laporan berstatus 'draft' dan Pimpinan telah memverifikasi angka laba bersih serta bagi hasil PCM",
+      "postcondition": "Status laporan dikunci menjadi 'final' dan finalizedAt diisi timestamp saat ini",
+      "nodes": [
+        { "type": "Start", "label": "Start: Klik Finalisasi pada laporan bulanan" },
+        { "type": "Decision", "label": "Decision: Konfirmasi peringatan 'Laporan yang difinalisasi tidak dapat diubah lagi. Lanjutkan?'",
+          "branches": [
+            { "condition": "Batal", "next": "Tutup modal & batalkan finalisasi" },
+            { "condition": "Ya (Kunci)", "next": "Submit POST ke /api/reports/monthly/[id]/finalize" }
+          ]
+        },
+        { "type": "Activity", "label": "Server memvalidasi bahwa laporan ada dan belum difinalisasi sebelumnya" },
+        { "type": "Activity", "label": "Update tabel monthly_reports dengan status = 'final' dan finalizedAt = nowIso()" },
+        { "type": "Activity", "label": "Catat audit log MONTHLY_REPORT_FINALIZED" },
+        { "type": "End", "label": "End: Laporan resmi dikunci dan siap diunduh PDF PCM" }
+      ],
+      "validations": {
+        "frontend": "Konfirmasi modal ganda sebelum mengunci data keuangan",
+        "backend": "Pengecekan di reporting.ts memastikan laporan dengan ID tersebut ada dan berstatus draft sebelum di-finalisasi"
+      },
+      "database_changes": {
+        "insert": "Tabel audit_logs",
+        "update": "Tabel monthly_reports (status = 'final', finalizedAt = timestamp)",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/reporting.ts (finalizeMonthlyReport)", "src/app/api/reports/monthly/[id]/finalize/route.ts"]
+    },
+    {
+      "name": "Undangan Pengguna",
+      "actor": "Pimpinan",
+      "trigger": "Tombol 'Kirim Undangan' pada /pengaturan/karyawan diklik",
+      "precondition": "Pengguna login sebagai Pimpinan workspace",
+      "postcondition": "Token undangan tergenerate dan tersimpan di tabel invitations",
+      "nodes": [
+        { "type": "Start", "label": "Start: Buka form Undang Karyawan" },
+        { "type": "Activity", "label": "Input Email calon karyawan dan pilih Role ('pengelola_keuangan' / 'kasir')" },
+        { "type": "Activity", "label": "Submit POST ke /api/users/invite" },
+        { "type": "Activity", "label": "Server membuat token acak unik 32-64 karakter dan set expiresAt = 7 hari ke depan" },
+        { "type": "Activity", "label": "Simpan ke tabel invitations (status = 'pending', role, email, token, invitedByUserId)" },
+        { "type": "Activity", "label": "Catat audit log INVITATION_CREATED & kembalikan link/token undangan ke UI" },
+        { "type": "End", "label": "End: Undangan aktif dan menunggu penerimaan calon staf" }
+      ],
+      "validations": {
+        "frontend": "Email harus berformat valid dan role harus dipilih",
+        "backend": "Check constraint invitations_role_check: role IN ('pengelola_keuangan', 'kasir')"
+      },
+      "database_changes": {
+        "insert": "Tabel invitations (id, workspaceOwnerId, email, role, token, status='pending', invitedByUserId, expiresAt), tabel audit_logs",
+        "update": "Tidak ada",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/app/api/users/invite/route.ts", "src/app/api/users/invitations/accept/route.ts"]
+    },
+    {
+      "name": "Pengaturan Shift",
+      "actor": "Pimpinan / Bendahara",
+      "trigger": "Tombol 'Tambah Jadwal Shift' diklik di pengaturan shift",
+      "precondition": "Pengguna adalah Pimpinan atau Bendahara",
+      "postcondition": "Jadwal shift baru tersimpan di tabel shifts dan siap dipilih oleh kasir",
+      "nodes": [
+        { "type": "Start", "label": "Start: Buka form Tambah Shift" },
+        { "type": "Activity", "label": "Input Nama Shift (misal: Shift Pagi), Jam Mulai (07:00), dan Jam Selesai (15:00)" },
+        { "type": "Activity", "label": "Submit POST ke /api/shifts" },
+        { "type": "Activity", "label": "Server memvalidasi format jam dan insert ke tabel shifts dengan is_active = 1" },
+        { "type": "Activity", "label": "Catat audit log SHIFT_CREATED" },
+        { "type": "End", "label": "End: Jadwal shift aktif ditambahkan" }
+      ],
+      "validations": {
+        "frontend": "Nama dan jam shift wajib diisi lengkap",
+        "backend": "Memastikan shift diasosiasikan ke workspaceOwnerId aktif"
+      },
+      "database_changes": {
+        "insert": "Tabel shifts (id, workspaceOwnerId, name, startTime, endTime, isActive=1), tabel audit_logs",
+        "update": "Tidak ada",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/lib/server/shift-service.ts", "src/app/api/shifts/route.ts"]
+    },
+    {
+      "name": "Audit Log",
+      "actor": "Pimpinan / Bendahara / Kasir",
+      "trigger": "Pengguna membuka rute /pengaturan/audit-log atau memilih opsi filter",
+      "precondition": "Pengguna sudah login ke workspace",
+      "postcondition": "Daftar log aktivitas keamanan dan perubahan data ditampilkan sesuai filter dan paginasi",
+      "nodes": [
+        { "type": "Start", "label": "Start: Pengguna membuka /pengaturan/audit-log" },
+        { "type": "Activity", "label": "Client memanggil GET /api/audit-log/facets untuk mendapatkan daftar event_type dan aktor" },
+        { "type": "Activity", "label": "Client memanggil GET /api/audit-log?page=1&pageSize=25" },
+        { "type": "Activity", "label": "Server mengeksekusi query join antara audit_logs dan tabel user di database berdasarkan workspaceOwnerId" },
+        { "type": "Decision", "label": "Decision: Apakah pengguna memilih filter tambahan (q, eventType, actorUserId, start/end date)?",
+          "branches": [
+            { "condition": "Ya (Ada Filter)", "next": "Tambahkan kondisi where and() / ilike() pada query Drizzle" },
+            { "condition": "Tidak (Default)", "next": "Tampilkan 25 log terbaru diurutkan desc(createdAt)" }
+          ]
+        },
+        { "type": "Activity", "label": "Render tabel riwayat aktivitas dengan kolom waktu, aktor, event_type, entitas, dan opsi lihat detail JSON before/after" },
+        { "type": "End", "label": "End: Rekam jejak audit berhasil ditelaah" }
+      ],
+      "validations": {
+        "frontend": "Validasi parameter halaman dan batas rentang tanggal filter",
+        "backend": "Pengecekan workspaceOwnerId agar pengguna tidak dapat melihat log dari warung/workspace lain"
+      },
+      "database_changes": {
+        "insert": "Tidak ada (Hanya operasi SELECT read-only)",
+        "update": "Tidak ada",
+        "delete": "Tidak ada"
+      },
+      "files_involved": ["src/app/(dashboard)/pengaturan/audit-log/page.tsx", "src/lib/server/audit.ts", "src/app/api/audit-log/route.ts"]
+    }
+  ]
+}

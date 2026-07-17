@@ -1,0 +1,26 @@
+import spawn from 'cross-spawn';
+
+const envVars = {
+  "DATABASE_URL": "postgresql://postgres:0a8d012736ad8dabcd543d58c94fed1c@rnuh6nq3.us-east.database.insforge.app:5432/insforge?sslmode=require",
+  "BETTER_AUTH_SECRET": "MuZmPjxaAxALgft1g0Zr2YZXWK3FF9HRs3ESlXzsLP8=",
+  "BETTER_AUTH_URL": "https://rnuh6nq3.insforge.site",
+  "GEMINI_API_KEY": "sk-rG1iXdCmkaj9g6Nfkk4TllKbHIKlliF3qz6faEjRVksxjfYH",
+  "GEMINI_BASE_URL": "https://api.hcnsec.cn/v1",
+  "GEMINI_TEXT_MODEL": "DeepSeek-V4-Flash",
+  "GEMINI_FALLBACK_TEXT_MODEL": "DeepSeek-V4-Flash",
+  "GEMINI_FALLBACK_TEXT_MODEL_PINNED": "DeepSeek-V4-Flash",
+  "GEMINI_VISION_MODEL": "Kimi-K2.6",
+  "GEMINI_FALLBACK_VISION_MODEL": "Kimi-K2.6"
+};
+
+const jsonStr = JSON.stringify(envVars);
+
+console.log("Deploying with environment variables via cross-spawn...");
+
+const child = spawn('npx', ['@insforge/cli', 'deployments', 'deploy', '--env', jsonStr], {
+  stdio: 'inherit'
+});
+
+child.on('close', (code) => {
+  console.log(`Deployment exited with code ${code}`);
+});

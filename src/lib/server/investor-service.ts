@@ -676,3 +676,75 @@ export async function deactivateInvestment(workspaceOwnerId: string, id: string)
 
   return investment;
 }
+
+export async function createInvestmentBatch(
+  workspaceOwnerId: string,
+  investorId: string,
+  drafts: InvestmentDraft[]
+) {
+  const investor = await validateInvestorForInvestment(workspaceOwnerId, investorId);
+  if (drafts.length === 0) {
+    throw new Error("Daftar investasi tidak boleh kosong.");
+  }
+
+  const normalizedList = drafts.map((draft) => normalizeCreateInvestmentDraft(draft));
+  const timestamp = nowIso();
+
+  return db.transaction(async (tx) => {
+    const results = [];
+
+    for (const next of normalizedList) {
+      if (next.type === "barang_titip_jual") {
+        const [product] = await tx
+          .select()
+          .from(products)
+          .where(and(eq(products.userId, workspaceOwnerId), eq(products.id, next.productId)))
+          .limit(1);
+
+        if (!product) {
+          throw new Error(`Produk titipan tidak ditemukan di workspace ini.`);
+        }
+
+        await tx
+          .update(products)
+          .set({
+            stock: product.stock + next.unitCount,
+            updatedAt: timestamp,
+          })
+          .where(and(eq(products.userId, workspaceOwnerId), eq(products.id, next.productId)));
+
+        await tx.insert(restockLogs).values({
+          id: createId("rsl"),
+          workspaceOwnerId,
+          productId: next.productId,
+          performedByUserId: workspaceOwnerId,
+          source: "manual",
+          quantity: next.unitCount,
+          unitCost: next.unitCost,
+          receiptImageUrl: null,
+          ocrRaw: null,
+          note: `Modal barang massal investor ${investor.name}`,
+          createdAt: timestamp,
+        });
+      }
+
+      const [inserted] = await tx
+        .insert(investments)
+        .values({
+          id: createId("ivt"),
+          investorId,
+          workspaceOwnerId,
+          ...next,
+          isActive: 1,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
+        .returning();
+
+      results.push(inserted);
+    }
+
+    return results;
+  });
+}
+
