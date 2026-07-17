@@ -659,9 +659,7 @@ export function InvestmentForm({
                             onValueChange={(val) => updateBatchItem(idx, "scheme", val as ProfitScheme)}
                           >
                             <SelectTrigger className="h-10 w-28 shrink-0 rounded-xl text-xs font-medium bg-muted/50">
-                              <SelectValue>
-                                {item.scheme === "percentage" ? "Persentase" : item.scheme === "flat_nominal" ? "Rp Flat" : "Setoran"}
-                              </SelectValue>
+                              <SelectValue>Persentase</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="percentage">Persentase</SelectItem>
@@ -689,9 +687,7 @@ export function InvestmentForm({
                             onValueChange={(val) => updateBatchItem(idx, "scheme", val as ProfitScheme)}
                           >
                             <SelectTrigger className="h-10 w-28 shrink-0 rounded-xl text-xs font-medium bg-muted/50">
-                              <SelectValue>
-                                {item.scheme === "percentage" ? "Persentase" : item.scheme === "flat_nominal" ? "Rp Flat" : "Setoran"}
-                              </SelectValue>
+                              <SelectValue>Rp Flat</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="percentage">Persentase</SelectItem>
@@ -717,9 +713,7 @@ export function InvestmentForm({
                             onValueChange={(val) => updateBatchItem(idx, "scheme", val as ProfitScheme)}
                           >
                             <SelectTrigger className="h-10 flex-1 rounded-xl text-xs font-medium bg-primary/10 text-primary border-primary/20">
-                              <SelectValue>
-                                {item.scheme === "percentage" ? "Persentase" : item.scheme === "flat_nominal" ? "Rp Flat" : "Setoran Murni"}
-                              </SelectValue>
+                              <SelectValue>Setoran Murni</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="percentage">Persentase</SelectItem>
