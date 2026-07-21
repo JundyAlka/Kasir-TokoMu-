@@ -66,27 +66,27 @@ export function LaporanAsetView() {
           title="Total Modal Barang"
           value={formatCompactCurrency(summary.inventoryCapital)}
           description="Nilai beli total semua stok aktif."
-          isLoading={isLoading}
+
         />
         <StatCard
           title="Piutang Aktif"
           value={formatCompactCurrency(summary.activeReceivables)}
           description="Uang di luar dari tagihan pelanggan."
           tone="accent"
-          isLoading={isLoading}
+
         />
         <StatCard
           title="Modal Uang Investor"
           value={formatCompactCurrency(summary.investorMoneyCapital)}
           description="Total uang disuntikkan ke toko."
-          isLoading={isLoading}
+
         />
         <StatCard
           title="Modal Barang Titipan"
           value={formatCompactCurrency(summary.consignmentCapital)}
           description="Nilai beli dari produk konsinyasi."
           tone="warn"
-          isLoading={isLoading}
+
         />
       </section>
 
