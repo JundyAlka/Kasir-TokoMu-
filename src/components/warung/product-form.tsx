@@ -116,8 +116,9 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
             id="product-stock"
             type="number"
             min={0}
-            value={draft.stock}
+            value={draft.stock || ""}
             onChange={(event) => onChange({ ...draft, stock: Number(event.target.value) })}
+            placeholder="0"
             className="h-11 rounded-2xl"
           />
         </div>
@@ -132,8 +133,9 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
             id="product-buy-price"
             type="number"
             min={0}
-            value={draft.buyPrice}
+            value={draft.buyPrice || ""}
             onChange={(event) => onChange({ ...draft, buyPrice: Number(event.target.value) })}
+            placeholder="0"
             className="h-11 rounded-2xl"
           />
         </div>
@@ -145,8 +147,9 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
             id="product-sell-price"
             type="number"
             min={0}
-            value={draft.sellPrice}
+            value={draft.sellPrice || ""}
             onChange={(event) => onChange({ ...draft, sellPrice: Number(event.target.value) })}
+            placeholder="0"
             className="h-11 rounded-2xl"
           />
         </div>
@@ -161,8 +164,9 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
             id="product-minimum-stock"
             type="number"
             min={0}
-            value={draft.minimumStock}
+            value={draft.minimumStock || ""}
             onChange={(event) => onChange({ ...draft, minimumStock: Number(event.target.value) })}
+            placeholder="0"
             className="h-11 rounded-2xl"
           />
         </div>

@@ -200,7 +200,7 @@ function ProductCard({
         }
       }}
       className={cn(
-        "group relative flex min-h-[210px] min-w-0 flex-col justify-between rounded-[24px] border border-border bg-card p-[18px] sm:p-5 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-md cursor-pointer select-none overflow-hidden",
+        "group relative flex min-h-[210px] min-w-0 flex-col justify-between rounded-[24px] border border-border bg-card p-3.5 sm:p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-md cursor-pointer select-none overflow-hidden",
         product.stock <= 0 && "cursor-not-allowed opacity-55 hover:translate-y-0 hover:border-border hover:shadow-sm",
         lowStock && product.stock > 0 && "border-primary/35 bg-primary/5"
       )}
@@ -238,17 +238,17 @@ function ProductCard({
         )}
       </div>
 
-      <div className="flex items-end justify-between gap-1.5 w-full mt-auto pt-3 border-t border-border/40">
-        <div className="min-w-0 pr-1">
+      <div className="flex items-end justify-between gap-1 w-full mt-auto pt-3 border-t border-border/40">
+        <div className="min-w-0 flex-1 pr-1.5">
           <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
             {product.category}
           </p>
-          <p className="mt-0.5 font-bold text-foreground text-base tracking-tight tabular-nums whitespace-nowrap">
+          <p className="mt-0.5 truncate font-bold text-foreground text-sm sm:text-base tracking-tight tabular-nums" title={formatCurrency(product.sellPrice)}>
             {formatCurrency(product.sellPrice)}
           </p>
         </div>
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm transition-all duration-200 group-hover:scale-105 group-hover:bg-primary/90">
-          <Plus className="size-4.5" />
+        <div className="flex size-8 sm:size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-all duration-200 group-hover:scale-105 group-hover:bg-primary/90">
+          <Plus className="size-3.5 sm:size-4" />
         </div>
       </div>
     </div>
@@ -726,9 +726,9 @@ export function KasirView() {
     <div
       ref={workspaceRef}
       className={cn(
-        "grid gap-4 min-h-[calc(100vh-1.5rem)]",
+        "grid gap-4 h-full max-h-full overflow-hidden",
         shouldStackCheckout
-          ? "grid-cols-1"
+          ? "grid-cols-1 auto-rows-min overflow-auto"
           : "grid-cols-[minmax(200px,1fr)_minmax(300px,350px)] md:grid-cols-[minmax(0,1fr)_minmax(350px,390px)] xl:grid-cols-[minmax(0,1fr)_minmax(390px,440px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(440px,0.76fr)]"
       )}
     >
@@ -768,8 +768,8 @@ export function KasirView() {
           });
         }}
       />
-      <div ref={productColumnRef} className="min-w-0 flex flex-col h-full">
-        <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] flex flex-col h-full">
+      <div ref={productColumnRef} className="min-w-0 min-h-0 flex flex-col overflow-hidden">
+        <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] flex flex-col flex-1 overflow-hidden">
           <CardHeader
             className={cn(
               "flex flex-col gap-4",
@@ -817,7 +817,7 @@ export function KasirView() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-y-auto custom-scrollbar">
             {filteredProducts.length > 0 ? (
               <div
                 className={cn(
@@ -860,11 +860,11 @@ export function KasirView() {
         </Card>
       </div>
 
-      <div className="min-w-0 flex flex-col h-full">
+      <div className="min-w-0 min-h-0 flex flex-col overflow-hidden">
         <Card
           className={cn(
-            "glass-panel border-border/60 shadow-[0_28px_70px_-48px_rgba(66,38,20,0.6)] flex flex-col justify-between h-full overflow-hidden",
-            !shouldStackCheckout && "sticky top-4 h-[calc(100vh-1.5rem)]"
+            "glass-panel border-border/60 shadow-[0_28px_70px_-48px_rgba(66,38,20,0.6)] flex flex-col flex-1 overflow-hidden",
+            !shouldStackCheckout && "sticky top-0"
           )}
         >
           <CardHeader className="shrink-0">
@@ -876,11 +876,13 @@ export function KasirView() {
               <Badge className="rounded-full bg-foreground text-background">{cartLines.length} item</Badge>
             </div>
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col justify-between space-y-4 sm:space-y-5 p-4 sm:p-5 min-h-0 overflow-y-auto custom-scrollbar">
+          <CardContent className="flex-1 flex flex-col p-0 min-h-0 overflow-hidden">
+            {/* Scrollable middle: cart items + payment options */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 sm:space-y-4 p-4 sm:p-5 min-h-0">
             <div
               className={cn(
-                "rounded-[24px] border border-border bg-background/25 p-3 sm:p-3.5 shadow-inner dark:bg-black/15 transition-all shrink-0 min-h-[160px] lg:min-h-[300px] xl:min-h-[380px] flex flex-col",
-                cartLines.length === 0 ? "justify-center items-center text-center" : "justify-start"
+                "rounded-[24px] border border-border bg-background/25 p-3 sm:p-3.5 shadow-inner dark:bg-black/15 transition-all min-h-[80px] flex flex-col overflow-y-auto custom-scrollbar",
+                cartLines.length === 0 ? "justify-center items-center text-center flex-1" : "justify-start"
               )}
             >
               {cartLines.length > 0 ? (
@@ -1059,30 +1061,31 @@ export function KasirView() {
                 </div>
               </div>
             ) : null}
+            </div>
 
-            <div className="rounded-[20px] lg:rounded-[24px] border border-border bg-card p-3 sm:p-3.5 lg:px-5 lg:py-5 text-card-foreground shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] dark:bg-muted/30 shrink-0">
+            {/* Fixed bottom: total + checkout - always visible */}
+            <div className="shrink-0 border-t border-border/40 p-3 sm:p-4 lg:px-5 lg:py-4">
+              <div className="rounded-[20px] lg:rounded-[24px] border border-border bg-card p-3 sm:p-3.5 lg:px-5 lg:py-4 text-card-foreground shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] dark:bg-muted/30">
               <div className="flex items-center justify-between text-xs sm:text-sm text-muted-foreground">
                 <span className="font-medium">Total tagihan</span>
                 <Badge variant="outline" className="rounded-full bg-background px-2.5 py-0.5 font-semibold text-xs border-border/60">
                   {totalItems} pcs
                 </Badge>
               </div>
-              <p className="mt-1 lg:mt-2 font-heading text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-primary tabular-nums">
+              <p className="mt-1 font-heading text-xl sm:text-2xl font-bold tracking-tight text-primary tabular-nums">
                 {formatCurrency(cartTotal)}
               </p>
               {showQrisPreview ? <QrisPaymentPreview items={cartLines} total={cartTotal} settings={settings} /> : null}
               <Button
                 type="button"
                 size="lg"
-                className="mt-2 sm:mt-3 lg:mt-4 h-10 sm:h-11 lg:h-13 w-full rounded-xl lg:rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-sm sm:text-base shadow-md"
+                className="mt-2 sm:mt-3 h-10 sm:h-11 lg:h-12 w-full rounded-xl lg:rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-sm sm:text-base shadow-md"
                 disabled={!canCheckout}
                 onClick={() => void handleCheckout()}
               >
                 Selesaikan transaksi
               </Button>
-              <p className="mt-1.5 lg:mt-3 text-[11px] lg:text-sm text-muted-foreground hidden sm:block lg:block">
-                Checkout akan mengurangi stok dan menyimpan transaksi ke laporan.
-              </p>
+              </div>
             </div>
           </CardContent>
         </Card>

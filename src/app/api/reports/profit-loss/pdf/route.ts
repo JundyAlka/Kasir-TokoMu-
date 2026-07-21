@@ -7,8 +7,8 @@ import {
   ProfitLossReportDocument,
   ProfitLossPdfData,
 } from "@/lib/server/pdf-profit-loss";
-import { calculatePeriodProfit } from "@/lib/server/profit-sharing";
-import { getPeriodRange, getTopProductsForPeriod } from "@/lib/server/reporting";
+import { calculatePayouts } from "@/lib/server/profit-sharing";
+import { getPeriodRange, getTopProductsForPeriod, getBottomProductsForPeriod } from "@/lib/server/reporting";
 import { handleRouteError } from "@/lib/server/route-error";
 import { requireRole } from "@/lib/server/rbac";
 import { JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
@@ -90,10 +90,11 @@ export async function GET(request: Request) {
       .where(eq(storeProfiles.userId, workspaceOwnerId))
       .limit(1);
 
-    const [summary, expenseCategories, topProducts] = await Promise.all([
-      calculatePeriodProfit(workspaceOwnerId, period.range.start, period.range.end),
+    const [summary, expenseCategories, topProducts, bottomProducts] = await Promise.all([
+      calculatePayouts(workspaceOwnerId, period.range.start, period.range.end),
       getExpenseCategories(workspaceOwnerId, period.range.start, period.range.end),
       getTopProductsForPeriod(workspaceOwnerId, period.range.start, period.range.end, 5),
+      getBottomProductsForPeriod(workspaceOwnerId, period.range.start, period.range.end, 5),
     ]);
     const ownerNotes =
       requestedNotes.length > 0
@@ -101,7 +102,7 @@ export async function GET(request: Request) {
         : [
             `Laba bersih ${period.label} tercatat ${formatCurrency(summary.netProfit)}.`,
             `Laba kotor ${formatCurrency(summary.grossProfit)} setelah HPP ${formatCurrency(summary.cogs)}.`,
-            "Data laporan ini memakai API /api/reports/profit-loss yang sama dengan basis perhitungan bagi hasil.",
+            "Laporan divalidasi dan dicetak secara otomatis dari sistem.",
           ];
 
     const data: ProfitLossPdfData = {
@@ -128,7 +129,9 @@ export async function GET(request: Request) {
       },
       expenseCategories,
       topProducts,
+      bottomProducts,
       ownerNotes,
+      payouts: summary.payouts,
     };
     const stream = await renderToStream(ProfitLossReportDocument({ data }));
     const filename = `laporan-untung-rugi-${cleanFilename(period.label)}.pdf`;

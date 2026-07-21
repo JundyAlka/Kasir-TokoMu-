@@ -184,6 +184,7 @@ export function BagiHasilClient() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLivePreview, setIsLivePreview] = useState(false);
+  const [calculatedAt, setCalculatedAt] = useState<Date | null>(null);
 
   const periodPayload = useMemo(() => parseMonthValue(period), [period]);
   const hasSavedDraft = savedRows.length > 0;
@@ -219,7 +220,10 @@ export function BagiHasilClient() {
       .then(([savedData, calcData, historyData]) => {
         if (!mounted) return;
         setSavedRows(savedData.payouts);
-        if (calcData) setCalculation(calcData.calculation);
+        if (calcData) {
+          setCalculation(calcData.calculation);
+          setCalculatedAt(new Date());
+        }
         setHistoryRows(historyData.payouts);
       })
       .finally(() => {
@@ -245,6 +249,7 @@ export function BagiHasilClient() {
         body: JSON.stringify(periodPayload),
       });
       setCalculation(data.calculation);
+      setCalculatedAt(new Date());
       setIsLivePreview(true);
       toast.success(
         existing.length > 0
@@ -309,6 +314,7 @@ export function BagiHasilClient() {
                   setPeriod(value || "");
                   setIsLivePreview(false);
                   setCalculation(null);
+                  setCalculatedAt(null);
                   setSavedRows([]);
                 }}
               >
@@ -391,12 +397,19 @@ export function BagiHasilClient() {
                 ? `Draft payout tersimpan (${selectedMonthLabel})`
                 : `Preview payout (${selectedMonthLabel})`}
             </CardTitle>
-            <CardDescription>
-              {showLive && calculation && !hasSavedDraft
-                ? "Preview bagi hasil bersifat dinamis. Anda dapat menghitung ulang simulasi dan menyimpannya ke draft kapan saja sesuai kebutuhan pengambilan payout."
-                : hasSavedDraft && !isLivePreview
-                ? "Periode ini sudah tersimpan dalam draft. Anda tetap dapat menghitung ulang simulasi terbaru atau mengelola status per baris."
-                : "Menampilkan simulasi preview live terbaru untuk periode ini. Jika ada perubahan transaksi, nilai ini mengikuti data terkini."}
+            <CardDescription className="flex flex-col gap-2">
+              <span>
+                {showLive && calculation && !hasSavedDraft
+                  ? "Preview bagi hasil bersifat dinamis. Anda dapat menghitung ulang simulasi dan menyimpannya ke draft kapan saja sesuai kebutuhan pengambilan payout."
+                  : hasSavedDraft && !isLivePreview
+                  ? "Periode ini sudah tersimpan dalam draft. Anda tetap dapat menghitung ulang simulasi terbaru atau mengelola status per baris."
+                  : "Menampilkan simulasi preview live terbaru untuk periode ini. Jika ada perubahan transaksi, nilai ini mengikuti data terkini."}
+              </span>
+              {showLive && calculation && calculatedAt ? (
+                <span className="inline-flex w-fit items-center rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                  Dihitung pada: {new Intl.DateTimeFormat("id-ID", { dateStyle: "full", timeStyle: "short" }).format(calculatedAt)}
+                </span>
+              ) : null}
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">

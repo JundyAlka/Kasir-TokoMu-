@@ -19,7 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { cn } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
-const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/*";
+const IMAGE_ACCEPT = "image/*";
 const SUPPORTED_IMAGE_EXTENSIONS = /\.(png|jpe?g|webp)$/i;
 type VideoFacingMode = "environment" | "user";
 

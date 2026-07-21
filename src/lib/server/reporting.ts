@@ -566,3 +566,101 @@ export async function getKasbonDetail(
 
   return { totalOutstanding, debtorCount, nearestDue, overdueCount, overdueAmount, topDebtors };
 }
+
+export type AssetCapitalSummary = {
+  inventoryCapital: number;
+  activeReceivables: number;
+  investorMoneyCapital: number;
+  consignmentCapital: number;
+};
+
+export async function getAssetCapitalSummary(workspaceOwnerId: string): Promise<AssetCapitalSummary> {
+  const inventoryResult = await pool.query<{ inventoryCapital: string }>(
+    `
+    select coalesce(sum(stock * buy_price), 0)::text as "inventoryCapital"
+    from products
+    where user_id = $1 and stock > 0
+    `,
+    [workspaceOwnerId]
+  );
+
+  const debtsResult = await pool.query<{ activeReceivables: string }>(
+    `
+    select coalesce(sum(amount - paid_amount), 0)::text as "activeReceivables"
+    from debts
+    where user_id = $1 and is_paid = 0
+    `,
+    [workspaceOwnerId]
+  );
+
+  const investmentsResult = await pool.query<{ 
+    investorMoneyCapital: string;
+    consignmentCapital: string;
+  }>(
+    `
+    select 
+      coalesce(sum(case when type = 'uang' then amount else 0 end), 0)::text as "investorMoneyCapital",
+      coalesce(sum(case when type = 'barang_titip_jual' then unit_count * unit_cost else 0 end), 0)::text as "consignmentCapital"
+    from investments
+    where workspace_owner_id = $1 and is_active = 1
+    `,
+    [workspaceOwnerId]
+  );
+
+  return {
+    inventoryCapital: Number(inventoryResult.rows[0]?.inventoryCapital ?? 0),
+    activeReceivables: Number(debtsResult.rows[0]?.activeReceivables ?? 0),
+    investorMoneyCapital: Number(investmentsResult.rows[0]?.investorMoneyCapital ?? 0),
+    consignmentCapital: Number(investmentsResult.rows[0]?.consignmentCapital ?? 0),
+  };
+}
+
+export async function getBottomProductsForPeriod(
+  workspaceOwnerId: string,
+  periodStart: string,
+  periodEnd: string,
+  limit = 5
+) {
+  const result = await pool.query<{
+    productId: string;
+    name: string;
+    sold: number;
+    revenue: number;
+  }>(
+    `
+      select
+        p.id as "productId",
+        p.name as name,
+        coalesce(sum(ti.quantity), 0)::int as sold,
+        coalesce(sum(ti.quantity * ti.unit_price), 0)::int as revenue
+      from products p
+      left join transaction_items ti on ti.product_id = p.id
+      left join transactions t on t.id = ti.transaction_id
+        and t.created_at >= $2::timestamptz
+        and t.created_at < $3::timestamptz
+      where p.user_id = $1
+      group by p.id, p.name
+      order by sold asc, revenue asc
+      limit $4
+    `,
+    [workspaceOwnerId, periodStart, periodEnd, limit]
+  );
+
+  return result.rows;
+}
+
+export async function getInvestorNotes(workspaceOwnerId: string) {
+  const result = await pool.query<{
+    name: string;
+    notes: string;
+  }>(
+    `
+      select name, notes
+      from investors
+      where workspace_owner_id = $1 and notes != ''
+    `,
+    [workspaceOwnerId]
+  );
+
+  return result.rows;
+}

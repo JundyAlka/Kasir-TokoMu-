@@ -38,7 +38,18 @@ export type ProfitLossPdfData = {
     sold: number;
     revenue: number;
   }>;
+  bottomProducts: Array<{
+    productId: string;
+    name: string;
+    sold: number;
+    revenue: number;
+  }>;
   ownerNotes: string[];
+  payouts: Array<{
+    investorName: string;
+    amount: number;
+    note: string;
+  }>;
 };
 
 const styles = StyleSheet.create({
@@ -333,6 +344,54 @@ export function ProfitLossReportDocument({
               ))
             ) : (
               <EmptyRow text="Belum ada penjualan produk pada periode ini." />
+            )}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Evaluasi Produk (Kurang Diminati)</Text>
+          <View style={styles.table}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.cell, styles.headCell, col("50%")]}>Produk</Text>
+              <Text style={[styles.cell, styles.headCell, styles.right, col("20%")]}>Terjual</Text>
+              <Text style={[styles.cell, styles.headCell, styles.lastCell, styles.right, col("30%")]}>Omzet</Text>
+            </View>
+            {data.bottomProducts && data.bottomProducts.length > 0 ? (
+              data.bottomProducts.map((product) => (
+                <View key={product.productId} style={styles.tableRow}>
+                  <Text style={[styles.cell, col("50%")]}>{product.name}</Text>
+                  <Text style={[styles.cell, styles.right, col("20%")]}>{product.sold}</Text>
+                  <Text style={[styles.cell, styles.lastCell, styles.right, col("30%")]}>
+                    {formatCurrency(product.revenue)}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <EmptyRow text="Semua produk memiliki tingkat penjualan yang baik." />
+            )}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Pembagian Hasil Investor</Text>
+          <View style={styles.table}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.cell, styles.headCell, col("30%")]}>Investor</Text>
+              <Text style={[styles.cell, styles.headCell, col("45%")]}>Keterangan</Text>
+              <Text style={[styles.cell, styles.headCell, styles.lastCell, styles.right, col("25%")]}>Bagi Hasil</Text>
+            </View>
+            {data.payouts && data.payouts.length > 0 ? (
+              data.payouts.map((payout, index) => (
+                <View key={index} style={styles.tableRow}>
+                  <Text style={[styles.cell, col("30%")]}>{payout.investorName}</Text>
+                  <Text style={[styles.cell, col("45%")]}>{payout.note}</Text>
+                  <Text style={[styles.cell, styles.lastCell, styles.right, col("25%")]}>
+                    {formatCurrency(payout.amount)}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <EmptyRow text="Belum ada data bagi hasil investor pada periode ini." />
             )}
           </View>
         </View>

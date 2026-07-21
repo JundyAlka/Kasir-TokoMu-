@@ -465,12 +465,15 @@ export function MonthlyReportPreview() {
           </CardHeader>
           <CardContent className="min-h-0">
             {previewUrl ? (
-              <div className="h-[clamp(520px,72dvh,900px)] overflow-hidden rounded-lg border bg-background">
+              <div className="flex h-[clamp(520px,72dvh,900px)] flex-col overflow-hidden rounded-lg border bg-background">
+                <div className="bg-muted/50 px-3 py-2 text-center text-xs text-muted-foreground border-b border-border/60">
+                  Preview mungkin tidak muncul di tablet/kiosk. Klik tombol <strong>PDF</strong> untuk mengunduh dokumen.
+                </div>
                 <iframe
                   key={previewUrl}
                   title="Preview laporan PCM"
                   src={`${previewUrl}#toolbar=1&navpanes=0&scrollbar=1&view=FitH`}
-                  className="block h-full w-full touch-pan-y bg-background"
+                  className="block flex-1 w-full touch-pan-y bg-background"
                 />
               </div>
             ) : (

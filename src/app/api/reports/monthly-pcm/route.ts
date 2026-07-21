@@ -5,7 +5,10 @@ import { monthlyReports, storeProfiles } from "@/db/schema";
 import { getRequestUser } from "@/lib/server/app-service";
 import { logEvent } from "@/lib/server/audit";
 import { calculatePayouts } from "@/lib/server/profit-sharing";
-import { getPeriodRange, getTopProductsForPeriod } from "@/lib/server/reporting";
+import {
+  getPeriodRange,
+  getTopProductsForPeriod,
+} from "@/lib/server/reporting";
 import { handleRouteError } from "@/lib/server/route-error";
 import { requireRole } from "@/lib/server/rbac";
 import { PcmMonthlyReportData } from "@/lib/server/pdf-pcm";

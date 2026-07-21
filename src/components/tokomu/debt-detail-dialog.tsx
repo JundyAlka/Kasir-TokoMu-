@@ -35,9 +35,13 @@ async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T
       ...(init?.headers ?? {}),
     },
   });
-  const data = (await response.json().catch(() => null)) as T & { error?: string } | null;
+  const data = (await response.json().catch(() => null)) as T & { error?: string | { issues?: { message: string }[] } } | null;
 
   if (!response.ok) {
+    if (data?.error && typeof data.error === "object" && Array.isArray(data.error.issues)) {
+      const issueMessage = data.error.issues.map((i) => i.message).join(", ");
+      throw new Error(issueMessage || "Permintaan gagal karena data tidak valid.");
+    }
     throw new Error(typeof data?.error === "string" ? data.error : "Permintaan gagal.");
   }
 

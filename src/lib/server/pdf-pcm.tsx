@@ -364,7 +364,7 @@ export function PcmMonthlyReportDocument({
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>5. Catatan</Text>
+          <Text style={styles.sectionTitle}>5. Catatan Tambahan Laporan</Text>
           <Text style={styles.note}>{data.note || "Tidak ada catatan tambahan."}</Text>
         </View>
 

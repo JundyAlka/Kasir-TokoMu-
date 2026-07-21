@@ -649,7 +649,7 @@ export function LaporanView() {
     () => [
       `Laba bersih ${periodLabel} tercatat ${formatCurrency(summary.netProfit)}.`,
       `Laba kotor ${formatCurrency(summary.grossProfit)} setelah HPP ${formatCurrency(summary.cogs)}.`,
-      "Data laporan ini memakai API /api/reports/profit-loss yang sama dengan basis perhitungan bagi hasil.",
+      "Catatan restock/pesanan: (isi pesanan pelanggan atau produk yang perlu direstock)",
     ],
     [periodLabel, summary.cogs, summary.grossProfit, summary.netProfit]
   );
@@ -1070,27 +1070,27 @@ export function LaporanView() {
       />
 
       <Dialog open={isPdfPreviewOpen} onOpenChange={setIsPdfPreviewOpen}>
-        <DialogContent className="max-h-[94vh] w-[min(1280px,calc(100vw-2rem))] !max-w-none overflow-hidden rounded-[28px] p-0 sm:!max-w-none">
-          <DialogHeader className="border-b border-border/70 px-5 py-4 pr-14">
+        <DialogContent className="flex max-h-[94vh] flex-col w-[min(1280px,calc(100vw-2rem))] !max-w-none overflow-hidden rounded-[28px] p-0 sm:!max-w-none">
+          <DialogHeader className="shrink-0 border-b border-border/70 px-5 py-4 pr-14">
             <DialogTitle>Preview PDF laporan</DialogTitle>
             <DialogDescription>
               Pratinjau memakai data periode {periodLabel}. Gunakan tombol Cetak PDF jika ingin mengunduh dokumen.
             </DialogDescription>
           </DialogHeader>
-          <div className="bg-muted/35 p-3 sm:p-5">
-            <div className="overflow-hidden rounded-[20px] border border-border/70 bg-background shadow-inner">
+          <div className="flex-1 overflow-auto bg-muted/35 p-3 sm:p-5">
+            <div className="flex h-full min-h-[60vh] flex-col overflow-hidden rounded-[20px] border border-border/70 bg-background shadow-inner">
               {isPdfPreviewOpen ? (
                 <iframe
                   title={`Preview PDF laporan ${periodLabel}`}
                   src={`${buildReportPdfUrl()}#view=FitH&toolbar=1&navpanes=0`}
-                  className="h-[76vh] min-h-[560px] w-full bg-background"
+                  className="flex-1 h-full w-full bg-background"
                 />
               ) : null}
             </div>
           </div>
-          <div className="flex flex-col gap-2 border-t border-border/70 bg-card/95 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="shrink-0 flex flex-col gap-2 border-t border-border/70 bg-card/95 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              Preview ditampilkan inline agar tidak otomatis mengunduh file.
+              Preview ditampilkan inline. Jika tidak muncul (di Kiosk/Tablet), klik tombol Cetak PDF.
             </p>
             <Button type="button" className="rounded-full" onClick={handleDownloadPdf}>
               <Download className="size-4" />
