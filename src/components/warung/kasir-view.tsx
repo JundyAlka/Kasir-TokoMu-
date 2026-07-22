@@ -200,7 +200,7 @@ function ProductCard({
         }
       }}
       className={cn(
-        "group relative flex min-h-[210px] min-w-0 flex-col justify-between rounded-[24px] border border-border bg-card p-3.5 sm:p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-md cursor-pointer select-none overflow-hidden",
+        "group relative flex min-h-[190px] xl:min-h-[210px] min-w-0 flex-col justify-between rounded-[24px] border border-border bg-card p-2.5 xl:p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-md cursor-pointer select-none overflow-hidden",
         product.stock <= 0 && "cursor-not-allowed opacity-55 hover:translate-y-0 hover:border-border hover:shadow-sm",
         lowStock && product.stock > 0 && "border-primary/35 bg-primary/5"
       )}
@@ -213,7 +213,7 @@ function ProductCard({
             onDetail?.();
           }}
           title={`Lihat detail ${product.name} (${product.category})`}
-          className="flex size-9 shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-muted/60 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          className="flex size-8 xl:size-9 shrink-0 items-center justify-center rounded-xl xl:rounded-2xl border border-border/60 bg-muted/60 text-muted-foreground transition hover:bg-muted hover:text-foreground"
         >
           <ProductCategoryIcon category={product.category} />
         </button>
@@ -228,27 +228,27 @@ function ProductCard({
       </div>
 
       <div className="min-w-0 space-y-1.5 my-3.5 w-full">
-        <p className="line-clamp-3 break-words font-heading text-base font-bold leading-snug text-foreground group-hover:text-primary transition-colors">
+        <p className="line-clamp-3 break-words font-heading text-sm xl:text-base font-bold leading-snug text-foreground group-hover:text-primary transition-colors">
           {product.name}
         </p>
         {product.description && (
-          <p className="line-clamp-3 break-words text-xs sm:text-[13px] leading-relaxed text-muted-foreground">
+          <p className="line-clamp-3 break-words text-[11px] xl:text-xs leading-relaxed text-muted-foreground">
             {product.description}
           </p>
         )}
       </div>
 
-      <div className="flex items-end justify-between gap-1 w-full mt-auto pt-3 border-t border-border/40">
-        <div className="min-w-0 flex-1 pr-1.5">
-          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
+      <div className="flex items-end justify-between gap-0.5 w-full mt-auto pt-3 border-t border-border/40">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[9px] xl:text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
             {product.category}
           </p>
-          <p className="mt-0.5 truncate font-bold text-foreground text-sm sm:text-base tracking-tight tabular-nums" title={formatCurrency(product.sellPrice)}>
+          <p className="mt-0.5 truncate font-bold text-foreground text-[13px] xl:text-sm tracking-tight tabular-nums" title={formatCurrency(product.sellPrice)}>
             {formatCurrency(product.sellPrice)}
           </p>
         </div>
-        <div className="flex size-8 sm:size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-all duration-200 group-hover:scale-105 group-hover:bg-primary/90">
-          <Plus className="size-3.5 sm:size-4" />
+        <div className="flex size-7 xl:size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-all duration-200 group-hover:scale-105 group-hover:bg-primary/90">
+          <Plus className="size-3.5" />
         </div>
       </div>
     </div>
@@ -641,15 +641,15 @@ export function KasirView() {
   const changeAmount = isCashPayment ? Math.max(0, paidAmount - cartTotal) : 0;
   const hasMeasuredWorkspace = workspaceWidth > 0;
   const shouldStackCheckout = hasMeasuredWorkspace && workspaceWidth < 560;
-  const isProductHeaderCompact = productColumnWidth > 0 && productColumnWidth < 600;
+  const isProductHeaderCompact = productColumnWidth === 0 || productColumnWidth < 720;
   const productGridClass =
     productColumnWidth === 0
       ? "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-4"
-      : productColumnWidth < 280
+      : productColumnWidth < 240
         ? "grid-cols-1"
-        : productColumnWidth < 420
+        : productColumnWidth < 350
           ? "grid-cols-2"
-          : productColumnWidth < 740
+          : productColumnWidth < 720
             ? "grid-cols-3"
             : "grid-cols-4";
   const canCheckout =
@@ -729,7 +729,7 @@ export function KasirView() {
         "grid gap-4 h-full max-h-full overflow-hidden",
         shouldStackCheckout
           ? "grid-cols-1 auto-rows-min overflow-auto"
-          : "grid-cols-[minmax(200px,1fr)_minmax(300px,350px)] md:grid-cols-[minmax(0,1fr)_minmax(350px,390px)] xl:grid-cols-[minmax(0,1fr)_minmax(390px,440px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(440px,0.76fr)]"
+          : "grid-cols-[minmax(200px,1fr)_minmax(300px,340px)] md:grid-cols-[minmax(0,1fr)_minmax(300px,340px)] xl:grid-cols-[minmax(0,1fr)_minmax(340px,390px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(390px,0.76fr)]"
       )}
     >
       {shiftBannerName ? (
