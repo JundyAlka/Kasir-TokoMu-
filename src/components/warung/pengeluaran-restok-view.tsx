@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatCurrency } from "@/lib/format";
+import { StatCard } from "@/components/stat-card";
+import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 
 type RestockPlan = {
   id: string;
@@ -242,6 +243,13 @@ export function PengeluaranRestokView() {
     }
   }
 
+  const totalExpensesAmount = expenses.reduce((acc, e) => acc + (e.amount || 0), 0);
+  const pendingPlansCount = plans.filter((p) => p.isDone === 0).length;
+  const estimatedRestokCost = plans
+    .filter((p) => p.isDone === 0)
+    .reduce((acc, p) => acc + (p.estimatedPrice || 0), 0);
+  const completedPlansCount = plans.filter((p) => p.isDone === 1).length;
+
   return (
     <div className="w-full space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <ExpenseRecordDialog
@@ -249,16 +257,41 @@ export function PengeluaranRestokView() {
         onOpenChange={setExpenseDialogOpen}
       />
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <section className="grid gap-4 grid-cols-2 md:grid-cols-4">
+        <StatCard
+          title="Beban Pengeluaran"
+          value={formatCompactCurrency(totalExpensesAmount)}
+          description="Total biaya operasional."
+          tone="warn"
+        />
+        <StatCard
+          title="Rencana Restok"
+          value={`${pendingPlansCount} Item`}
+          description="Stok menipis perlu dibeli."
+        />
+        <StatCard
+          title="Est. Modal Restok"
+          value={formatCompactCurrency(estimatedRestokCost)}
+          description="Perkiraan belanja restok."
+          tone="accent"
+        />
+        <StatCard
+          title="Restok Selesai"
+          value={`${completedPlansCount} Terbeli`}
+          description="Barang yang sudah dibeli."
+        />
+      </section>
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-1">
         <div>
-          <h2 className="text-xl font-heading font-semibold">Pengeluaran & Restok</h2>
-          <p className="text-sm text-muted-foreground mt-1">Catat belanja pengeluaran dan rencana produk untuk direstok.</p>
+          <h2 className="text-xl font-heading font-semibold">Detail Pengeluaran & Rencana Restok</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">Catat belanja operasional toko dan daftar barang yang akan dibeli.</p>
         </div>
         
         {/* Catat Pengeluaran Button sejajar di sini */}
         <Button 
           onClick={() => setExpenseDialogOpen(true)}
-          className="rounded-xl h-11 px-5 shadow-md shadow-primary/20 hover:shadow-primary/30 transition-all font-medium"
+          className="rounded-xl h-11 px-5 shadow-md shadow-primary/20 hover:shadow-primary/30 transition-all font-medium shrink-0"
         >
           <BanknoteArrowDown className="mr-2 size-4" />
           Catat Pengeluaran
