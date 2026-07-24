@@ -88,7 +88,7 @@ function generateTemplateCSV(): string {
 export function ImportProductDialog({
   onImportComplete,
 }: {
-  onImportComplete: () => void;
+  onImportComplete: (products?: Array<{ id: string; name: string; sku: string }>) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -180,7 +180,7 @@ export function ImportProductDialog({
 
       if (data.imported > 0) {
         toast.success(`${data.imported} produk berhasil diimport!`);
-        onImportComplete();
+        onImportComplete(data.products);
       }
     } catch {
       toast.error("Terjadi kesalahan saat mengimport file.");

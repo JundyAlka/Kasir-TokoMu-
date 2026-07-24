@@ -29,8 +29,9 @@ import {
   RestockBodySchema,
   SettingsUpdateSchema,
   TransactionCheckoutSchema,
+  ExpenseCreateSchema,
 } from "@/lib/server/validation";
-import { AppState, Debt, DebtDetail, DebtDraft, PaymentMethod, ProductDraft, Settings, Transaction } from "@/lib/types";
+import { AppState, Debt, DebtDetail, DebtDraft, ExpenseDraft, PaymentMethod, ProductDraft, Settings, Transaction } from "@/lib/types";
 import { getJakartaDayRange } from "@/lib/server/timezone";
 
 let initializationPromise: Promise<void> | null = null;
@@ -617,6 +618,36 @@ export async function createTransaction(
   };
 }
 
+export async function createExpense(userId: string, draft: ExpenseDraft) {
+  const nextDraft = ExpenseCreateSchema.parse(draft);
+  const timestamp = nowIso();
+  const expenseId = createId("exp");
+  
+  const [expense] = await db
+    .insert(expenses)
+    .values({
+      id: expenseId,
+      userId,
+      title: nextDraft.title,
+      amount: nextDraft.amount,
+      category: nextDraft.category,
+      createdAt: timestamp,
+    })
+    .returning();
+
+  if (!expense) {
+    throw new Error("Gagal mencatat pengeluaran.");
+  }
+
+  return {
+    id: expense.id,
+    title: expense.title,
+    amount: expense.amount,
+    category: expense.category,
+    createdAt: expense.createdAt,
+  };
+}
+
 export async function createDebt(userId: string, draft: DebtDraft) {
   const nextDraft = DebtCreateSchema.parse(draft);
   const timestamp = nowIso();
@@ -879,30 +910,7 @@ export async function remindDebt(userId: string, debtId: string) {
   return mapDebt(updated);
 }
 
-export async function createExpense(
-  userId: string,
-  draft: { title: string; amount: number; category: "Operasional" | "Belanja" | "Utilitas" }
-) {
-  const [expense] = await db
-    .insert(expenses)
-    .values({
-      id: createId("exp"),
-      userId,
-      title: draft.title,
-      amount: draft.amount,
-      category: draft.category,
-      createdAt: nowIso(),
-    })
-    .returning();
 
-  return {
-    id: expense.id,
-    title: expense.title,
-    amount: expense.amount,
-    category: expense.category as "Operasional" | "Belanja" | "Utilitas",
-    createdAt: expense.createdAt,
-  };
-}
 
 export async function updateStoreSettings(userId: string, settings: Settings) {
   const nextSettings = normalizeSettings(SettingsUpdateSchema.parse(settings));

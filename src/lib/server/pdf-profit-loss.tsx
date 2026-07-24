@@ -50,6 +50,22 @@ export type ProfitLossPdfData = {
     amount: number;
     note: string;
   }>;
+  restockPlans: Array<{
+    productName: string;
+    note: string;
+    estimatedPrice: number;
+  }>;
+  lowStockProducts: Array<{
+    name: string;
+    stock: number;
+    minimumStock: number;
+    category: string;
+  }>;
+  employeeSalaries: Array<{
+    name: string;
+    role: string;
+    monthlySalary: number;
+  }>;
 };
 
 const styles = StyleSheet.create({
@@ -368,6 +384,77 @@ export function ProfitLossReportDocument({
               ))
             ) : (
               <EmptyRow text="Semua produk memiliki tingkat penjualan yang baik." />
+            )}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Rencana Restok Barang (Belum Terpenuhi)</Text>
+          <View style={styles.table}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.cell, styles.headCell, col("40%")]}>Nama Produk</Text>
+              <Text style={[styles.cell, styles.headCell, col("40%")]}>Keterangan</Text>
+              <Text style={[styles.cell, styles.headCell, styles.lastCell, styles.right, col("20%")]}>Estimasi Harga</Text>
+            </View>
+            {data.restockPlans && data.restockPlans.length > 0 ? (
+              data.restockPlans.map((plan, index) => (
+                <View key={index} style={styles.tableRow}>
+                  <Text style={[styles.cell, col("40%")]}>{plan.productName}</Text>
+                  <Text style={[styles.cell, col("40%")]}>{plan.note || "-"}</Text>
+                  <Text style={[styles.cell, styles.lastCell, styles.right, col("20%")]}>
+                    {plan.estimatedPrice ? formatCurrency(plan.estimatedPrice) : "-"}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <EmptyRow text="Tidak ada rencana restok produk saat ini." />
+            )}
+          </View>
+        </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Peringatan Stok Menipis (Perlu Restok)</Text>
+          <View style={styles.table}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.cell, styles.headCell, col("40%")]}>Nama Produk</Text>
+              <Text style={[styles.cell, styles.headCell, col("30%")]}>Kategori</Text>
+              <Text style={[styles.cell, styles.headCell, styles.lastCell, styles.right, col("30%")]}>Sisa Stok / Min.</Text>
+            </View>
+            {data.lowStockProducts && data.lowStockProducts.length > 0 ? (
+              data.lowStockProducts.map((item, index) => (
+                <View key={index} style={styles.tableRow}>
+                  <Text style={[styles.cell, col("40%")]}>{item.name}</Text>
+                  <Text style={[styles.cell, col("30%")]}>{item.category}</Text>
+                  <Text style={[styles.cell, styles.lastCell, styles.right, col("30%")]}>
+                    {item.stock} / {item.minimumStock}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <EmptyRow text="Semua stok produk dalam kondisi aman." />
+            )}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Rincian Beban Gaji Karyawan</Text>
+          <View style={styles.table}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.cell, styles.headCell, col("50%")]}>Nama Karyawan</Text>
+              <Text style={[styles.cell, styles.headCell, col("25%")]}>Role</Text>
+              <Text style={[styles.cell, styles.headCell, styles.lastCell, styles.right, col("25%")]}>Gaji Bulanan</Text>
+            </View>
+            {data.employeeSalaries && data.employeeSalaries.length > 0 ? (
+              data.employeeSalaries.map((emp, index) => (
+                <View key={index} style={styles.tableRow}>
+                  <Text style={[styles.cell, col("50%")]}>{emp.name}</Text>
+                  <Text style={[styles.cell, col("25%")]}>{emp.role}</Text>
+                  <Text style={[styles.cell, styles.lastCell, styles.right, col("25%")]}>
+                    {formatCurrency(emp.monthlySalary)}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <EmptyRow text="Tidak ada beban gaji karyawan aktif." />
             )}
           </View>
         </View>

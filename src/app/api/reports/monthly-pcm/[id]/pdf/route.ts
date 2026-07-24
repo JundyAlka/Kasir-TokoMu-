@@ -72,6 +72,8 @@ function legacyToReportData(
       revenue: Number(legacy.omzet ?? 0),
       cogs: 0,
       grossProfit: Number(legacy.labaKotor ?? 0),
+      expenses: 0,
+      salaries: 0,
       expenseTotal: 0,
       netProfit: Number(legacy.labaKotor ?? 0),
       transactionCount: Number(legacy.transaksi ?? 0),

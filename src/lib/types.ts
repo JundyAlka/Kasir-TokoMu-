@@ -82,12 +82,14 @@ export interface DebtDetail extends Debt {
   payments: DebtPayment[];
 }
 
+export type ExpenseCategory = string;
+
 export interface Expense {
   id: string;
   title: string;
   amount: number;
   createdAt: string;
-  category: "Operasional" | "Belanja" | "Utilitas";
+  category: ExpenseCategory;
 }
 
 export interface Settings {
@@ -143,4 +145,10 @@ export interface DebtDraft {
     unitPrice: number;
     lineTotal?: number;
   }>;
+}
+
+export interface ExpenseDraft {
+  title: string;
+  amount: number;
+  category: ExpenseCategory;
 }

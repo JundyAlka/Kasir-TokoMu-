@@ -1,8 +1,8 @@
 import { renderToStream } from "@react-pdf/renderer";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { Readable } from "node:stream";
 import { db, pool } from "@/db/client";
-import { storeProfiles } from "@/db/schema";
+import { storeProfiles, restockPlans } from "@/db/schema";
 import {
   ProfitLossReportDocument,
   ProfitLossPdfData,
@@ -10,7 +10,7 @@ import {
 import { calculatePayouts } from "@/lib/server/profit-sharing";
 import { getPeriodRange, getTopProductsForPeriod, getBottomProductsForPeriod } from "@/lib/server/reporting";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRole, listWorkspaceUsers } from "@/lib/server/rbac";
 import { JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
 import { getRequestUser } from "@/lib/server/app-service";
 
@@ -72,6 +72,26 @@ async function getExpenseCategories(workspaceOwnerId: string, periodStart: strin
   return result.rows;
 }
 
+async function getLowStockProducts(workspaceOwnerId: string) {
+  const result = await pool.query<{
+    name: string;
+    stock: number;
+    minimumStock: number;
+    category: string;
+  }>(
+    `
+      select name, stock, minimum_stock as "minimumStock", category
+      from products
+      where user_id = $1 and stock <= minimum_stock
+      order by stock asc
+      limit 20
+    `,
+    [workspaceOwnerId]
+  );
+
+  return result.rows;
+}
+
 export async function GET(request: Request) {
   try {
     await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
@@ -90,12 +110,16 @@ export async function GET(request: Request) {
       .where(eq(storeProfiles.userId, workspaceOwnerId))
       .limit(1);
 
-    const [summary, expenseCategories, topProducts, bottomProducts] = await Promise.all([
+    const [summary, expenseCategories, lowStockProducts, topProducts, bottomProducts, pendingRestocks, usersList] = await Promise.all([
       calculatePayouts(workspaceOwnerId, period.range.start, period.range.end),
       getExpenseCategories(workspaceOwnerId, period.range.start, period.range.end),
+      getLowStockProducts(workspaceOwnerId),
       getTopProductsForPeriod(workspaceOwnerId, period.range.start, period.range.end, 5),
       getBottomProductsForPeriod(workspaceOwnerId, period.range.start, period.range.end, 5),
+      db.select().from(restockPlans).where(and(eq(restockPlans.workspaceOwnerId, workspaceOwnerId), eq(restockPlans.isDone, 0))).orderBy(desc(restockPlans.createdAt)).limit(20),
+      listWorkspaceUsers(workspaceOwnerId),
     ]);
+    const activeEmployees = usersList.filter(u => u.isActive && u.monthlySalary > 0);
     const ownerNotes =
       requestedNotes.length > 0
         ? requestedNotes
@@ -132,6 +156,9 @@ export async function GET(request: Request) {
       bottomProducts,
       ownerNotes,
       payouts: summary.payouts,
+      restockPlans: pendingRestocks,
+      lowStockProducts,
+      employeeSalaries: activeEmployees,
     };
     const stream = await renderToStream(ProfitLossReportDocument({ data }));
     const filename = `laporan-untung-rugi-${cleanFilename(period.label)}.pdf`;

@@ -3,7 +3,10 @@
 import { type PointerEvent, useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
+  Check,
   Download,
+  ExternalLink,
+  FileText,
   ListChecks,
   Loader2,
   Printer,
@@ -571,6 +574,70 @@ export function LaporanView() {
   const [trendRange, setTrendRange] = useState<TrendRange>("bulanan");
   const [trendWeek, setTrendWeek] = useState(() => getDefaultTrendWeek(currentMonthValue()));
 
+  const [finalizedReports, setFinalizedReports] = useState<any[]>([]);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [isLoadingReports, setIsLoadingReports] = useState(true);
+
+  useEffect(() => {
+    fetchFinalizedReports();
+  }, []);
+
+  async function fetchFinalizedReports() {
+    setIsLoadingReports(true);
+    try {
+      const res = await fetch("/api/reports/monthly", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok && data.reports) {
+        setFinalizedReports(data.reports);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingReports(false);
+    }
+  }
+
+  async function handleFinalizeReport() {
+    const [year, month] = period.split("-").map(Number);
+    setIsFinalizing(true);
+    try {
+      const payload = {
+        periodYear: year,
+        periodMonth: month,
+        data: summary,
+      };
+      const res = await fetch("/api/reports/monthly", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      toast.success(isCurrentPeriodFinalized ? "Snapshot laporan berhasil diperbarui." : "Laporan bulanan berhasil disetujui & ditandai selesai.");
+      fetchFinalizedReports();
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menyimpan laporan.");
+    } finally {
+      setIsFinalizing(false);
+    }
+  }
+  const [selYear, selMonth] = period.split("-").map(Number);
+  const currentFinalizedReport = finalizedReports.find(
+    (r) => r.periodYear === selYear && r.periodMonth === selMonth
+  );
+  const isCurrentPeriodFinalized = !!currentFinalizedReport;
+
+  function buildHistoricalPdfUrl(year: number, month: number) {
+    const periodStr = `${year}-${pad2(month)}`;
+    const params = new URLSearchParams();
+    params.set("period", periodStr);
+    if (settings.storeName) params.set("storeName", settings.storeName);
+    if (settings.storeTagline) params.set("storeTagline", settings.storeTagline);
+    if (settings.storeAddress) params.set("storeAddress", settings.storeAddress);
+    if (settings.city) params.set("city", settings.city);
+    return `/api/reports/profit-loss/pdf?${params.toString()}`;
+  }
   useEffect(() => {
     let active = true;
 
@@ -719,7 +786,7 @@ export function LaporanView() {
         />
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr] xl:grid-cols-[1.05fr_0.95fr]">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
           <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
@@ -1099,6 +1166,135 @@ export function LaporanView() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Bagian Finalisasi Laporan */}
+      <div className="mt-8 mb-4 border-t border-border/70 pt-8">
+        <div className="grid gap-6 lg:grid-cols-2 items-stretch">
+          {/* Kolom Kiri: Submit Laporan */}
+          <div className="flex flex-col h-full rounded-3xl border border-border/50 bg-card/40 shadow-sm backdrop-blur-xl p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <ListChecks className="size-5" />
+              </div>
+              <h3 className="font-heading text-xl font-semibold">Tutup Buku Laporan</h3>
+            </div>
+            {currentFinalizedReport ? (
+              <div className="mb-6 rounded-2xl bg-card/60 border border-border p-4">
+                <p className="text-sm font-medium text-foreground mb-3">Tersimpan di Riwayat:</p>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="flex justify-between items-center">
+                    <span>Omzet Terakhir</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(currentFinalizedReport.data.revenue ?? 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Laba Bersih Terakhir</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(currentFinalizedReport.data.netProfit ?? 0)}</span>
+                  </div>
+                </div>
+                
+                {(summary.revenue !== (currentFinalizedReport.data.revenue ?? 0) || summary.netProfit !== (currentFinalizedReport.data.netProfit ?? 0)) && (
+                  <div className="mt-4 pt-4 border-t border-border/60 space-y-2 text-sm">
+                    <p className="font-medium text-primary flex items-center gap-2 mb-3">
+                      <RotateCcw className="size-4" /> Ada Perubahan Baru (Belum Disimpan)
+                    </p>
+                    {summary.revenue !== (currentFinalizedReport.data.revenue ?? 0) && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Selisih Omzet</span>
+                        <span className={summary.revenue > (currentFinalizedReport.data.revenue ?? 0) ? "text-emerald-500 font-medium" : "text-rose-500 font-medium"}>
+                          {summary.revenue > (currentFinalizedReport.data.revenue ?? 0) ? "+" : ""}{formatCurrency(summary.revenue - (currentFinalizedReport.data.revenue ?? 0))}
+                        </span>
+                      </div>
+                    )}
+                    {summary.netProfit !== (currentFinalizedReport.data.netProfit ?? 0) && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Selisih Laba Bersih</span>
+                        <span className={summary.netProfit > (currentFinalizedReport.data.netProfit ?? 0) ? "text-emerald-500 font-medium" : "text-rose-500 font-medium"}>
+                          {summary.netProfit > (currentFinalizedReport.data.netProfit ?? 0) ? "+" : ""}{formatCurrency(summary.netProfit - (currentFinalizedReport.data.netProfit ?? 0))}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground mb-6">
+                Jika laporan bulan <strong>{periodLabel}</strong> sudah sesuai, Anda bisa menandainya sebagai Selesai / Fix. Ini akan menyimpan snapshot laba rugi saat ini ke dalam riwayat. Anda juga masih bisa memperbaruinya nanti jika ada perubahan transaksi.
+              </p>
+            )}
+            <div className="mt-auto">
+              <Button
+                size="lg"
+                className="w-full rounded-2xl h-12 text-base font-semibold"
+                disabled={isFinalizing || isLoading}
+                onClick={handleFinalizeReport}
+              >
+                {isFinalizing ? (
+                  <Loader2 className="mr-2 size-5 animate-spin" />
+                ) : isCurrentPeriodFinalized ? (
+                  <RotateCcw className="mr-2 size-5" />
+                ) : (
+                  <ListChecks className="mr-2 size-5" />
+                )}
+                {isCurrentPeriodFinalized ? "Perbarui Snapshot Laporan" : "Simpan & Tandai Selesai"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Kolom Kanan: Histori Laporan */}
+          <div className="flex flex-col h-full rounded-3xl border border-border/50 bg-card/40 shadow-sm backdrop-blur-xl p-6 md:p-8">
+            <h3 className="font-heading text-xl font-semibold mb-6">Riwayat Laporan Selesai</h3>
+            {isLoadingReports ? (
+              <div className="py-8 flex justify-center">
+                <Loader2 className="size-6 animate-spin text-muted-foreground/50" />
+              </div>
+            ) : finalizedReports.length === 0 ? (
+              <div className="text-center py-8">
+                <ListChecks className="size-10 mx-auto mb-3 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">Belum ada histori laporan bulanan yang ditutup/selesai.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {finalizedReports.map((report) => (
+                  <a 
+                    key={report.id} 
+                    href={buildHistoricalPdfUrl(report.periodYear, report.periodMonth)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center justify-between p-4 rounded-2xl border bg-background border-border hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-[15px] group-hover:text-primary transition-colors">
+                          Laporan {monthOptions.find(m => m.value === pad2(report.periodMonth))?.label} {report.periodYear}
+                        </p>
+                        <ExternalLink className="size-3.5 text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                          <Check className="size-3" />
+                          Fix
+                        </span>
+                        <p className="text-xs text-muted-foreground">
+                          {new Intl.DateTimeFormat("id-ID", {
+                            day: "numeric", month: "short", year: "numeric"
+                          }).format(new Date(report.finalizedAt))}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-primary">{formatCurrency(report.data.netProfit || 0)}</p>
+                      <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-muted-foreground">
+                        <FileText className="size-3" />
+                        PDF
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

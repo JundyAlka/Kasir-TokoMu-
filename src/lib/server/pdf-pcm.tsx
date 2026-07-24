@@ -50,6 +50,8 @@ export type PcmMonthlyReportData = {
     revenue: number;
     cogs: number;
     grossProfit: number;
+    expenses: number;
+    salaries: number;
     expenseTotal: number;
     netProfit: number;
     transactionCount: number;
@@ -291,7 +293,8 @@ export function PcmMonthlyReportDocument({
             <FinancialRow label="Omzet penjualan" value={financial.revenue} />
             <FinancialRow label="Harga pokok penjualan (HPP)" value={financial.cogs} />
             <FinancialRow label="Laba kotor" value={financial.grossProfit} />
-            <FinancialRow label="Beban operasional" value={financial.expenseTotal} />
+            <FinancialRow label="Biaya operasional" value={financial.expenses || 0} />
+            <FinancialRow label="Gaji karyawan" value={financial.salaries || 0} />
             <FinancialRow label="Laba bersih" value={financial.netProfit} />
             <FinancialRow label={`Bagian PCM (${financial.profitSharePcmPct}%)`} value={financial.pcmShare} />
             <FinancialRow label={`Dana cadangan (${financial.profitShareReservePct}%)`} value={financial.reserveShare} />

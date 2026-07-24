@@ -873,7 +873,7 @@ res = await api<{ newMessages: ServerMessage[] }>(
                   <div className="space-y-2">
                     {chatHistory
                       .filter((c) => c.title.toLowerCase().includes(searchHistory.toLowerCase()))
-                      .slice(0, 15)
+                      .slice(0, 7)
                       .map((c) => (
                         <div key={c.id} className="flex items-center justify-between gap-2 rounded-xl bg-card p-3 shadow-sm ring-1 ring-border">
                           <div

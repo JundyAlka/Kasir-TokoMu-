@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Coins, HandCoins, Loader2, Package, WalletCards } from "lucide-react";
+import { BanknoteArrowDown, Coins, HandCoins, Loader2, Package, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 import { StatCard } from "@/components/stat-card";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 
 type AssetCapitalSummary = {
@@ -20,6 +24,8 @@ const emptySummary: AssetCapitalSummary = {
   investorMoneyCapital: 0,
   consignmentCapital: 0,
 };
+
+// ExpenseRecordDialog moved to pengeluaran-restok-view.tsx
 
 export function LaporanAsetView() {
   const [summary, setSummary] = useState<AssetCapitalSummary>(emptySummary);
@@ -60,7 +66,7 @@ export function LaporanAsetView() {
   const totalCapital = summary.investorMoneyCapital + summary.consignmentCapital;
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="w-full space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <section className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <StatCard
           title="Total Modal Barang"
@@ -90,7 +96,7 @@ export function LaporanAsetView() {
         />
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] relative overflow-hidden">
           <div className="absolute -right-12 -top-12 size-40 rounded-full bg-primary/5 blur-3xl" />
           <CardHeader>

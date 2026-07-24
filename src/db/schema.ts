@@ -32,6 +32,7 @@ export const userRoles = pgTable(
     role: text("role").notNull(),
     workspaceOwnerId: text("workspace_owner_id").notNull(),
     isActive: integer("is_active").notNull().default(1),
+    monthlySalary: integer("monthly_salary").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull(),
   },
@@ -299,6 +300,24 @@ export const expenses = pgTable("expenses", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
   category: text("category").notNull(),
 });
+
+export const restockPlans = pgTable(
+  "restock_plans",
+  {
+    id: text("id").primaryKey(),
+    workspaceOwnerId: text("workspace_owner_id").notNull(),
+    productName: text("product_name").notNull(),
+    note: text("note").notNull().default(""),
+    estimatedPrice: integer("estimated_price").notNull().default(0),
+    isDone: integer("is_done").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull(),
+  },
+  (table) => [
+    index("restock_plans_workspace_idx").on(table.workspaceOwnerId),
+    index("restock_plans_status_idx").on(table.workspaceOwnerId, table.isDone),
+  ]
+);
 
 export const restockLogs = pgTable(
   "restock_logs",

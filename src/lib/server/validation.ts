@@ -3,6 +3,8 @@ import { z, ZodError } from "zod";
 
 const productCategories = ["Makanan", "Minuman", "Sembako", "Kebutuhan Harian"] as const;
 const paymentMethods = ["Tunai", "QRIS", "Transfer"] as const;
+const expenseCategories = ["Operasional", "Belanja", "Utilitas", "Listrik", "ATK", "WiFi", "Lainnya"] as const;
+
 
 const requiredText = (field: string) =>
   z.string().trim().min(1, `${field} wajib diisi.`);
@@ -139,6 +141,15 @@ export const SettingsUpdateSchema = z
   })
   .strict();
 
+export const ExpenseCreateSchema = z
+  .object({
+    title: requiredText("Keterangan pengeluaran"),
+    amount: positiveInteger("Jumlah pengeluaran"),
+    category: requiredText("Kategori"),
+  })
+  .strict();
+
+
 export type ProductCreateInput = z.infer<typeof ProductCreateSchema>;
 export type ProductUpdateInput = z.infer<typeof ProductUpdateSchema>;
 export type RestockBodyInput = z.infer<typeof RestockBodySchema>;
@@ -147,6 +158,7 @@ export type DebtCreateInput = z.infer<typeof DebtCreateSchema>;
 export type DebtUpdateInput = z.infer<typeof DebtUpdateSchema>;
 export type DebtPaymentCreateInput = z.infer<typeof DebtPaymentCreateSchema>;
 export type SettingsUpdateInput = z.infer<typeof SettingsUpdateSchema>;
+export type ExpenseCreateInput = z.infer<typeof ExpenseCreateSchema>;
 
 export function formatValidationIssues(error: ZodError) {
   return error.issues.map((issue) => ({

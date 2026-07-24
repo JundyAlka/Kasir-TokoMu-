@@ -15,6 +15,7 @@ import { PcmMonthlyReportData } from "@/lib/server/pdf-pcm";
 import { JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type MonthlyReportBody = {
   periodYear?: unknown;
@@ -143,6 +144,8 @@ async function buildReportData(
       revenue: calculation.revenue,
       cogs: calculation.cogs,
       grossProfit: calculation.grossProfit,
+      expenses: calculation.expenses,
+      salaries: calculation.expenseTotal - calculation.expenses,
       expenseTotal: calculation.expenseTotal,
       netProfit: calculation.netProfit,
       transactionCount: calculation.transactionCount,

@@ -63,6 +63,7 @@ export function InventarisView() {
     deleteProduct,
     restockProduct,
     lowStockProducts,
+    refreshWorkspace,
   } = useAppState();
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -71,6 +72,7 @@ export function InventarisView() {
   const [editDraft, setEditDraft] = useState<ProductDraft>(emptyDraft);
   const [restockTarget, setRestockTarget] = useState<Product | null>(null);
   const [restockAmount, setRestockAmount] = useState(12);
+  const [newlyAddedIds, setNewlyAddedIds] = useState<string[]>([]);
   const [activeSummaryMetric, setActiveSummaryMetric] =
     useState<InventorySummaryMetric | null>(null);
   const [pendingDeletedIds, setPendingDeletedIds] = useState<Set<string>>(() => new Set());
@@ -123,7 +125,8 @@ export function InventarisView() {
         return;
       }
 
-      await addProduct(draft);
+      const newProduct = await addProduct(draft);
+      setNewlyAddedIds((prev) => [newProduct.id, ...prev]);
       setDraft(emptyDraft);
       setCreateOpen(false);
       toast.success("Produk baru berhasil ditambahkan.");
@@ -291,7 +294,25 @@ export function InventarisView() {
                   <Camera className="size-4" />
                   Restok via Scan Struk
                 </Button>
-                <ImportProductDialog onImportComplete={() => window.location.reload()} />
+                <ImportProductDialog onImportComplete={async (importedProducts) => {
+                  await refreshWorkspace();
+                  if (importedProducts && importedProducts.length > 0) {
+                    const ids = importedProducts.map((p) => p.id);
+                    setNewlyAddedIds((prev) => [...ids, ...prev]);
+                    
+                    if (importedProducts.length <= 5) {
+                      toast.success(
+                        `${importedProducts.length} produk berhasil ditambahkan: ${importedProducts.map(p => p.name).join(", ")}`, 
+                        { duration: 5000 }
+                      );
+                    } else {
+                      toast.success(
+                        `${importedProducts.length} produk berhasil ditambahkan secara massal.`, 
+                        { duration: 5000 }
+                      );
+                    }
+                  }
+                }} />
                 <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                   <DialogTrigger
                     render={<Button size="lg" className="h-11 shrink-0 rounded-2xl" />}
@@ -370,7 +391,13 @@ export function InventarisView() {
                 const marginPct = product.sellPrice > 0 ? Math.round((margin / product.sellPrice) * 100) : 0;
 
                 return (
-                  <TableRow key={product.id} className={cn(lowStock && "bg-primary/6")}>
+                  <TableRow 
+                    key={product.id} 
+                    className={cn(
+                      lowStock && "bg-primary/6",
+                      newlyAddedIds.includes(product.id) && "bg-emerald-500/15 transition-colors duration-1000 dark:bg-emerald-500/20"
+                    )}
+                  >
                     <TableCell className="font-mono text-xs font-medium text-muted-foreground">
                       {sku}
                     </TableCell>

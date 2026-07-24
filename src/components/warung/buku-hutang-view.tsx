@@ -22,14 +22,14 @@ type DebtFilter = "semua" | "aktif" | "lewat_tempo" | "lunas";
 
 function statusClassName(status: Debt["status"]) {
   if (status === "lunas") {
-    return "rounded-full bg-accent text-accent-foreground";
+    return "rounded-full bg-emerald-600 text-white font-semibold";
   }
 
   if (status === "lewat_tempo") {
-    return "rounded-full bg-destructive text-destructive-foreground";
+    return "rounded-full bg-red-600 text-white font-semibold";
   }
 
-  return "rounded-full bg-primary text-primary-foreground";
+  return "rounded-full bg-primary text-primary-foreground font-semibold";
 }
 
 function statusLabel(status: Debt["status"]) {

@@ -23,6 +23,7 @@ export type WorkspaceUser = {
   email: string;
   role: Role;
   isActive: boolean;
+  monthlySalary: number;
 };
 
 const roles: Role[] = ["pimpinan", "pengelola_keuangan", "kasir"];
@@ -150,6 +151,7 @@ export async function listWorkspaceUsers(workspaceOwnerId: string): Promise<Work
     email: string;
     role: string;
     isActive: boolean;
+    monthlySalary: number;
   }>(
     `
       select
@@ -157,7 +159,8 @@ export async function listWorkspaceUsers(workspaceOwnerId: string): Promise<Work
         u.name,
         u.email,
         ur.role,
-        (ur.is_active = 1) as "isActive"
+        (ur.is_active = 1) as "isActive",
+        ur.monthly_salary as "monthlySalary"
       from user_roles ur
       join "user" u on u.id = ur.user_id
       where ur.workspace_owner_id = $1
@@ -179,8 +182,9 @@ export async function listWorkspaceUsers(workspaceOwnerId: string): Promise<Work
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        role: user.role as Role,
         isActive: user.isActive,
+        monthlySalary: (user as any).monthlySalary ?? 0,
       });
     }
 

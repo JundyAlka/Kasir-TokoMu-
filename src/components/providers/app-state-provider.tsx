@@ -21,7 +21,7 @@ type AppStateContextValue = AppState & {
   removeFromCart: (productId: string) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
   checkout: (paidAmount?: number) => Promise<Transaction | null>;
-  addProduct: (draft: ProductDraft) => Promise<void>;
+  addProduct: (draft: ProductDraft) => Promise<Product>;
   updateProduct: (productId: string, draft: ProductDraft) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
   restockProduct: (productId: string, quantity: number) => Promise<void>;
@@ -30,6 +30,7 @@ type AppStateContextValue = AppState & {
   sendDebtReminder: (debtId: string) => Promise<Debt | null>;
   updateSettings: (settings: Settings) => Promise<void>;
   resetWorkspace: () => Promise<void>;
+  refreshWorkspace: () => Promise<void>;
 };
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -229,6 +230,8 @@ export function AppStateProvider({
       ...current,
       products: [response.product, ...current.products],
     }));
+
+    return response.product;
   }
 
   async function updateProduct(productId: string, draft: ProductDraft) {
@@ -343,6 +346,17 @@ export function AppStateProvider({
     }));
   }
 
+  async function refreshWorkspace() {
+    const response = await requestJson<{ appState: AppState }>("/api/bootstrap");
+    setState((current) => ({
+      ...response.appState,
+      cart: current.cart,
+      paymentMethod: response.appState.settings.enabledPayments.includes(current.paymentMethod)
+        ? current.paymentMethod
+        : response.appState.paymentMethod,
+    }));
+  }
+
   return (
     <AppStateContext.Provider
       value={{
@@ -364,6 +378,7 @@ export function AppStateProvider({
         sendDebtReminder,
         updateSettings,
         resetWorkspace,
+        refreshWorkspace,
       }}
     >
       {children}

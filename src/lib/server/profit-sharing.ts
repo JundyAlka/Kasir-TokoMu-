@@ -155,27 +155,36 @@ export async function calculatePeriodProfit(
         where user_id = $1
           and created_at >= $2::timestamptz
           and created_at < $3::timestamptz
+      ),
+      salaries as (
+        select coalesce(sum(monthly_salary), 0)::int as total_salary
+        from user_roles
+        where workspace_owner_id = $1
+          and is_active = 1
       )
       select
         tx.revenue,
         item_cost.cogs,
         exp.expenses,
+        salaries.total_salary as "totalSalary",
         tx.transaction_count as "transactionCount"
-      from tx, item_cost, exp
+      from tx, item_cost, exp, salaries
     `,
     [workspaceOwnerId, start, end]
   );
 
-  const row = result.rows[0] ?? { revenue: 0, cogs: 0, expenses: 0, transactionCount: 0 };
+  const row = result.rows[0] ?? { revenue: 0, cogs: 0, expenses: 0, totalSalary: 0, transactionCount: 0 };
   const grossProfit = row.revenue - row.cogs;
-  const baseProfit = grossProfit - row.expenses;
+  // Beban total adalah beban expense biasa ditambah beban gaji karyawan (snapshot saat ini)
+  const expenseTotal = row.expenses + (row as any).totalSalary;
+  const baseProfit = grossProfit - expenseTotal;
 
   return {
     revenue: row.revenue,
     cogs: row.cogs,
     grossProfit,
     expenses: row.expenses,
-    expenseTotal: row.expenses,
+    expenseTotal,
     baseProfit,
     netProfit: baseProfit,
     transactionCount: row.transactionCount,

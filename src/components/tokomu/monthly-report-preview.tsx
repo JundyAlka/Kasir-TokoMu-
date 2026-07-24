@@ -40,6 +40,9 @@ type SnapshotData = {
   period?: { label?: string };
   financial?: {
     revenue?: number;
+    grossProfit?: number;
+    expenses?: number;
+    salaries?: number;
     netProfit?: number;
     pcmShare?: number;
     reserveShare?: number;
@@ -95,6 +98,9 @@ function getReportMetrics(report: ReportRow) {
   return {
     label: data.period?.label ?? periodLabel(report.periodYear, report.periodMonth),
     revenue: data.financial?.revenue ?? data.omzet ?? 0,
+    grossProfit: data.financial?.grossProfit ?? data.labaKotor ?? 0,
+    expenses: data.financial?.expenses ?? 0,
+    salaries: data.financial?.salaries ?? 0,
     netProfit: data.financial?.netProfit ?? data.labaKotor ?? 0,
     pcmShare: data.financial?.pcmShare ?? data.bagianPcm ?? 0,
     reserveShare: data.financial?.reserveShare ?? data.danaCadangan ?? 0,
@@ -356,21 +362,29 @@ export function MonthlyReportPreview() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="rounded-xl bg-muted/55 p-3">
-                      <p className="text-xs text-muted-foreground">Omzet</p>
-                      <p className="mt-1 font-semibold tabular-nums">{formatCurrency(metrics.revenue)}</p>
+                      <p className="text-[11px] text-muted-foreground">Laba Kotor</p>
+                      <p className="mt-1 font-semibold tabular-nums text-sm">{formatCurrency(metrics.grossProfit)}</p>
                     </div>
                     <div className="rounded-xl bg-muted/55 p-3">
-                      <p className="text-xs text-muted-foreground">Laba bersih</p>
-                      <p className="mt-1 font-semibold tabular-nums">{formatCurrency(metrics.netProfit)}</p>
+                      <p className="text-[11px] text-muted-foreground">Biaya Operasional</p>
+                      <p className="mt-1 font-semibold text-rose-500 tabular-nums text-sm">-{formatCurrency(metrics.expenses || 0)}</p>
+                    </div>
+                    <div className="rounded-xl bg-muted/55 p-3">
+                      <p className="text-[11px] text-muted-foreground">Gaji Karyawan</p>
+                      <p className="mt-1 font-semibold text-rose-500 tabular-nums text-sm">-{formatCurrency(metrics.salaries || 0)}</p>
+                    </div>
+                    <div className="rounded-xl bg-primary/10 border border-primary/20 p-3">
+                      <p className="text-[11px] font-medium text-primary">Laba Bersih</p>
+                      <p className="mt-1 font-bold text-primary tabular-nums text-sm">{formatCurrency(metrics.netProfit)}</p>
                     </div>
                   </div>
 
                   <div className="grid gap-2 rounded-xl border border-border/60 p-3 text-sm sm:grid-cols-3">
-                    <div><span className="text-muted-foreground">PCM</span><p className="font-medium tabular-nums">{formatCurrency(metrics.pcmShare)}</p></div>
-                    <div><span className="text-muted-foreground">Cadangan</span><p className="font-medium tabular-nums">{formatCurrency(metrics.reserveShare)}</p></div>
-                    <div><span className="text-muted-foreground">Investor</span><p className="font-medium tabular-nums">{formatCurrency(metrics.investorPayout)}</p></div>
+                    <div><span className="text-muted-foreground">Bagi Hasil PCM</span><p className="font-medium tabular-nums">{formatCurrency(metrics.pcmShare)}</p></div>
+                    <div><span className="text-muted-foreground">Dana Cadangan</span><p className="font-medium tabular-nums">{formatCurrency(metrics.reserveShare)}</p></div>
+                    <div><span className="text-muted-foreground">Bagi Hasil Investor</span><p className="font-medium tabular-nums">{formatCurrency(metrics.investorPayout)}</p></div>
                   </div>
 
                   {asSnapshot(report.data).note ? (

@@ -1,5 +1,6 @@
 import { LaporanView } from "@/components/warung/laporan-view";
 import { LaporanAsetView } from "@/components/warung/laporan-aset-view";
+import { PengeluaranRestokView } from "@/components/warung/pengeluaran-restok-view";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function LaporanPage() {
@@ -21,6 +22,9 @@ export default function LaporanPage() {
             <TabsTrigger value="aset_modal" className="rounded-xl px-6 py-2.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">
               Aset & Modal Awal
             </TabsTrigger>
+            <TabsTrigger value="restok_pengeluaran" className="rounded-xl px-6 py-2.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">
+              Pengeluaran & Restok
+            </TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="laba_rugi" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
@@ -28,6 +32,9 @@ export default function LaporanPage() {
         </TabsContent>
         <TabsContent value="aset_modal" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
           <LaporanAsetView />
+        </TabsContent>
+        <TabsContent value="restok_pengeluaran" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+          <PengeluaranRestokView />
         </TabsContent>
       </Tabs>
     </div>

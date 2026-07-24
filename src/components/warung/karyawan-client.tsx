@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Eye, EyeOff, Loader2, Trash2, UserPlus } from "lucide-react";
+import { Copy, Eye, EyeOff, Loader2, Trash2, UserPlus, Banknote } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import { Badge } from "@/components/ui/badge";
@@ -68,6 +68,8 @@ export function KaryawanClient({
   const [credentials, setCredentials] = useState<InviteCredentials | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [confirmDeactivateUser, setConfirmDeactivateUser] = useState<WorkspaceUser | null>(null);
+  const [salaryTarget, setSalaryTarget] = useState<WorkspaceUser | null>(null);
+  const [salaryAmount, setSalaryAmount] = useState<string>("");
 
   async function refreshUsers() {
     const response = await fetch("/api/users", { cache: "no-store" });
@@ -184,6 +186,45 @@ export function KaryawanClient({
     }
   }
 
+  async function handleSetSalary(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!salaryTarget) return;
+
+    const actionId = `${salaryTarget.id}:salary`;
+    setPendingAction(actionId);
+
+    const amount = Number(salaryAmount.replace(/[^0-9]/g, ""));
+    const user = salaryTarget;
+    setSalaryTarget(null);
+    setSalaryAmount("");
+
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(user.id)}/salary`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ monthlySalary: amount }),
+      });
+      const data = (await response.json()) as { success?: boolean; monthlySalary?: number } & ApiError;
+
+      if (!response.ok || data.success !== true) {
+        throw new Error(errorMessage(data, "Gagal mengatur gaji karyawan."));
+      }
+
+      setUsers((current) =>
+        current.map((item) =>
+          item.id === user.id
+            ? { ...item, monthlySalary: data.monthlySalary ?? amount }
+            : item
+        )
+      );
+      toast.success(`Gaji ${user.name} berhasil diatur menjadi Rp ${amount.toLocaleString("id-ID")}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal mengatur gaji karyawan.");
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
   async function copyCredentials() {
     if (!credentials) {
       return;
@@ -265,6 +306,7 @@ export function KaryawanClient({
                 <TableHead>Nama</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Gaji Bulanan</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
@@ -272,7 +314,7 @@ export function KaryawanClient({
             <TableBody>
               {users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                     Belum ada karyawan di workspace ini.
                   </TableCell>
                 </TableRow>
@@ -311,25 +353,47 @@ export function KaryawanClient({
                         )}
                       </TableCell>
                       <TableCell>
+                        <span className="text-sm font-medium">
+                          Rp {(user.monthlySalary ?? 0).toLocaleString("id-ID")}
+                        </span>
+                      </TableCell>
+                      <TableCell>
                         <Badge variant={user.isActive ? "default" : "secondary"}>
                           {user.isActive ? "Aktif" : "Nonaktif"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          disabled={!canManage || deletePending || Boolean(pendingAction)}
-                          onClick={() => setConfirmDeactivateUser(user)}
-                        >
-                          {deletePending ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="size-3.5" />
+                        <div className="flex items-center justify-end gap-2">
+                          {canManage && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={Boolean(pendingAction)}
+                              onClick={() => {
+                                setSalaryTarget(user);
+                                setSalaryAmount(user.monthlySalary?.toString() ?? "0");
+                              }}
+                            >
+                              <Banknote className="size-3.5" />
+                              Atur Gaji
+                            </Button>
                           )}
-                          Nonaktifkan
-                        </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            disabled={!canManage || deletePending || Boolean(pendingAction)}
+                            onClick={() => setConfirmDeactivateUser(user)}
+                          >
+                            {deletePending ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="size-3.5" />
+                            )}
+                            Nonaktifkan
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -402,6 +466,43 @@ export function KaryawanClient({
               Nonaktifkan
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(salaryTarget)} onOpenChange={(open) => !open && setSalaryTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={handleSetSalary}>
+            <DialogHeader>
+              <DialogTitle>Atur Gaji Karyawan</DialogTitle>
+              <DialogDescription>
+                Tentukan gaji bulanan untuk {salaryTarget?.name}. Nilai ini akan dimasukkan sebagai pengeluaran otomatis di Laporan Keuangan (PCM).
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="salary-amount">Nominal Gaji Bulanan (Rp)</Label>
+                <Input
+                  id="salary-amount"
+                  type="text"
+                  inputMode="numeric"
+                  value={salaryAmount}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, "");
+                    setSalaryAmount(value ? Number(value).toLocaleString("id-ID") : "");
+                  }}
+                  placeholder="Misal: 2.000.000"
+                  required
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setSalaryTarget(null)}>
+                Batal
+              </Button>
+              <Button type="submit">
+                Simpan Gaji
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
