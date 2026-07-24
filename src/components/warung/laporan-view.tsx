@@ -756,7 +756,7 @@ export function LaporanView() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="w-full space-y-4">
       <section className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <StatCard
           title="Omzet"
