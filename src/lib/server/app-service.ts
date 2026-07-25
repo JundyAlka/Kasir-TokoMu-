@@ -752,7 +752,7 @@ export async function updateDebt(
   draft: {
     borrowerName?: string;
     whatsapp?: string;
-    dueDate?: string;
+    dueDate?: string | null;
     status?: "aktif" | "lunas" | "lewat_tempo";
     isPaid?: true;
   }
