@@ -35,6 +35,7 @@ export type PayoutPreview = {
   sharePct: number;
   amount: number;
   note: string;
+  quantitySold?: number;
 };
 
 export type PayoutCalculation = PeriodProfit & {
@@ -197,21 +198,23 @@ async function calculateConsignmentBaseAmount(
   investment: InvestmentRow,
   periodStart: string,
   periodEnd: string
-) {
+): Promise<{ baseAmount: number; quantitySold: number }> {
   if (!investment.productId || !investment.unitCost) {
-    return 0;
+    return Promise.resolve({ baseAmount: 0, quantitySold: 0 });
   }
 
   const activeStart = laterIso(periodStart, investment.startDate);
   const activeEnd = investment.endDate ? earlierIso(periodEnd, investment.endDate) : periodEnd;
 
   if (new Date(activeStart) >= new Date(activeEnd)) {
-    return 0;
+    return Promise.resolve({ baseAmount: 0, quantitySold: 0 });
   }
 
-  const result = await pool.query<{ baseAmount: number }>(
+  const result = await pool.query<{ baseAmount: number; quantitySold: number }>(
     `
-      select coalesce(sum(ti.quantity * (ti.unit_price - $4::int)), 0)::int as "baseAmount"
+      select 
+        coalesce(sum(ti.quantity * (ti.unit_price - $4::int)), 0)::int as "baseAmount",
+        coalesce(sum(ti.quantity), 0)::int as "quantitySold"
       from transaction_items ti
       join transactions t on t.id = ti.transaction_id
       where t.user_id = $1
@@ -222,14 +225,18 @@ async function calculateConsignmentBaseAmount(
     [workspaceOwnerId, investment.productId, activeStart, investment.unitCost, activeEnd]
   );
 
-  return Math.max(result.rows[0]?.baseAmount ?? 0, 0);
+  return {
+    baseAmount: Math.max(result.rows[0]?.baseAmount ?? 0, 0),
+    quantitySold: Math.max(result.rows[0]?.quantitySold ?? 0, 0),
+  };
 }
 
 function calculatePayoutForInvestment(
   investment: InvestmentRow,
   akadType: AkadType,
   periodBaseProfit: number,
-  consignmentBaseAmount: number
+  consignmentBaseAmount: number,
+  quantitySold?: number
 ): PayoutPreview {
   const legacyType: LegacyInvestmentType =
     akadType === "barang_titip_jual" || akadType === "sales_titipan"
@@ -276,6 +283,20 @@ function calculatePayoutForInvestment(
 
   if (akadType === "barang_titip_jual" || akadType === "sales_titipan") {
     const ratePct = investment.profitSharePerUnitPct ?? investment.profitSharePct ?? 0;
+    
+    let amount = roundCurrency(consignmentBaseAmount * (ratePct / 100));
+    let perUnit = 0;
+    
+    if (quantitySold && quantitySold > 0) {
+      const marginPerUnit = consignmentBaseAmount / quantitySold;
+      perUnit = Math.round(marginPerUnit * (ratePct / 100));
+      amount = perUnit * quantitySold;
+    }
+    
+    let note = `Titipan ${investment.productName ?? "produk"} terjual. ${ratePct}% dari margin produk.`;
+    if (quantitySold && quantitySold > 0) {
+      note = `Titipan ${investment.productName ?? "produk"} terjual ${quantitySold} pcs (Bagi hasil Rp ${perUnit.toLocaleString("id-ID")}/pcs).`;
+    }
 
     return {
       investmentId: investment.id,
@@ -287,8 +308,9 @@ function calculatePayoutForInvestment(
       baseProfit: consignmentBaseAmount,
       ratePct,
       sharePct: ratePct,
-      amount: roundCurrency(consignmentBaseAmount * (ratePct / 100)),
-      note: `Titipan ${investment.productName ?? "produk"} ${ratePct}% dari margin produk terjual.`,
+      amount,
+      note,
+      quantitySold,
     };
   }
 
@@ -357,17 +379,18 @@ export async function calculatePayouts(
 
   for (const investment of investmentResult.rows) {
     const akadType = resolveAkadType(investment);
-    const consignmentBaseAmount =
+    const consignment =
       akadType === "barang_titip_jual" || akadType === "sales_titipan"
         ? await calculateConsignmentBaseAmount(workspaceOwnerId, investment, periodStart, periodEnd)
-        : 0;
+        : { baseAmount: 0, quantitySold: 0 };
 
     payouts.push(
       calculatePayoutForInvestment(
         investment,
         akadType,
         profit.baseProfit,
-        consignmentBaseAmount
+        consignment.baseAmount,
+        consignment.quantitySold
       )
     );
   }
@@ -375,8 +398,23 @@ export async function calculatePayouts(
   const totalInvestorPayout = payouts.reduce((sum, payout) => sum + payout.amount, 0);
   const remaining = profit.baseProfit - totalInvestorPayout;
   const positiveRemaining = Math.max(remaining, 0);
-  const pcmShare = roundCurrency(positiveRemaining * 0.3);
-  const storeShare = positiveRemaining - pcmShare;
+
+  // Read profit sharing percentages from store profile
+  const profileResult = await pool.query<{ pcmPct: number; reservePct: number }>(
+    `SELECT
+       coalesce(profit_share_pcm_pct, 30) as "pcmPct",
+       coalesce(profit_share_reserve_pct, 0) as "reservePct"
+     FROM store_profiles
+     WHERE user_id = $1
+     LIMIT 1`,
+    [workspaceOwnerId]
+  );
+  const pcmPct = profileResult.rows[0]?.pcmPct ?? 30;
+  const reservePct = profileResult.rows[0]?.reservePct ?? 0;
+
+  const pcmShare = roundCurrency(positiveRemaining * (pcmPct / 100));
+  const reserveShare = roundCurrency(positiveRemaining * (reservePct / 100));
+  const storeShare = positiveRemaining - pcmShare - reserveShare;
 
   return {
     ...profit,
@@ -386,10 +424,10 @@ export async function calculatePayouts(
     remaining,
     distributableNetProfit: Math.max(profit.baseProfit, 0),
     pcmShare,
-    reserveShare: 0,
+    reserveShare,
     storeShare,
-    profitSharePcmPct: 30,
-    profitShareReservePct: 0,
+    profitSharePcmPct: pcmPct,
+    profitShareReservePct: reservePct,
     payouts,
   };
 }

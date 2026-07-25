@@ -216,7 +216,7 @@ export function BukuHutangView() {
                         </div>
                         <div className="rounded-[20px] bg-muted/55 p-4">
                           <p className="text-sm text-muted-foreground">Tempo</p>
-                          <p className="mt-2 text-lg font-semibold">{formatDate(debt.dueDate)}</p>
+                          <p className="mt-2 text-lg font-semibold">{debt.dueDate ? formatDate(debt.dueDate) : "Tanpa batas"}</p>
                         </div>
                       </div>
 

@@ -68,7 +68,7 @@ export const DebtCreateSchema = z
     borrowerName: requiredText("Nama peminjam"),
     whatsapp: requiredText("Nomor WhatsApp").min(10, "Nomor WhatsApp minimal 10 karakter."),
     amount: positiveInteger("Nominal hutang").optional(),
-    dueDate: isoDateLike("Tanggal jatuh tempo"),
+    dueDate: isoDateLike("Tanggal jatuh tempo").optional().nullable(),
     items: z
       .array(
         z
@@ -99,7 +99,7 @@ export const DebtUpdateSchema = z
   .object({
     borrowerName: requiredText("Nama peminjam").optional(),
     whatsapp: requiredText("Nomor WhatsApp").min(10, "Nomor WhatsApp minimal 10 karakter.").optional(),
-    dueDate: isoDateLike("Tanggal jatuh tempo").optional(),
+    dueDate: isoDateLike("Tanggal jatuh tempo").optional().nullable(),
     status: z.enum(["aktif", "lunas", "lewat_tempo"]).optional(),
     isPaid: z.literal(true).optional(),
   })
@@ -123,6 +123,7 @@ export const SettingsUpdateSchema = z
     storeAddress: requiredText("Alamat warung"),
     pcmName: optionalText,
     pcmChairmanName: optionalText,
+    pcmChairmanTitle: optionalText,
     pcmAddress: optionalText,
     ownerName: requiredText("Nama pemilik"),
     ownerWhatsapp: requiredText("WhatsApp pemilik").min(10, "WhatsApp pemilik minimal 10 karakter."),

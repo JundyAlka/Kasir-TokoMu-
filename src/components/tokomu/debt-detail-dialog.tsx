@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BadgeCheck, Info, MessageSquareShare, WalletCards } from "lucide-react";
+import { BadgeCheck, Info, MessageSquareShare, WalletCards, Pencil, Check, X, ChevronDown, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -90,6 +90,10 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentNote, setPaymentNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [editingDueDate, setEditingDueDate] = useState(false);
+  const [newDueDate, setNewDueDate] = useState("");
+  const [newNoDueDate, setNewNoDueDate] = useState(false);
+  const [showTemplate, setShowTemplate] = useState(false);
 
   useEffect(() => {
     if (!open || !debtId) {
@@ -142,6 +146,28 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
     setPaymentAmount(response.debt.remainingAmount);
     setPaymentNote("");
     onDebtUpdated(response.debt);
+  }
+
+  async function handleSaveDueDate() {
+    if (!detail) return;
+    try {
+      setSubmitting(true);
+      const payload = {
+        dueDate: newNoDueDate ? null : newDueDate,
+      };
+      const response = await requestJson<{ debt: DebtDetail }>(`/api/debts/${detail.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      setDetail(response.debt);
+      onDebtUpdated(response.debt);
+      setEditingDueDate(false);
+      toast.success("Jatuh tempo berhasil diubah.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal mengubah jatuh tempo.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function handlePayment() {
@@ -211,7 +237,45 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
                   <Badge className={statusClassName(detail.status)}>{statusLabel(detail.status)}</Badge>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground break-words">{detail.whatsapp}</p>
-                <p className="mt-1 text-sm text-muted-foreground">Jatuh tempo {formatDate(detail.dueDate)}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  {editingDueDate ? (
+                    <div className="flex flex-wrap items-center gap-2 bg-muted/40 p-1 pr-2 rounded-2xl border border-border/70">
+                      <Input
+                        type="date"
+                        value={newDueDate}
+                        onChange={(e) => setNewDueDate(e.target.value)}
+                        disabled={newNoDueDate}
+                        className="h-8 min-w-[130px] w-auto border-0 focus-visible:ring-0 bg-transparent shadow-none"
+                      />
+                      <label className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="accent-primary"
+                          checked={newNoDueDate}
+                          onChange={(e) => setNewNoDueDate(e.target.checked)}
+                        />
+                        Tanpa batas
+                      </label>
+                      <div className="flex items-center gap-1 pl-1 ml-1 border-l border-border/70">
+                        <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/30" onClick={() => void handleSaveDueDate()} disabled={submitting}><Check className="size-3.5" /></Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => setEditingDueDate(false)} disabled={submitting}><X className="size-3.5" /></Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-muted-foreground">{detail.dueDate ? `Jatuh tempo ${formatDate(detail.dueDate)}` : "Tanpa jatuh tempo"}</p>
+                      {detail.status !== "lunas" && (
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground rounded-full" onClick={() => {
+                          setNewDueDate(detail.dueDate ? detail.dueDate.slice(0, 10) : "");
+                          setNewNoDueDate(!detail.dueDate);
+                          setEditingDueDate(true);
+                        }}>
+                          <Pencil className="size-3" />
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
               <div className="grid min-w-0 sm:min-w-[220px] w-full gap-2 rounded-[20px] border border-border/70 bg-muted/40 p-4">
                 <div className="flex items-center justify-between text-sm">
@@ -323,29 +387,73 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
         )}
         </div>
 
-        <DialogFooter className="m-0 rounded-b-[28px] border-t border-border/70 bg-card p-4 sm:p-5 sm:justify-end" showCloseButton>
+        <DialogFooter className="m-0 rounded-b-[28px] border-t border-border/70 bg-card">
           {detail ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  toast.success("Simulasi pengingat WhatsApp terkirim.", {
-                    description: `Pesan pengingat untuk ${detail.borrowerName} siap dikirim.`,
-                  })
-                }
-              >
-                <MessageSquareShare className="size-4" />
-                Kirim pengingat
-              </Button>
-              {detail.status !== "lunas" ? (
-                <Button type="button" onClick={() => void handleMarkPaid()} disabled={submitting}>
-                  <BadgeCheck className="size-4" />
-                  Tandai lunas
-                </Button>
-              ) : null}
-            </>
-          ) : null}
+            <div className="w-full">
+              {showTemplate && (
+                <div className="border-b border-border/70 p-4 sm:p-5">
+                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">Template pesan WA:</p>
+                  <div className="rounded-2xl bg-muted/50 p-3 text-sm leading-relaxed text-foreground whitespace-pre-wrap font-mono text-xs">{`Assalamu'alaikum wr. wb.
+
+Halo ${detail.borrowerName}, mohon maaf mengganggu waktunya 🙏
+
+Ini pesan dari TokoMu, sekadar mengingatkan mengenai catatan kasbon yang belum terselesaikan sebesar *${formatCurrency(detail.remainingAmount)}*.
+
+Terima kasih banyak ya, semoga sehat selalu dan dilancarkan rezekinya! 😊`}</div>
+                  <button
+                    type="button"
+                    className="mt-2 flex items-center gap-1.5 text-xs text-primary hover:underline transition-opacity"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(`Assalamu'alaikum wr. wb.\n\nHalo ${detail.borrowerName}, mohon maaf mengganggu waktunya 🙏\n\nIni pesan dari TokoMu, sekadar mengingatkan mengenai catatan kasbon yang belum terselesaikan sebesar *${formatCurrency(detail.remainingAmount)}*.\n\nTerima kasih banyak ya, semoga sehat selalu dan dilancarkan rezekinya! 😊`);
+                      toast.success("Template disalin ke clipboard!");
+                    }}
+                  >
+                    <Copy className="size-3" />
+                    Salin teks
+                  </button>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setShowTemplate((v) => !v)}
+                  >
+                    <ChevronDown className={`size-3.5 transition-transform ${showTemplate ? "rotate-180" : ""}`} />
+                    {showTemplate ? "Sembunyikan" : "Lihat"} template
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    render={
+                      <a
+                        href={`https://wa.me/${detail.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Assalamu'alaikum wr. wb.\n\nHalo ${detail.borrowerName}, mohon maaf mengganggu waktunya 🙏\n\nIni pesan dari TokoMu, sekadar mengingatkan mengenai catatan kasbon yang belum terselesaikan sebesar *${formatCurrency(detail.remainingAmount)}*.\n\nTerima kasih banyak ya, semoga sehat selalu dan dilancarkan rezekinya! 😊`)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      />
+                    }
+                    nativeButton={false}
+                    variant="outline"
+                  >
+                    <MessageSquareShare className="size-4" />
+                    Kirim pengingat
+                  </Button>
+                  {detail.status !== "lunas" ? (
+                    <Button type="button" onClick={() => void handleMarkPaid()} disabled={submitting}>
+                      <BadgeCheck className="size-4" />
+                      Tandai lunas
+                    </Button>
+                  ) : null}
+                  <Button variant="outline" type="button" onClick={() => onOpenChange(false)}>Tutup</Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 sm:p-5">
+              <Button variant="outline" type="button" onClick={() => onOpenChange(false)}>Tutup</Button>
+            </div>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

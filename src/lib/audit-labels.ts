@@ -129,5 +129,21 @@ export const ALL_CATEGORIES: AuditCategory[] = [
   "auth",
   "finance",
   "ai",
-  "system",
 ];
+
+export const ENTITY_LABELS: Record<string, string> = {
+  monthly_report: "Laporan Bulanan",
+  pcm_report: "Laporan PCM",
+  user: "Pengguna",
+  product: "Produk",
+  transaction: "Transaksi",
+  expense: "Pengeluaran",
+  investment: "Investasi",
+  debt: "Hutang",
+  payout: "Bagi Hasil",
+  store: "Toko",
+};
+
+export function translateEntity(entityType: string) {
+  return ENTITY_LABELS[entityType] ?? entityType.replace(/_/g, " ").replace(/^./, (s) => s.toUpperCase());
+}

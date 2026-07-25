@@ -1,7 +1,9 @@
 "use client";
 
 import { type PointerEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
+  ArrowRight,
   CalendarDays,
   Check,
   Download,
@@ -11,11 +13,13 @@ import {
   Loader2,
   Printer,
   RotateCcw,
+  ScrollText,
   Settings2,
   TableProperties,
   TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
+import { RoleGate } from "@/components/role-gate";
 import { useAppState } from "@/components/providers/app-state-provider";
 import { StatCard } from "@/components/stat-card";
 import {
@@ -575,6 +579,7 @@ export function LaporanView() {
   const [trendWeek, setTrendWeek] = useState(() => getDefaultTrendWeek(currentMonthValue()));
 
   const [finalizedReports, setFinalizedReports] = useState<any[]>([]);
+  const [pcmReports, setPcmReports] = useState<any[]>([]);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isLoadingReports, setIsLoadingReports] = useState(true);
 
@@ -585,10 +590,17 @@ export function LaporanView() {
   async function fetchFinalizedReports() {
     setIsLoadingReports(true);
     try {
-      const res = await fetch("/api/reports/monthly", { cache: "no-store" });
-      const data = await res.json();
-      if (res.ok && data.reports) {
-        setFinalizedReports(data.reports);
+      const ts = Date.now();
+      const resMonthly = await fetch(`/api/reports/monthly?t=${ts}`, { cache: "no-store" });
+      const dataMonthly = await resMonthly.json();
+      const resPcm = await fetch(`/api/reports/monthly-pcm?t=${ts}`, { cache: "no-store" });
+      const dataPcm = await resPcm.json();
+
+      if (resMonthly.ok && dataMonthly.reports) {
+        setFinalizedReports(dataMonthly.reports);
+      }
+      if (resPcm.ok && dataPcm.reports) {
+        setPcmReports(dataPcm.reports);
       }
     } catch (e) {
       console.error(e);
@@ -613,7 +625,7 @@ export function LaporanView() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      
+
       toast.success(isCurrentPeriodFinalized ? "Snapshot laporan berhasil diperbarui." : "Laporan bulanan berhasil disetujui & ditandai selesai.");
       fetchFinalizedReports();
     } catch (err: any) {
@@ -652,9 +664,8 @@ export function LaporanView() {
         if (active) setSummary(data);
       })
       .catch((error) => {
-        if (!active) return;
-        toast.error(error instanceof Error ? error.message : "Gagal memuat laporan periode.");
-        setSummary(emptySummary);
+        if (active) setSummary(emptySummary);
+        console.error(error);
       })
       .finally(() => {
         if (active) setIsLoading(false);
@@ -664,6 +675,20 @@ export function LaporanView() {
       active = false;
     };
   }, [period]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    const hasUnsaved =
+      !currentFinalizedReport ||
+      summary.revenue !== (currentFinalizedReport.data?.revenue ?? 0) ||
+      summary.netProfit !== (currentFinalizedReport.data?.netProfit ?? 0);
+
+    window.dispatchEvent(
+      new CustomEvent("pcm-reports-updated", {
+        detail: { action: "unsaved_changes", hasUnsaved },
+      })
+    );
+  }, [summary, currentFinalizedReport, isLoading]);
 
   const [selectedYear, selectedMonth] = period.split("-");
   const trendWeekOptions = useMemo(() => getTrendWeekOptions(period), [period]);
@@ -722,9 +747,9 @@ export function LaporanView() {
   );
   const ownerNotes = customOwnerNotes.trim()
     ? customOwnerNotes
-        .split("\n")
-        .map((note) => note.trim())
-        .filter(Boolean)
+      .split("\n")
+      .map((note) => note.trim())
+      .filter(Boolean)
     : defaultOwnerNotes;
   const ownerNotesText = customOwnerNotes || defaultOwnerNotes.join("\n");
 
@@ -1179,42 +1204,84 @@ export function LaporanView() {
               <h3 className="font-heading text-xl font-semibold">Tutup Buku Laporan</h3>
             </div>
             {currentFinalizedReport ? (
-              <div className="mb-6 rounded-2xl bg-card/60 border border-border p-4">
-                <p className="text-sm font-medium text-foreground mb-3">Tersimpan di Riwayat:</p>
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <div className="flex justify-between items-center">
-                    <span>Omzet Terakhir</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(currentFinalizedReport.data.revenue ?? 0)}</span>
+              <div className="mb-6 space-y-3">
+                <RoleGate role={["pimpinan"]}>
+                  {(summary.revenue === (currentFinalizedReport.data.revenue ?? 0) && summary.netProfit === (currentFinalizedReport.data.netProfit ?? 0)) && (() => {
+                    const currentPcm = pcmReports.find(r => r.periodYear === selYear && r.periodMonth === selMonth);
+                    const pcmFin = (currentPcm?.data as any)?.financial;
+                    const isPcmOutdated = !currentPcm || (currentFinalizedReport.data as any)?.revenue !== pcmFin?.revenue || (currentFinalizedReport.data as any)?.netProfit !== pcmFin?.netProfit;
+                    return (
+                      <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                              <Check className="size-4" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">Laporan Bulanan Sudah Fix</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Snapshot disetujui. Silakan buat atau periksa Laporan PCM.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isPcmOutdated && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/15 px-3 py-1 text-xs font-semibold text-rose-600 dark:text-rose-400 animate-pulse border border-rose-500/30">
+                                <span className="relative inline-flex size-2 rounded-full bg-rose-500"></span>
+                                Laporan PCM perlu di-update!
+                              </span>
+                            )}
+                            <Link href="/laporan-pcm">
+                              <Button size="sm" className={cn("rounded-xl text-xs gap-1.5 shrink-0 font-bold", isPcmOutdated ? "animate-pulse ring-2 ring-primary ring-offset-1 shadow-lg" : "")}>
+                                <ScrollText className="size-3.5" />
+                                Laporan PCM
+                                <ArrowRight className="size-3" />
+                              </Button>
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </RoleGate>
+
+                <div className="rounded-2xl bg-card/60 border border-border p-4">
+                  <p className="text-sm font-medium text-foreground mb-3">Tersimpan di Riwayat:</p>
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <div className="flex justify-between items-center">
+                      <span>Omzet Terakhir</span>
+                      <span className="font-semibold text-foreground">{formatCurrency(currentFinalizedReport.data.revenue ?? 0)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Laba Bersih Terakhir</span>
+                      <span className="font-semibold text-foreground">{formatCurrency(currentFinalizedReport.data.netProfit ?? 0)}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span>Laba Bersih Terakhir</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(currentFinalizedReport.data.netProfit ?? 0)}</span>
-                  </div>
+
+                  {(summary.revenue !== (currentFinalizedReport.data.revenue ?? 0) || summary.netProfit !== (currentFinalizedReport.data.netProfit ?? 0)) && (
+                    <div className="mt-4 pt-4 border-t border-border/60 space-y-2 text-sm">
+                      <p className="font-medium text-primary flex items-center gap-2 mb-3">
+                        <RotateCcw className="size-4" /> Ada Perubahan Baru (Belum Disimpan)
+                      </p>
+                      {summary.revenue !== (currentFinalizedReport.data.revenue ?? 0) && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Selisih Omzet</span>
+                          <span className={summary.revenue > (currentFinalizedReport.data.revenue ?? 0) ? "text-emerald-500 font-medium" : "text-rose-500 font-medium"}>
+                            {summary.revenue > (currentFinalizedReport.data.revenue ?? 0) ? "+" : ""}{formatCurrency(summary.revenue - (currentFinalizedReport.data.revenue ?? 0))}
+                          </span>
+                        </div>
+                      )}
+                      {summary.netProfit !== (currentFinalizedReport.data.netProfit ?? 0) && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Selisih Laba Bersih</span>
+                          <span className={summary.netProfit > (currentFinalizedReport.data.netProfit ?? 0) ? "text-emerald-500 font-medium" : "text-rose-500 font-medium"}>
+                            {summary.netProfit > (currentFinalizedReport.data.netProfit ?? 0) ? "+" : ""}{formatCurrency(summary.netProfit - (currentFinalizedReport.data.netProfit ?? 0))}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                
-                {(summary.revenue !== (currentFinalizedReport.data.revenue ?? 0) || summary.netProfit !== (currentFinalizedReport.data.netProfit ?? 0)) && (
-                  <div className="mt-4 pt-4 border-t border-border/60 space-y-2 text-sm">
-                    <p className="font-medium text-primary flex items-center gap-2 mb-3">
-                      <RotateCcw className="size-4" /> Ada Perubahan Baru (Belum Disimpan)
-                    </p>
-                    {summary.revenue !== (currentFinalizedReport.data.revenue ?? 0) && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Selisih Omzet</span>
-                        <span className={summary.revenue > (currentFinalizedReport.data.revenue ?? 0) ? "text-emerald-500 font-medium" : "text-rose-500 font-medium"}>
-                          {summary.revenue > (currentFinalizedReport.data.revenue ?? 0) ? "+" : ""}{formatCurrency(summary.revenue - (currentFinalizedReport.data.revenue ?? 0))}
-                        </span>
-                      </div>
-                    )}
-                    {summary.netProfit !== (currentFinalizedReport.data.netProfit ?? 0) && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Selisih Laba Bersih</span>
-                        <span className={summary.netProfit > (currentFinalizedReport.data.netProfit ?? 0) ? "text-emerald-500 font-medium" : "text-rose-500 font-medium"}>
-                          {summary.netProfit > (currentFinalizedReport.data.netProfit ?? 0) ? "+" : ""}{formatCurrency(summary.netProfit - (currentFinalizedReport.data.netProfit ?? 0))}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground mb-6">
@@ -1255,8 +1322,8 @@ export function LaporanView() {
             ) : (
               <div className="space-y-3">
                 {finalizedReports.map((report) => (
-                  <a 
-                    key={report.id} 
+                  <a
+                    key={report.id}
                     href={buildHistoricalPdfUrl(report.periodYear, report.periodMonth)}
                     target="_blank"
                     rel="noopener noreferrer"

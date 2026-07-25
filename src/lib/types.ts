@@ -53,7 +53,7 @@ export interface Debt {
   remainingAmount: number;
   status: "aktif" | "lunas" | "lewat_tempo";
   createdAt: string;
-  dueDate: string;
+  dueDate?: string | null;
   isPaid: boolean;
   lastReminderAt?: string;
 }
@@ -98,6 +98,7 @@ export interface Settings {
   storeAddress: string;
   pcmName: string;
   pcmChairmanName: string;
+  pcmChairmanTitle: string;
   pcmAddress: string;
   ownerName: string;
   ownerWhatsapp: string;
@@ -137,7 +138,7 @@ export interface DebtDraft {
   borrowerName: string;
   whatsapp: string;
   amount?: number;
-  dueDate: string;
+  dueDate?: string | null;
   items?: Array<{
     productId?: string | null;
     name: string;

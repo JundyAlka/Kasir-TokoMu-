@@ -66,6 +66,7 @@ function legacyToReportData(
       ownerName: "Pimpinan TokoMu",
       pcmName: "PCM Muhammadiyah Grabag",
       pcmChairmanName: "",
+      pcmChairmanTitle: "Ketua PCM",
       pcmAddress: "Grabag, Purworejo",
     },
     financial: {

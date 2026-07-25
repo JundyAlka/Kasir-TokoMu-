@@ -138,6 +138,7 @@ async function buildReportData(
       ownerName: normalizeOwnerName(profile?.ownerName),
       pcmName: profile?.pcmName || "PCM Muhammadiyah Grabag",
       pcmChairmanName: profile?.pcmChairmanName ?? "",
+      pcmChairmanTitle: profile?.pcmChairmanTitle ?? "Ketua PCM",
       pcmAddress: normalizeAddress(profile?.pcmAddress),
     },
     financial: {
@@ -201,9 +202,9 @@ export async function POST(request: NextRequest) {
       )
       .limit(1);
 
-    if (existing?.status === "final") {
+    if (existing?.status === "final" && (existing.data as any)?.financial) {
       return NextResponse.json(
-        { error: "Laporan final tidak bisa diedit." },
+        { error: "Laporan PCM final tidak bisa diedit." },
         { status: 409 }
       );
     }
@@ -212,7 +213,10 @@ export async function POST(request: NextRequest) {
       ? await db
           .update(monthlyReports)
           .set({
-            data,
+            data: {
+              ...(existing.data as any),
+              ...data,
+            },
             status: "draft",
             finalizedAt: null,
             updatedAt: timestamp,

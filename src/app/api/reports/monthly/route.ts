@@ -27,14 +27,18 @@ export async function GET(request: NextRequest) {
     const list = await db
       .select()
       .from(monthlyReports)
-      .where(
-        and(
-          eq(monthlyReports.workspaceOwnerId, workspaceOwnerId),
-          eq(monthlyReports.status, "final")
-        )
-      )
+      .where(eq(monthlyReports.workspaceOwnerId, workspaceOwnerId))
       .orderBy(desc(monthlyReports.periodYear), desc(monthlyReports.periodMonth))
       .limit(50);
+      
+    console.log("=== DEBUG MONTHLY REPORTS ===");
+    console.log(JSON.stringify(list.slice(0, 3).map(r => ({
+      id: r.id,
+      year: r.periodYear,
+      month: r.periodMonth,
+      status: r.status,
+      hasFinancial: (r.data as any)?.financial !== undefined
+    })), null, 2));
 
     return NextResponse.json({ reports: list });
   } catch (error) {
@@ -68,7 +72,10 @@ export async function POST(request: NextRequest) {
       const [updated] = await db
         .update(monthlyReports)
         .set({
-          data: parsed.data,
+          data: {
+            ...(existing[0].data as any),
+            ...parsed.data
+          },
           status: "final",
           finalizedAt: timestamp,
           updatedAt: timestamp,

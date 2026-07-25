@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronsLeft,
   ChevronsRight,
@@ -42,9 +42,9 @@ const navigation = [
 ] satisfies Array<{ href: string; label: string; icon: typeof Gauge; roles: Role[] }>;
 
 const layoutStorageKey = "warungos.shell.layout.v2";
-const defaultSidebarWidth = 240;
+const defaultSidebarWidth = 280;
 const defaultAiWidth = 320;
-const minSidebarWidth = 200;
+const minSidebarWidth = 260;
 const maxSidebarWidth = 320;
 const minAiWidth = 280;
 const maxAiWidth = 460;
@@ -69,6 +69,100 @@ export function AppShell({
   const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
   const [aiWidth, setAiWidth] = useState(defaultAiWidth);
   const [isResizing, setIsResizing] = useState(false);
+  const [hasPendingMonthlyReport, setHasPendingMonthlyReport] = useState(false);
+  const [hasPendingPcmReport, setHasPendingPcmReport] = useState(false);
+  const unsavedTransactionsRef = useRef(false);
+  const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0;
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    let mounted = true;
+    let refetchTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function fetchReportsStatus() {
+      const ts = Date.now();
+      Promise.all([
+        fetch(`/api/reports/monthly?t=${ts}`, { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)).catch(() => null),
+        fetch(`/api/reports/monthly-pcm?t=${ts}`, { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)).catch(() => null),
+      ]).then(([monthlyData, pcmData]) => {
+        if (!mounted) return;
+
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+
+        const currentSnapshot = monthlyData?.reports?.find((r: any) =>
+          r.periodYear === currentYear && r.periodMonth === currentMonth
+        );
+        const currentPcm = pcmData?.reports?.find((r: any) =>
+          r.periodYear === currentYear && r.periodMonth === currentMonth
+        );
+
+        // 1. Pending Monthly Report (/laporan):
+        const monthlyPending = !currentSnapshot || unsavedTransactionsRef.current;
+        setHasPendingMonthlyReport(monthlyPending);
+
+        // 2. Pending PCM Report (/laporan-pcm):
+        // Only pending if PCM report does NOT exist, OR snapshot is newer than PCM data (outdated)
+        let pcmPending = false;
+        if (!currentPcm) {
+          pcmPending = !!currentSnapshot; // if snapshot exists but no PCM, then pending
+        } else if (currentSnapshot) {
+          const snapshotData = currentSnapshot.data as any;
+          const pcmData = currentPcm.data as any;
+          const fin = pcmData?.financial;
+          
+          if (!fin) {
+            pcmPending = true;
+          } else {
+            const snapRev = Number(snapshotData?.revenue ?? 0);
+            const snapNet = Number(snapshotData?.netProfit ?? 0);
+            const pcmRev = Number(fin?.revenue ?? 0);
+            const pcmNet = Number(fin?.netProfit ?? 0);
+            if (snapRev !== pcmRev || snapNet !== pcmNet) {
+              pcmPending = true;
+            }
+          }
+        }
+        setHasPendingPcmReport(pcmPending);
+      });
+    }
+
+    fetchReportsStatus();
+
+    function handlePcmUpdate(e: any) {
+      if (e.detail?.action === "unsaved_changes") {
+        const unsaved = !!e.detail?.hasUnsaved;
+        unsavedTransactionsRef.current = unsaved;
+        setHasPendingMonthlyReport(unsaved);
+      } else if (e.detail?.action === "transaction_added") {
+        unsavedTransactionsRef.current = true;
+        setHasPendingMonthlyReport(true);
+      } else if (e.detail?.action === "snapshot_updated") {
+        unsavedTransactionsRef.current = false;
+        setHasPendingMonthlyReport(false);
+        setHasPendingPcmReport(true);
+      } else if (e.detail?.action === "updated" || e.detail?.action === "finalized") {
+        setHasPendingPcmReport(false);
+      } else if (e.detail?.action === "reopened") {
+        setHasPendingPcmReport(true);
+      }
+      if (refetchTimer) clearTimeout(refetchTimer);
+      refetchTimer = setTimeout(fetchReportsStatus, 800);
+    }
+
+    window.addEventListener("pcm-reports-updated", handlePcmUpdate);
+    return () => {
+      mounted = false;
+      if (refetchTimer) clearTimeout(refetchTimer);
+      window.removeEventListener("pcm-reports-updated", handlePcmUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -149,7 +243,7 @@ export function AppShell({
           className={cn(
             "glass-panel hidden h-full shrink-0 flex-col overflow-hidden rounded-[26px] border border-border/60 shadow-[0_32px_80px_-50px_rgba(68,39,20,0.65)] transition-[width] duration-200 ease-out md:flex",
             tabletSidebarExpanded
-              ? "w-[180px] items-stretch p-3"
+              ? "w-[260px] items-stretch p-3"
               : "w-[60px] items-center px-1.5 py-2.5",
             leftCollapsed
               ? "2xl:w-[88px] 2xl:items-center 2xl:px-5 2xl:py-4"
@@ -248,7 +342,7 @@ export function AppShell({
                   href={item.href}
                   title={item.label}
                   className={cn(
-                    "flex items-center gap-2.5 rounded-xl text-xs font-medium transition-colors sm:text-sm 2xl:rounded-2xl",
+                    "relative flex items-center gap-2.5 rounded-xl text-xs font-medium transition-colors sm:text-sm 2xl:rounded-2xl",
                     leftCollapsed
                       ? "size-12 justify-center"
                       : tabletSidebarExpanded
@@ -261,9 +355,68 @@ export function AppShell({
                 >
                   <Icon className={cn("shrink-0", leftCollapsed ? "size-5" : "size-4")} />
                   {!leftCollapsed && (
-                    <span className={cn(tabletSidebarExpanded ? "inline" : "hidden 2xl:inline")}>
+                    <span className={cn(tabletSidebarExpanded ? "block" : "hidden 2xl:block", "whitespace-nowrap")}>
                       {item.label}
                     </span>
+                  )}
+                  {/* Badge Notifikasi 1: Laporan Bulanan (/laporan) */}
+                  {hasPendingMonthlyReport && item.href === "/laporan" && (
+                    <>
+                      {/* Expanded Pill Badge */}
+                      <span className={cn(
+                        "relative ml-auto hidden shrink-0 items-center gap-1.5 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-600 transition-all dark:text-rose-400 border border-rose-500/30 animate-pulse",
+                        !leftCollapsed && (tabletSidebarExpanded ? "flex" : "2xl:flex"),
+                        isActive && "bg-white/20 text-white border-white/40"
+                      )}>
+                        <span className={cn("relative inline-flex size-1.5 rounded-full", isActive ? "bg-white" : "bg-rose-500")} />
+                        Perbarui
+                      </span>
+                      {/* Collapsed Dot Badge */}
+                      <span
+                        className={cn(
+                          "absolute top-1 right-1 flex size-2.5 shrink-0 transition-all z-10 animate-pulse",
+                          !leftCollapsed && (tabletSidebarExpanded ? "hidden" : "2xl:hidden")
+                        )}
+                        title="Ada transaksi baru, perlu perbarui snapshot laporan"
+                      >
+                        <span
+                          className={cn(
+                            "relative inline-flex size-2.5 rounded-full ring-2 ring-background",
+                            isActive ? "bg-white" : "bg-rose-500"
+                          )}
+                        />
+                      </span>
+                    </>
+                  )}
+
+                  {/* Badge Notifikasi 2: Laporan PCM (/laporan-pcm) */}
+                  {hasPendingPcmReport && item.href === "/laporan-pcm" && (
+                    <>
+                      {/* Expanded Pill Badge */}
+                      <span className={cn(
+                        "relative ml-auto hidden shrink-0 items-center gap-1.5 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-600 transition-all dark:text-rose-400 border border-rose-500/30 animate-pulse",
+                        !leftCollapsed && (tabletSidebarExpanded ? "flex" : "2xl:flex"),
+                        isActive && "bg-white/20 text-white border-white/40"
+                      )}>
+                        <span className={cn("relative inline-flex size-1.5 rounded-full", isActive ? "bg-white" : "bg-rose-500")} />
+                        Update
+                      </span>
+                      {/* Collapsed Dot Badge */}
+                      <span
+                        className={cn(
+                          "absolute top-1 right-1 flex size-2.5 shrink-0 transition-all z-10 animate-pulse",
+                          !leftCollapsed && (tabletSidebarExpanded ? "hidden" : "2xl:hidden")
+                        )}
+                        title="Laporan PCM perlu diperbarui"
+                      >
+                        <span
+                          className={cn(
+                            "relative inline-flex size-2.5 rounded-full ring-2 ring-background",
+                            isActive ? "bg-white" : "bg-rose-500"
+                          )}
+                        />
+                      </span>
+                    </>
                   )}
                 </Link>
               );
@@ -290,7 +443,7 @@ export function AppShell({
         ) : null}
 
         <RoleProvider role={role}>
-          <main className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto px-1 py-0.5 sm:px-2 sm:py-1 2xl:min-w-[680px]">
+          <main ref={mainRef} className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto px-1 py-0.5 sm:px-2 sm:py-1 2xl:min-w-[680px]">
             {children}
           </main>
         </RoleProvider>

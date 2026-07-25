@@ -66,7 +66,7 @@ function effectiveDebtStatus(debt: Pick<typeof debts.$inferSelect, "amount" | "p
     return "lunas" as const;
   }
 
-  if (new Date(debt.dueDate).getTime() < new Date(getJakartaDayRange().start).getTime()) {
+  if (debt.dueDate && new Date(debt.dueDate).getTime() < new Date(getJakartaDayRange().start).getTime()) {
     return "lewat_tempo" as const;
   }
 
@@ -127,6 +127,7 @@ async function ensureWorkspace(userId: string, session?: SessionHint) {
         storeAddress: "Alamat belum diisi",
         pcmName: "",
         pcmChairmanName: "",
+        pcmChairmanTitle: "Ketua PCM",
         pcmAddress: "",
         ownerName: session?.user?.name ?? "Pemilik Warung",
         ownerWhatsapp: "-",
@@ -245,6 +246,7 @@ function mapSettings(profile: typeof storeProfiles.$inferSelect): Settings {
     storeAddress: profile.storeAddress,
     pcmName: profile.pcmName,
     pcmChairmanName: profile.pcmChairmanName,
+    pcmChairmanTitle: profile.pcmChairmanTitle ?? "Ketua PCM",
     pcmAddress: profile.pcmAddress,
     ownerName: profile.ownerName,
     ownerWhatsapp: profile.ownerWhatsapp,
@@ -275,6 +277,7 @@ function normalizeSettings(settings: Settings): Settings {
     storeAddress: settings.storeAddress.trim(),
     pcmName: settings.pcmName.trim(),
     pcmChairmanName: settings.pcmChairmanName.trim(),
+    pcmChairmanTitle: (settings.pcmChairmanTitle ?? "Ketua PCM").trim(),
     pcmAddress: settings.pcmAddress.trim(),
     ownerName: settings.ownerName.trim(),
     ownerWhatsapp: settings.ownerWhatsapp.trim(),
@@ -675,7 +678,7 @@ export async function createDebt(userId: string, draft: DebtDraft) {
         paidAmount: 0,
         status: "aktif",
         createdAt: timestamp,
-        dueDate: parseDueDate(nextDraft.dueDate),
+        dueDate: nextDraft.dueDate ? parseDueDate(nextDraft.dueDate) : null,
         isPaid: 0,
         lastReminderAt: null,
       })
@@ -773,7 +776,7 @@ export async function updateDebt(
     .set({
       borrowerName: draft.borrowerName ?? existing.borrowerName,
       whatsapp: draft.whatsapp ?? existing.whatsapp,
-      dueDate: draft.dueDate ? parseDueDate(draft.dueDate) : existing.dueDate,
+      dueDate: draft.dueDate !== undefined ? (draft.dueDate ? parseDueDate(draft.dueDate) : null) : existing.dueDate,
       status: draft.status ?? effectiveDebtStatus(existing),
     })
     .where(and(eq(debts.id, debtId), eq(debts.userId, userId)))
@@ -936,6 +939,7 @@ export async function updateStoreSettings(userId: string, settings: Settings) {
       storeAddress: nextSettings.storeAddress,
       pcmName: nextSettings.pcmName,
       pcmChairmanName: nextSettings.pcmChairmanName,
+      pcmChairmanTitle: nextSettings.pcmChairmanTitle ?? "Ketua PCM",
       pcmAddress: nextSettings.pcmAddress,
       ownerName: nextSettings.ownerName,
       ownerWhatsapp: nextSettings.ownerWhatsapp,
@@ -1008,6 +1012,7 @@ export async function resetWorkspace(userId: string) {
     storeAddress: "Alamat belum diisi",
     pcmName: "",
     pcmChairmanName: "",
+    pcmChairmanTitle: "Ketua PCM",
     pcmAddress: "",
     ownerName: "Pemilik Warung",
     ownerWhatsapp: "-",

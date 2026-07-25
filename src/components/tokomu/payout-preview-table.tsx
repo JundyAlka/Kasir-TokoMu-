@@ -42,6 +42,7 @@ type PayoutRow = {
   note: string;
   periodStart?: string;
   periodEnd?: string;
+  quantitySold?: number;
 };
 
 type PayoutCalculation = {
@@ -125,7 +126,7 @@ export function PayoutPreviewTable({
         <TableRow>
           <TableHead>Investor</TableHead>
           <TableHead>Tipe akad</TableHead>
-          <TableHead>Base profit</TableHead>
+          <TableHead>Base profit / Qty</TableHead>
           <TableHead>Share/Rate</TableHead>
           <TableHead>Payout</TableHead>
           <TableHead>Catatan</TableHead>
@@ -139,8 +140,31 @@ export function PayoutPreviewTable({
             <TableCell>
               <Badge variant="outline">{akadLabels[row.akadType]}</Badge>
             </TableCell>
-            <TableCell>{formatCurrency(row.baseAmount)}</TableCell>
-            <TableCell>{row.ratePct}%</TableCell>
+            <TableCell>
+              {row.akadType === "barang_titip_jual" || row.akadType === "sales_titipan" ? (
+                row.quantitySold ? (
+                  <div>
+                    <span>{row.quantitySold} pcs</span>
+                    <span className="ml-2 text-xs text-muted-foreground block">(Margin: {formatCurrency(row.baseAmount)})</span>
+                  </div>
+                ) : (
+                  formatCurrency(row.baseAmount)
+                )
+              ) : (
+                formatCurrency(row.baseAmount)
+              )}
+            </TableCell>
+            <TableCell>
+              {row.akadType === "barang_titip_jual" || row.akadType === "sales_titipan" ? (
+                row.quantitySold ? (
+                  `${formatCurrency(row.amount / row.quantitySold)} / pcs`
+                ) : (
+                  `${row.ratePct}%`
+                )
+              ) : (
+                `${row.ratePct}%`
+              )}
+            </TableCell>
             <TableCell className="font-medium">{formatCurrency(row.amount)}</TableCell>
             <TableCell className="max-w-sm whitespace-normal text-muted-foreground">{row.note}</TableCell>
             {mode === "saved" ? (

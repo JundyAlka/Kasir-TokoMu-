@@ -694,6 +694,7 @@ export function KasirView() {
       toast.success("Transaksi berhasil disimpan.", {
         description: `${transaction.items.length} produk masuk ke penjualan ${paymentLabels[transaction.paymentMethod]}.`,
       });
+      window.dispatchEvent(new CustomEvent("pcm-reports-updated", { detail: { action: "transaction_added" } }));
       const transactionRecordedBy = {
         userId: transaction.recordedByUserId ?? "",
         name: transaction.recordedByName || "Kasir",

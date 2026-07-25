@@ -64,7 +64,7 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
               value={draft.sku ?? ""}
               onChange={(event) => onChange({ ...draft, sku: event.target.value.toUpperCase() })}
               placeholder="Contoh: MIG-MKN-001"
-              className="h-11 flex-1 rounded-2xl"
+              className="h-11 flex-1 rounded-2xl bg-white dark:bg-background shadow-sm"
             />
             <Button
               type="button"
@@ -85,7 +85,7 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
             value={draft.name}
             onChange={(event) => onChange({ ...draft, name: event.target.value })}
             placeholder="Contoh: Mi Instan Goreng"
-            className="h-11 rounded-2xl"
+            className="h-11 rounded-2xl bg-white dark:bg-background shadow-sm"
           />
         </div>
       </div>
@@ -97,7 +97,7 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
             value={draft.category}
             onValueChange={(value) => onChange({ ...draft, category: value as ProductCategory })}
           >
-            <SelectTrigger className="h-11 w-full rounded-2xl bg-card">
+            <SelectTrigger className="h-11 w-full rounded-2xl bg-white dark:bg-background shadow-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -119,7 +119,7 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
             value={draft.stock || ""}
             onChange={(event) => onChange({ ...draft, stock: Number(event.target.value) })}
             placeholder="0"
-            className="h-11 rounded-2xl"
+            className="h-11 rounded-2xl bg-white dark:bg-background shadow-sm"
           />
         </div>
       </div>
@@ -136,7 +136,7 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
             value={draft.buyPrice || ""}
             onChange={(event) => onChange({ ...draft, buyPrice: Number(event.target.value) })}
             placeholder="0"
-            className="h-11 rounded-2xl"
+            className="h-11 rounded-2xl bg-white dark:bg-background shadow-sm"
           />
         </div>
         <div className="grid gap-2">
@@ -150,7 +150,7 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
             value={draft.sellPrice || ""}
             onChange={(event) => onChange({ ...draft, sellPrice: Number(event.target.value) })}
             placeholder="0"
-            className="h-11 rounded-2xl"
+            className="h-11 rounded-2xl bg-white dark:bg-background shadow-sm"
           />
         </div>
       </div>
@@ -167,12 +167,12 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
             value={draft.minimumStock || ""}
             onChange={(event) => onChange({ ...draft, minimumStock: Number(event.target.value) })}
             placeholder="0"
-            className="h-11 rounded-2xl"
+            className="h-11 rounded-2xl bg-white dark:bg-background shadow-sm"
           />
         </div>
         <div className="grid gap-2">
           <FieldLabel help={FIELD_HELP.margin}>Margin</FieldLabel>
-          <div className="flex h-11 items-center rounded-2xl border border-border bg-muted/45 px-3 text-sm font-medium">
+          <div className="flex h-11 items-center rounded-2xl border border-border bg-white dark:bg-background shadow-sm px-3 text-sm font-medium">
             {formatCurrency(margin)} {marginPct > 0 ? `(${marginPct}%)` : ""}
           </div>
         </div>
@@ -185,7 +185,7 @@ export function ProductForm({ draft, onChange, existingSkus = [] }: ProductFormP
           value={draft.description}
           onChange={(event) => onChange({ ...draft, description: event.target.value })}
           placeholder="Penempatan rak, paket laris, atau info kasir"
-          className="h-11 rounded-2xl"
+          className="h-11 rounded-2xl bg-white dark:bg-background shadow-sm"
         />
       </div>
     </div>

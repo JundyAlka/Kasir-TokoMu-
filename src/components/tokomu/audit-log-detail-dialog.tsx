@@ -10,7 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/format";
-import { getAuditLabel, CATEGORY_STYLES, type AuditCategory } from "@/lib/audit-labels";
+import { getAuditLabel, CATEGORY_STYLES, type AuditCategory, translateEntity } from "@/lib/audit-labels";
 import { cn } from "@/lib/utils";
 
 export type AuditLogEntry = {
@@ -33,9 +33,12 @@ interface AuditLogDetailDialogProps {
   onClose: () => void;
 }
 
-function formatValue(value: unknown): string {
+function formatValue(value: unknown, key?: string): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "number") {
+    // Skip currency formatting for year/month/qty fields
+    if (key && /year|month|qty|quantity/i.test(key)) return String(value);
+
     // Heuristic: if the field looks like currency (> 100), format as IDR
     if (value >= 100) return formatCurrency(value);
     return String(value);
@@ -74,6 +77,11 @@ const FIELD_LABELS: Record<string, string> = {
   profitShareReservePct: "Dana cadangan (%)",
   stockAlertThreshold: "Batas alert stok",
   enabledPayments: "Pembayaran aktif",
+  periodYear: "Tahun Periode",
+  periodMonth: "Bulan Periode",
+  finalizedAt: "Waktu Disetujui",
+  snapshot: "Data Snapshot",
+  data: "Data",
 };
 
 function fieldLabel(key: string): string {
@@ -121,10 +129,10 @@ function DiffTable({ before, after }: { before: Record<string, unknown>; after: 
               >
                 <td className="px-3 py-2 font-medium">{fieldLabel(key)}</td>
                 <td className={cn("px-3 py-2 tabular-nums", changed && "text-red-600 line-through dark:text-red-400")}>
-                  {formatValue(oldVal)}
+                  {formatValue(oldVal, key)}
                 </td>
                 <td className={cn("px-3 py-2 tabular-nums", changed && "text-emerald-600 font-medium dark:text-emerald-400")}>
-                  {formatValue(newVal)}
+                  {formatValue(newVal, key)}
                 </td>
               </tr>
             );
@@ -151,7 +159,7 @@ function PayloadView({ payload }: { payload: Record<string, unknown> }) {
       {entries.map(([key, value]) => (
         <div key={key} className="flex items-start justify-between gap-3 rounded-lg border border-border/40 px-3 py-2">
           <span className="text-sm text-muted-foreground">{fieldLabel(key)}</span>
-          <span className="text-right text-sm font-medium tabular-nums">{formatValue(value)}</span>
+          <span className="text-right text-sm font-medium tabular-nums">{formatValue(value, key)}</span>
         </div>
       ))}
     </div>
@@ -211,9 +219,9 @@ export function AuditLogDetailDialog({ entry, onClose }: AuditLogDetailDialogPro
               <div className="rounded-lg border border-border/40 px-3 py-2">
                 <p className="text-xs text-muted-foreground">Entity</p>
                 <p className="mt-0.5 text-sm font-medium">
-                  {entry.entityType}
+                  {translateEntity(entry.entityType)}
                   {entry.entityId ? (
-                    <span className="ml-1 text-xs text-muted-foreground">#{entry.entityId}</span>
+                    <span className="ml-1 text-xs text-muted-foreground">#{entry.entityId.slice(0, 8)}</span>
                   ) : null}
                 </p>
               </div>

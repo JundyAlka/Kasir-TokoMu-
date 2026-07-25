@@ -82,8 +82,8 @@ export function DebtSummaryDetailDialog({
   const paidAmount = selectedDebts.reduce((sum, debt) => sum + debt.paidAmount, 0);
   const remainingAmount = selectedDebts.reduce((sum, debt) => sum + debt.remainingAmount, 0);
   const nearestDue = selectedDebts
-    .filter((debt) => debt.status !== "lunas")
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
+    .filter((debt) => debt.status !== "lunas" && debt.dueDate)
+    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())[0];
   const largestRemaining = [...selectedDebts].sort(
     (a, b) => b.remainingAmount - a.remainingAmount
   )[0];
@@ -145,7 +145,7 @@ export function DebtSummaryDetailDialog({
                       Tempo terdekat
                     </div>
                     <p className="mt-2 text-sm font-medium">
-                      {nearestDue ? formatDate(nearestDue.dueDate) : "Tidak ada tempo aktif"}
+                      {nearestDue?.dueDate ? formatDate(nearestDue.dueDate) : "Tidak ada tempo aktif"}
                     </p>
                   </div>
                   <div className="rounded-xl border border-border/60 p-3">
@@ -182,7 +182,7 @@ export function DebtSummaryDetailDialog({
                         </div>
                         <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                           <span>Total: {formatCurrency(debt.amount)}</span>
-                          <span className="text-right">Tempo: {formatDate(debt.dueDate)}</span>
+                          <span className="text-right">Tempo: {debt.dueDate ? formatDate(debt.dueDate) : "Tanpa batas"}</span>
                         </div>
                       </div>
                     ))

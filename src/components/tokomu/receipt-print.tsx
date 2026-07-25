@@ -167,8 +167,10 @@ export function ReceiptPrintDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md rounded-[28px] p-0">
-        <DialogHeader className="p-6 pb-0">
+      <DialogContent 
+        className="max-w-md max-h-[90vh] flex flex-col overflow-hidden rounded-[28px] p-0"
+      >
+        <DialogHeader tabIndex={0} className="p-6 pb-2 focus:outline-none shrink-0">
           <div className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-primary/14 text-primary">
             <ReceiptText className="size-5" />
           </div>
@@ -178,7 +180,7 @@ export function ReceiptPrintDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 px-6 pb-4">
+        <div className="flex-1 overflow-y-auto space-y-4 px-6 pb-4">
           <div className="rounded-[22px] border border-border/70 bg-card/75 p-4">
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-muted-foreground">Total</span>
@@ -208,7 +210,7 @@ export function ReceiptPrintDialog({
             </div>
           </div>
 
-          <div className="max-h-52 space-y-2 overflow-y-auto rounded-[22px] border border-border/70 bg-muted/35 p-3">
+          <div className="space-y-2 rounded-[22px] border border-border/70 bg-muted/35 p-3">
             {transaction.items.map((item) => (
               <div key={`${transaction.id}-${item.productId}`} className="flex justify-between gap-3 text-sm">
                 <span>
@@ -222,7 +224,7 @@ export function ReceiptPrintDialog({
           </div>
         </div>
 
-        <DialogFooter className="rounded-b-[28px] border-t-0 p-6 pt-2 sm:justify-end gap-2" showCloseButton={false}>
+        <DialogFooter className="shrink-0 bg-background/50 backdrop-blur-sm rounded-b-[28px] border-t-0 p-6 pt-4 sm:justify-end gap-2" showCloseButton={false}>
           <Button
             type="button"
             variant="outline"

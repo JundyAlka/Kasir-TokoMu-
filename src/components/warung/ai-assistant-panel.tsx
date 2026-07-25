@@ -20,6 +20,12 @@ import {
   Search,
   History,
   Activity,
+  Eye,
+  EyeOff,
+  Quote,
+  Play,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -545,6 +551,7 @@ export function AIAssistantPanel({
   const [isThinking, setIsThinking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPrompts, setShowPrompts] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasBootstrappedRef = useRef(false);
 
@@ -989,21 +996,32 @@ res = await api<{ newMessages: ServerMessage[] }>(
           </div>
 
           <div className="border-t border-border/60 bg-card/70 px-3 py-3">
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {quickPrompts.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => handleSend(q)}
-                  disabled={isThinking || !chat}
-                  className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-foreground/80 ring-1 ring-foreground/5 transition-colors hover:bg-primary/10 hover:text-primary disabled:opacity-50"
-                >
-                  <ArrowRight className="size-3" />
-                  {q}
-                </button>
-              ))}
-            </div>
+            {showPrompts && (
+              <div className="mb-3 flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-150">
+                {quickPrompts.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => handleSend(q)}
+                    disabled={isThinking || !chat}
+                    className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-foreground/80 ring-1 ring-foreground/5 transition-colors hover:bg-primary/10 hover:text-primary disabled:opacity-50"
+                  >
+                    <ArrowRight className="size-3" />
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-end gap-2">
+              <Button
+                variant={showPrompts ? "default" : "outline"}
+                size="icon-lg"
+                className="rounded-2xl shrink-0"
+                onClick={() => setShowPrompts((v) => !v)}
+                title={showPrompts ? "Sembunyikan template" : "Tampilkan template"}
+              >
+                {showPrompts ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+              </Button>
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}

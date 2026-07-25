@@ -256,7 +256,7 @@ export function ProfitLossReportDocument({
           <Text style={styles.subtitle}>{data.identity.storeAddress}</Text>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>Ringkasan</Text>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryCard}>
@@ -278,7 +278,7 @@ export function ProfitLossReportDocument({
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>Detail Perhitungan</Text>
           <View style={styles.table}>
             <FinancialRow label="Omzet penjualan" value={financial.revenue} />
@@ -293,7 +293,7 @@ export function ProfitLossReportDocument({
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>Rumus</Text>
           <View style={styles.formula}>
             <Text>Omzet = total nilai transaksi penjualan pada periode aktif.</Text>
@@ -303,7 +303,7 @@ export function ProfitLossReportDocument({
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>Catatan untuk Pemilik Warung</Text>
           {data.ownerNotes.length > 0 ? (
             data.ownerNotes.map((note, index) => (
@@ -318,7 +318,7 @@ export function ProfitLossReportDocument({
           )}
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>Kategori Pengeluaran</Text>
           <View style={styles.table}>
             <View style={styles.tableHeader}>
@@ -340,7 +340,7 @@ export function ProfitLossReportDocument({
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>Produk Terlaris</Text>
           <View style={styles.table}>
             <View style={styles.tableHeader}>
@@ -364,7 +364,7 @@ export function ProfitLossReportDocument({
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>Evaluasi Produk (Kurang Diminati)</Text>
           <View style={styles.table}>
             <View style={styles.tableHeader}>
@@ -388,7 +388,7 @@ export function ProfitLossReportDocument({
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>Rencana Restok Barang (Belum Terpenuhi)</Text>
           <View style={styles.table}>
             <View style={styles.tableHeader}>
@@ -411,7 +411,7 @@ export function ProfitLossReportDocument({
             )}
           </View>
         </View>
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>Peringatan Stok Menipis (Perlu Restok)</Text>
           <View style={styles.table}>
             <View style={styles.tableHeader}>
@@ -435,7 +435,7 @@ export function ProfitLossReportDocument({
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>Rincian Beban Gaji Karyawan</Text>
           <View style={styles.table}>
             <View style={styles.tableHeader}>
@@ -459,7 +459,7 @@ export function ProfitLossReportDocument({
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>Pembagian Hasil Investor</Text>
           <View style={styles.table}>
             <View style={styles.tableHeader}>

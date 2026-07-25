@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Download,
   Eye,
+  EyeOff,
   FilePenLine,
   FileText,
   Loader2,
@@ -119,6 +120,7 @@ export function MonthlyReportPreview() {
   const [isReopening, setIsReopening] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [previewVersion, setPreviewVersion] = useState(0);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   const selectedReport = useMemo(
     () => reports.find((report) => report.id === selectedId) ?? reports[0] ?? null,
@@ -133,9 +135,24 @@ export function MonthlyReportPreview() {
   );
   const previewUrl = selectedReport
     ? `/api/reports/monthly-pcm/${selectedReport.id}/pdf?v=${encodeURIComponent(
-        `${selectedReport.updatedAt}-${previewVersion}`
-      )}`
+      `${selectedReport.updatedAt}-${previewVersion}`
+    )}`
     : null;
+
+  const isCurrentMonthOutdated = useMemo(() => {
+    if (!currentMonthReport) return false;
+    const data = currentMonthReport.data as any;
+    const fin = data?.financial;
+    if (!fin) return false;
+    const snapRev = Number(data?.revenue ?? 0);
+    const snapNet = Number(data?.netProfit ?? 0);
+    const pcmRev = Number(fin?.revenue ?? snapRev);
+    const pcmNet = Number(fin?.netProfit ?? snapNet);
+    return snapRev !== pcmRev || snapNet !== pcmNet;
+  }, [currentMonthReport]);
+
+  // Banner: show ONLY if snapshot is outdated OR current month report is missing
+  const showPendingBanner = !currentMonthReport || isCurrentMonthOutdated;
 
   async function loadReports(nextSelectedId?: string) {
     const data = await requestJson<{ reports: ReportRow[] }>("/api/reports/monthly-pcm");
@@ -145,6 +162,7 @@ export function MonthlyReportPreview() {
 
   useEffect(() => {
     let mounted = true;
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
 
     requestJson<{ reports: ReportRow[] }>("/api/reports/monthly-pcm")
       .then((data) => {
@@ -169,9 +187,9 @@ export function MonthlyReportPreview() {
     try {
       const payload = editingReport
         ? {
-            periodYear: editingReport.periodYear,
-            periodMonth: editingReport.periodMonth,
-          }
+          periodYear: editingReport.periodYear,
+          periodMonth: editingReport.periodMonth,
+        }
         : currentMonthPayload();
       const data = await requestJson<{ report: ReportRow }>("/api/reports/monthly-pcm", {
         method: "POST",
@@ -181,6 +199,7 @@ export function MonthlyReportPreview() {
       setEditingId(null);
       setPreviewVersion((version) => version + 1);
       toast.success(editingReport ? "Perubahan draft berhasil disimpan." : "Draft laporan bulan ini berhasil dibuat.");
+      window.dispatchEvent(new CustomEvent("pcm-reports-updated", { detail: { action: "updated" } }));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal membuat laporan PCM.");
     } finally {
@@ -228,6 +247,7 @@ export function MonthlyReportPreview() {
       if (editingId === reportId) handleCancelEdit();
       setPreviewVersion((version) => version + 1);
       toast.success("Laporan berhasil difinalkan.");
+      window.dispatchEvent(new CustomEvent("pcm-reports-updated", { detail: { action: "finalized" } }));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal finalize laporan.");
     } finally {
@@ -247,6 +267,7 @@ export function MonthlyReportPreview() {
       setNote(asSnapshot(data.report.data).note ?? "");
       setPreviewVersion((version) => version + 1);
       toast.success("Laporan dibuka kembali sebagai draft dan siap diedit.");
+      window.dispatchEvent(new CustomEvent("pcm-reports-updated", { detail: { action: "reopened" } }));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal membuka kembali laporan.");
     } finally {
@@ -256,6 +277,28 @@ export function MonthlyReportPreview() {
 
   return (
     <div className="space-y-4">
+      {showPendingBanner ? (
+        <div className="rounded-3xl border border-rose-500/50 bg-rose-500/10 p-5 shadow-sm backdrop-blur-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-pulse">
+          <div className="flex items-center gap-3.5">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-rose-500 text-white">
+              <FileText className="size-5" />
+            </div>
+            <div>
+              <p className="font-heading text-lg font-semibold text-foreground">
+                {isCurrentMonthOutdated && currentMonthReport?.status === "final"
+                  ? `Snapshot Laporan Bulanan Baru Saja Diperbarui!`
+                  : `Laporan PCM ${periodLabel(currentPeriod.periodYear, currentPeriod.periodMonth)} Belum Final`}
+              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {isCurrentMonthOutdated && currentMonthReport?.status === "final"
+                  ? `Silakan klik "Buka kembali" pada daftar laporan di bawah, lalu klik "Update Laporan" di atas untuk memperbarui data PCM.`
+                  : `Draft laporan PCM bulan ini sudah ada. Periksa dan finalize agar tercatat resmi.`}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <Card className="border-border/60 bg-card/80">
         <CardHeader className="gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-1">
@@ -280,24 +323,25 @@ export function MonthlyReportPreview() {
             ) : null}
             <div className="flex flex-wrap gap-2">
               <Button
-                className="rounded-2xl"
+                className={cn(
+                  "rounded-2xl transition-all",
+                  (editingReport || isCurrentMonthOutdated) && "animate-pulse ring-2 ring-primary ring-offset-2 bg-primary font-bold shadow-lg"
+                )}
                 onClick={() => void handleSaveReport()}
-                disabled={isCreating || (!editingReport && currentMonthReport?.status === "final")}
+                disabled={isCreating || (!editingReport && currentMonthReport?.status === "final" && !isCurrentMonthOutdated)}
               >
                 {isCreating ? (
                   <Loader2 className="size-4 animate-spin" />
-                ) : editingReport ? (
+                ) : editingReport || isCurrentMonthOutdated ? (
                   <FilePenLine className="size-4" />
                 ) : (
                   <Plus className="size-4" />
                 )}
-                {editingReport
-                  ? "Simpan Perubahan"
+                {editingReport || isCurrentMonthOutdated
+                  ? "Update Perubahan"
                   : currentMonthReport?.status === "final"
                     ? "Laporan Bulan Ini Sudah Final"
-                    : currentMonthReport?.status === "draft"
-                      ? "Perbarui Draft Bulan Ini"
-                      : "Buat Laporan Bulan Ini"}
+                    : "Simpan Perubahan"}
               </Button>
               {editingReport ? (
                 <Button variant="outline" className="rounded-2xl" onClick={handleCancelEdit}>
@@ -334,6 +378,18 @@ export function MonthlyReportPreview() {
             {reports.map((report) => {
               const metrics = getReportMetrics(report);
               const isSelected = selectedReport?.id === report.id;
+              const isCurrentMonth =
+                report.periodYear === currentPeriod.periodYear &&
+                report.periodMonth === currentPeriod.periodMonth;
+
+              const reportData = report.data as any;
+              const pcmFin = reportData?.financial;
+              const snapRev = Number(reportData?.revenue ?? 0);
+              const snapNet = Number(reportData?.netProfit ?? 0);
+              const pcmRev = Number(pcmFin?.revenue ?? snapRev);
+              const pcmNet = Number(pcmFin?.netProfit ?? snapNet);
+
+              const isOutdated = !!pcmFin && (snapRev !== pcmRev || snapNet !== pcmNet);
 
               return (
                 <article
@@ -394,64 +450,72 @@ export function MonthlyReportPreview() {
                   ) : null}
 
                   <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-full"
-                            onClick={() => setSelectedId(report.id)}
-                          >
-                            <Eye className="size-4" />
-                            Preview
-                          </Button>
-                          <a
-                            href={`/api/reports/monthly-pcm/${report.id}/pdf`}
-                            download
-                            className={cn(buttonVariants({ size: "sm", variant: "outline" }), "rounded-full")}
-                          >
-                            <Download className="size-4" />
-                            PDF
-                          </a>
-                          {report.status === "draft" ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="rounded-full"
-                              onClick={() => handleEdit(report)}
-                            >
-                              <FilePenLine className="size-4" />
-                              Edit
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="rounded-full"
-                              disabled={isReopening === report.id}
-                              onClick={() => void handleReopen(report)}
-                            >
-                              {isReopening === report.id ? (
-                                <Loader2 className="size-4 animate-spin" />
-                              ) : (
-                                <RotateCcw className="size-4" />
-                              )}
-                              Buka kembali
-                            </Button>
-                          )}
-                          {report.status === "draft" ? (
-                            <Button
-                              size="sm"
-                              className="rounded-full"
-                              disabled={isFinalizing === report.id}
-                              onClick={() => void handleFinalize(report.id)}
-                            >
-                              {isFinalizing === report.id ? (
-                                <Loader2 className="size-4 animate-spin" />
-                              ) : (
-                                <Lock className="size-4" />
-                              )}
-                              Finalize
-                            </Button>
-                          ) : null}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() => {
+                        setSelectedId(report.id);
+                        setShowPdfPreview(true);
+                      }}
+                    >
+                      <Eye className="size-4" />
+                      Preview
+                    </Button>
+                    <a
+                      href={`/api/reports/monthly-pcm/${report.id}/pdf`}
+                      download
+                      className={cn(buttonVariants({ size: "sm", variant: "outline" }), "rounded-full")}
+                    >
+                      <Download className="size-4" />
+                      PDF
+                    </a>
+                    {report.status === "draft" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() => handleEdit(report)}
+                      >
+                        <FilePenLine className="size-4" />
+                        Edit
+                      </Button>
+                    ) : isCurrentMonth ? (
+                      <Button
+                        size="sm"
+                        variant={isOutdated ? "default" : "outline"}
+                        className={cn(
+                          "rounded-full font-bold transition-all",
+                          isOutdated
+                            ? "bg-rose-600 text-white hover:bg-rose-700 font-bold border-0 shadow-lg ring-2 ring-rose-400 ring-offset-1 animate-pulse"
+                            : ""
+                        )}
+                        disabled={isReopening === report.id}
+                        onClick={() => void handleReopen(report)}
+                      >
+                        {isReopening === report.id ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <RotateCcw className="size-4 text-white" />
+                        )}
+                        <span className={isOutdated ? "font-bold text-white" : ""}>Buka kembali</span>
+                      </Button>
+                    ) : null}
+                    {report.status === "draft" ? (
+                      <Button
+                        size="sm"
+                        className="rounded-full"
+                        disabled={isFinalizing === report.id}
+                        onClick={() => void handleFinalize(report.id)}
+                      >
+                        {isFinalizing === report.id ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Lock className="size-4" />
+                        )}
+                        Finalize
+                      </Button>
+                    ) : null}
                   </div>
                 </article>
               );
@@ -471,17 +535,67 @@ export function MonthlyReportPreview() {
         </Card>
 
         <Card className="border-border/60 bg-card/80">
-          <CardHeader>
-            <CardTitle>Preview PDF</CardTitle>
-            <CardDescription>
-              Tampilan dokumen resmi yang akan diunduh atau dicetak.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="font-heading text-xl">Preview PDF</CardTitle>
+              <CardDescription className="mt-1">
+                Tampilan dokumen resmi yang akan diunduh atau dicetak.
+              </CardDescription>
+            </div>
+            {selectedReport && showPdfPreview ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-xl text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowPdfPreview(false)}
+              >
+                <EyeOff className="size-4" />
+                Sembunyikan
+              </Button>
+            ) : null}
           </CardHeader>
-          <CardContent className="min-h-0">
-            {previewUrl ? (
-              <div className="flex h-[clamp(520px,72dvh,900px)] flex-col overflow-hidden rounded-lg border bg-background">
-                <div className="bg-muted/50 px-3 py-2 text-center text-xs text-muted-foreground border-b border-border/60">
-                  Preview mungkin tidak muncul di tablet/kiosk. Klik tombol <strong>PDF</strong> untuk mengunduh dokumen.
+          <CardContent className="min-h-0 pt-4">
+            {!selectedReport ? (
+              <div className="flex h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 p-6 text-center text-muted-foreground">
+                <FileText className="size-12 text-muted-foreground/30 mb-3" />
+                <p className="font-medium text-foreground">Belum ada laporan terpilih</p>
+                <p className="mt-1 text-xs text-muted-foreground max-w-xs">
+                  Pilih atau buat laporan dari daftar di samping untuk melihat detail dan preview PDF.
+                </p>
+              </div>
+            ) : !showPdfPreview ? (
+              <div className="flex h-[420px] flex-col items-center justify-center rounded-2xl border border-border/60 bg-muted/20 p-6 text-center shadow-inner">
+                <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4">
+                  <FileText className="size-7" />
+                </div>
+                <h4 className="font-heading text-lg font-semibold text-foreground">
+                  Dokumen Preview ({getReportMetrics(selectedReport).label})
+                </h4>
+                <p className="mt-1.5 text-xs text-muted-foreground max-w-sm">
+                  Klik tombol di bawah dengan ikon tampilkan untuk memuat pratinjau PDF dokumen.
+                </p>
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  <Button
+                    className="rounded-2xl px-5 font-semibold gap-2 shadow-sm"
+                    onClick={() => setShowPdfPreview(true)}
+                  >
+                    <Eye className="size-4" />
+                    Tampilkan Preview PDF
+                  </Button>
+                  <a
+                    href={previewUrl ?? "#"}
+                    download
+                    className={cn(buttonVariants({ variant: "outline" }), "rounded-2xl gap-2")}
+                  >
+                    <Download className="size-4" />
+                    Download PDF
+                  </a>
+                </div>
+              </div>
+            ) : previewUrl ? (
+              <div className="flex h-[clamp(520px,72dvh,900px)] flex-col overflow-hidden rounded-2xl border border-border/70 bg-background shadow-sm">
+                <div className="bg-muted/50 px-4 py-2 text-center text-xs text-muted-foreground border-b border-border/60">
+                  Preview mungkin tidak muncul di tablet/kiosk. Klik tombol <strong>PDF</strong> untuk mengunduh.
                 </div>
                 <iframe
                   key={previewUrl}
@@ -490,11 +604,7 @@ export function MonthlyReportPreview() {
                   className="block flex-1 w-full touch-pan-y bg-background"
                 />
               </div>
-            ) : (
-              <div className="flex h-[420px] items-center justify-center rounded-lg border text-sm text-muted-foreground">
-                Pilih atau buat laporan untuk menampilkan preview.
-              </div>
-            )}
+            ) : null}
           </CardContent>
         </Card>
       </div>

@@ -363,9 +363,9 @@ export function InvestmentForm({
 
   return (
     <form className="space-y-6" onSubmit={(event) => void handleSubmit(event)}>
-      <div className="grid gap-6 sm:grid-cols-12">
-        <div className="space-y-2 sm:col-span-7">
-          <Label className="text-sm font-semibold text-foreground">Akad Investasi</Label>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Akad Investasi</Label>
           <Select
             value={akadType}
             onValueChange={(value) => {
@@ -374,7 +374,7 @@ export function InvestmentForm({
               setType(isGoodsAkad(nextAkad) ? "barang_titip_jual" : "uang");
             }}
           >
-            <SelectTrigger className="h-11 w-full rounded-2xl bg-card font-medium shadow-sm">
+            <SelectTrigger className="h-11 w-full rounded-xl border-border/80 bg-card text-sm font-medium shadow-sm">
               <SelectValue>
                 {akadLabels[akadType] 
                   ? `${akadLabels[akadType]} (${isGoodsAkad(akadType) ? 'Barang Titipan' : 'Modal Uang'})` 
@@ -396,8 +396,8 @@ export function InvestmentForm({
           </Select>
         </div>
 
-        <div className="space-y-2 sm:col-span-5">
-          <Label htmlFor="investment-start-date" className="text-sm font-semibold text-foreground">
+        <div className="space-y-1.5">
+          <Label htmlFor="investment-start-date" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Tanggal Mulai
           </Label>
           <Input
@@ -405,7 +405,7 @@ export function InvestmentForm({
             type="date"
             value={draft.startDate}
             onChange={(event) => setDraft((current) => ({ ...current, startDate: event.target.value }))}
-            className="h-11 rounded-2xl bg-card font-medium shadow-sm"
+            className="h-11 rounded-xl border-border/80 bg-card text-sm font-medium shadow-sm"
             required
           />
         </div>
@@ -413,7 +413,7 @@ export function InvestmentForm({
 
       {/* Dynamic Akad Explanation Banner */}
       {akadExplanations[akadType] && (
-        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm text-foreground shadow-sm transition-all duration-300">
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-foreground shadow-sm transition-all duration-300">
           <h5 className="font-semibold text-primary flex items-center gap-1.5 mb-1 text-sm">
             <WalletCards className="size-4 shrink-0 text-primary" />
             Detail Akad: {akadExplanations[akadType].title}
@@ -425,9 +425,9 @@ export function InvestmentForm({
       )}
 
       {type === "uang" ? (
-        <div className="grid gap-6 sm:grid-cols-12">
-          <div className="space-y-2 sm:col-span-5">
-            <Label htmlFor="investment-amount" className="text-sm font-semibold text-foreground">
+        <div className="grid gap-4 sm:grid-cols-2 items-end">
+          <div className="space-y-1.5">
+            <Label htmlFor="investment-amount" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Nominal Modal (Rp)
             </Label>
             <Input
@@ -437,16 +437,16 @@ export function InvestmentForm({
               value={draft.amount}
               onChange={(event) => setDraft((current) => ({ ...current, amount: event.target.value }))}
               placeholder="5000000"
-              className="h-11 rounded-2xl bg-card font-semibold text-primary shadow-sm"
+              className="h-11 rounded-xl border-border/80 bg-white dark:bg-background text-sm font-semibold text-primary shadow-sm"
               required
             />
           </div>
 
           {akadType === "murabahah_bil_wakalah" ? (
-            <div className="space-y-2 sm:col-span-7">
+            <div className="space-y-1.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <Label htmlFor="investment-fixed-return" className="text-sm font-semibold text-foreground">
-                  Konfigurasi Imbal Hasil
+                <Label htmlFor="investment-fixed-return" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Imbal Hasil
                 </Label>
                 <div className="inline-flex rounded-full bg-muted p-0.5">
                   <button
@@ -486,7 +486,7 @@ export function InvestmentForm({
                     onChange={(event) =>
                       setDraft((current) => ({ ...current, monthlyReturnRatePct: event.target.value }))
                     }
-                    className="h-11 rounded-2xl bg-card font-semibold shadow-sm pr-20"
+                    className="h-11 rounded-xl border-border/80 bg-white dark:bg-background text-sm font-semibold shadow-sm pr-20"
                     required
                   />
                   <span className="absolute right-4 top-3 text-sm font-medium text-muted-foreground">% / bln</span>
@@ -500,7 +500,7 @@ export function InvestmentForm({
                     value={moneyFlatRp}
                     onChange={(event) => setMoneyFlatRp(event.target.value)}
                     placeholder="125000"
-                    className="h-11 rounded-2xl bg-card font-semibold shadow-sm pr-24"
+                    className="h-11 rounded-xl border-border/80 bg-white dark:bg-background text-sm font-semibold shadow-sm pr-24"
                     required
                   />
                   <span className="absolute right-4 top-3 text-sm font-medium text-muted-foreground">Rp / bln</span>
@@ -510,9 +510,9 @@ export function InvestmentForm({
           ) : null}
 
           {akadType === "mudharabah" || akadType === "musyarakah" ? (
-            <div className="space-y-2 sm:col-span-7">
-              <Label htmlFor="investment-profit-share" className="text-sm font-semibold text-foreground">
-                Persentase Bagi Hasil Laba Bersih
+            <div className="space-y-1.5">
+              <Label htmlFor="investment-profit-share" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Bagi Hasil Laba Bersih
               </Label>
               <div className="relative">
                 <Input
@@ -523,7 +523,7 @@ export function InvestmentForm({
                   step="0.1"
                   value={draft.profitSharePct}
                   onChange={(event) => setDraft((current) => ({ ...current, profitSharePct: event.target.value }))}
-                  className="h-11 rounded-2xl bg-card font-semibold shadow-sm pr-24"
+                  className="h-11 rounded-xl border-border/80 bg-white dark:bg-background text-sm font-semibold shadow-sm pr-24"
                   required
                 />
                 <span className="absolute right-4 top-3 text-sm font-medium text-muted-foreground">% laba</span>
@@ -532,13 +532,13 @@ export function InvestmentForm({
           ) : null}
 
           {akadType === "pinjaman_qardh" ? (
-            <div className="rounded-2xl border border-border/70 bg-muted/45 p-4 text-sm text-muted-foreground sm:col-span-12">
+            <div className="rounded-xl border border-border/70 bg-muted/45 p-4 text-sm text-muted-foreground sm:col-span-2">
               <strong>Info Qardh:</strong> Dicatat murni sebagai pinjaman/kasbon modal tanpa imbal hasil/payout bagi hasil.
             </div>
           ) : null}
         </div>
       ) : (
-        <div className="space-y-4 rounded-3xl border border-border/80 bg-muted/20 p-5 shadow-inner">
+        <div className="space-y-4 rounded-2xl border border-border/80 bg-muted/20 p-5 shadow-inner">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h4 className="font-heading text-base font-semibold text-foreground">Daftar Produk Titipan / Massal</h4>
@@ -562,10 +562,10 @@ export function InvestmentForm({
                   value={productSearch}
                   onChange={(event) => setProductSearch(event.target.value)}
                   placeholder="Ketik nama produk untuk mencari..."
-                  className="h-11 rounded-2xl bg-card pr-10 shadow-sm"
+                  className="h-11 rounded-xl border-border/80 bg-card pr-10 text-sm shadow-sm"
                 />
               </div>
-              <div className="min-h-[110px] max-h-[110px] overflow-y-auto border border-border/60 bg-card/45 rounded-2xl p-3 shadow-inner">
+              <div className="min-h-[110px] max-h-[110px] overflow-y-auto border border-border/60 bg-card/45 rounded-xl p-3 shadow-inner">
                 <div className="flex flex-wrap gap-2">
                   {filteredProducts.map((product) => (
                     <button
@@ -604,7 +604,7 @@ export function InvestmentForm({
               {batchItems.map((item, idx) => (
                 <div
                   key={item.productId}
-                  className="flex flex-col gap-4 rounded-2xl border border-border/80 bg-card p-5 shadow-sm transition-all hover:border-border"
+                  className="flex flex-col gap-4 rounded-xl border border-border/80 bg-card p-5 shadow-sm transition-all hover:border-border"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -624,33 +624,31 @@ export function InvestmentForm({
                     </Button>
                   </div>
 
-                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-12">
-                    <div className="space-y-1.5 sm:col-span-3">
-                      <Label className="text-xs font-semibold text-muted-foreground">Jumlah Unit</Label>
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-[120px_140px_1fr]">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Jumlah Unit</Label>
                       <Input
                         type="number"
                         min={1}
                         value={item.unitCount}
                         onChange={(e) => updateBatchItem(idx, "unitCount", e.target.value)}
-                        className="h-10 rounded-xl font-medium"
+                        className="h-10 rounded-xl border-border/80 bg-background shadow-sm text-sm font-medium"
                       />
                     </div>
                     
-                    <div className="space-y-1.5 sm:col-span-4">
-                      <Label className="text-xs font-semibold text-muted-foreground">Modal / Unit (Rp)</Label>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Modal / Unit (Rp)</Label>
                       <Input
                         type="number"
                         min={0}
                         value={item.unitCost}
                         onChange={(e) => updateBatchItem(idx, "unitCost", e.target.value)}
-                        className="h-10 rounded-xl font-medium"
+                        className="h-10 rounded-xl border-border/80 bg-background shadow-sm text-sm font-medium"
                       />
                     </div>
 
-                    <div className="space-y-1.5 sm:col-span-5">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs font-semibold text-muted-foreground">Skema Imbal Hasil</Label>
-                      </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Skema Imbal Hasil</Label>
                       
                       {item.scheme === "percentage" ? (
                         <div className="flex gap-2">
@@ -658,8 +656,8 @@ export function InvestmentForm({
                             value={item.scheme}
                             onValueChange={(val) => updateBatchItem(idx, "scheme", val as ProfitScheme)}
                           >
-                            <SelectTrigger className="h-10 w-28 shrink-0 rounded-xl text-xs font-medium bg-muted/50">
-                              <SelectValue>Persentase</SelectValue>
+                            <SelectTrigger className="h-10 w-24 shrink-0 rounded-xl text-xs font-medium bg-background border-border/80 shadow-sm">
+                              <SelectValue>Persen</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="percentage">Persentase</SelectItem>
@@ -675,7 +673,7 @@ export function InvestmentForm({
                               step="0.1"
                               value={item.profitSharePerUnitPct}
                               onChange={(e) => updateBatchItem(idx, "profitSharePerUnitPct", e.target.value)}
-                              className="h-10 rounded-xl pr-8 font-semibold text-primary"
+                              className="h-10 rounded-xl border-border/80 bg-background shadow-sm pr-8 text-sm font-semibold text-primary"
                             />
                             <span className="absolute right-3 top-2.5 text-xs font-semibold text-muted-foreground">%</span>
                           </div>
@@ -686,7 +684,7 @@ export function InvestmentForm({
                             value={item.scheme}
                             onValueChange={(val) => updateBatchItem(idx, "scheme", val as ProfitScheme)}
                           >
-                            <SelectTrigger className="h-10 w-28 shrink-0 rounded-xl text-xs font-medium bg-muted/50">
+                            <SelectTrigger className="h-10 w-24 shrink-0 rounded-xl text-xs font-medium bg-background border-border/80 shadow-sm">
                               <SelectValue>Rp Flat</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
@@ -702,7 +700,7 @@ export function InvestmentForm({
                               min={0}
                               value={item.flatNominalRp}
                               onChange={(e) => updateBatchItem(idx, "flatNominalRp", e.target.value)}
-                              className="h-10 rounded-xl pl-8 font-semibold text-primary"
+                              className="h-10 rounded-xl border-border/80 bg-background shadow-sm pl-8 text-sm font-semibold text-primary"
                             />
                           </div>
                         </div>
@@ -729,7 +727,7 @@ export function InvestmentForm({
               ))}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/80 bg-card/50 py-8 text-center">
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/80 bg-card/50 py-8 text-center">
               <PackageOpen className="size-8 text-muted-foreground/60" />
               <p className="mt-2 text-sm font-medium text-foreground">Belum ada produk titipan terpilih</p>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -741,7 +739,7 @@ export function InvestmentForm({
       )}
 
       <div className="flex items-center justify-end border-t border-border/60 pt-4">
-        <Button type="submit" size="lg" className="rounded-2xl font-semibold shadow-md px-6" disabled={isSubmitting}>
+        <Button type="submit" size="lg" className="rounded-xl font-semibold shadow-md px-6" disabled={isSubmitting}>
           {isSubmitting ? (
             <Loader2 className="size-4 animate-spin" />
           ) : isEdit ? (
@@ -775,7 +773,7 @@ export function InvestmentFormDialog({
         <Plus className="size-4" />
         Investasi Baru
       </DialogTrigger>
-      <DialogContent className="max-w-3xl sm:max-w-[840px] rounded-[32px] p-0 shadow-2xl">
+      <DialogContent className="max-w-3xl sm:max-w-[840px] rounded-2xl p-0 shadow-2xl">
         <DialogHeader className="p-6 sm:p-8 pb-2">
           <DialogTitle className="font-heading text-2xl font-bold">Tambah Investasi & Titip Jual</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground mt-1">
@@ -829,7 +827,7 @@ export function InvestmentEditDialog({
           </Button>
         }
       />
-      <DialogContent className="max-w-3xl sm:max-w-[820px] rounded-[32px] p-0 shadow-2xl">
+      <DialogContent className="max-w-3xl sm:max-w-[820px] rounded-2xl p-0 shadow-2xl">
         <DialogHeader className="p-6 sm:p-8 pb-2">
           <div className="flex items-center justify-between pr-8">
             <DialogTitle className="font-heading text-2xl font-bold">Kelola Investasi</DialogTitle>

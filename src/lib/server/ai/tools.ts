@@ -230,7 +230,7 @@ export const toolDefinitions: GeminiToolDef[] = [
             description: "Tanggal jatuh tempo (ISO 8601, contoh 2026-05-15).",
           },
         },
-        required: ["borrowerName", "whatsapp", "amount", "dueDate"],
+        required: ["borrowerName", "whatsapp", "amount"],
         additionalProperties: false,
       },
     },
@@ -553,7 +553,7 @@ async function execListUnpaidDebts(userId: string): Promise<ToolResult> {
 
 async function execCreateDebt(
   userId: string,
-  args: { borrowerName: string; whatsapp: string; amount: number; dueDate: string }
+  args: { borrowerName: string; whatsapp: string; amount: number; dueDate?: string }
 ): Promise<ToolResult> {
   const debt = await createDebt(userId, args);
   return {
@@ -564,7 +564,7 @@ async function execCreateDebt(
     rows: [
       { label: "Nominal", value: rupiah(debt.amount) },
       { label: "WhatsApp", value: debt.whatsapp },
-      { label: "Jatuh tempo", value: debt.dueDate.slice(0, 10) },
+      { label: "Jatuh tempo", value: debt.dueDate ? debt.dueDate.slice(0, 10) : "Tanpa batas" },
     ],
     data: debt,
   };

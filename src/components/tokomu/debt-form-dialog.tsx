@@ -70,6 +70,7 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
   const [whatsapp, setWhatsapp] = useState("");
   const [amount, setAmount] = useState(0);
   const [dueDate, setDueDate] = useState(defaultDueDate());
+  const [noDueDate, setNoDueDate] = useState(false);
   const [withItems, setWithItems] = useState(false);
   const [items, setItems] = useState<ItemDraft[]>([emptyItem()]);
   const [saving, setSaving] = useState(false);
@@ -85,6 +86,7 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
     setWhatsapp("");
     setAmount(0);
     setDueDate(defaultDueDate());
+    setNoDueDate(false);
     setWithItems(false);
     setItems([emptyItem()]);
   }
@@ -146,7 +148,7 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
         borrowerName: borrowerName.trim(),
         whatsapp: whatsapp.trim(),
         amount: effectiveAmount,
-        dueDate,
+        dueDate: noDueDate ? null : dueDate,
         items: withItems ? cleanedItems : [],
       });
       reset();
@@ -187,7 +189,7 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
                   id="debt-borrower-name"
                   value={borrowerName}
                   onChange={(event) => setBorrowerName(event.target.value)}
-                  className="h-11 rounded-2xl"
+                  className="h-11 rounded-2xl bg-white dark:bg-background shadow-sm"
                 />
               </div>
               <div className="grid min-w-0 gap-2">
@@ -197,7 +199,7 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
                   value={whatsapp}
                   onChange={(event) => setWhatsapp(event.target.value)}
                   placeholder="08xxxxxxxxxx"
-                  className="h-11 rounded-2xl"
+                  className="h-11 rounded-2xl bg-white dark:bg-background shadow-sm"
                 />
               </div>
             </div>
@@ -216,19 +218,31 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
                   value={formatNumberInput(effectiveAmount)}
                   onChange={(event) => setAmount(parseNumberInput(event.target.value))}
                   readOnly={withItems}
-                  className="h-11 rounded-2xl"
+                  className="h-11 rounded-2xl bg-white dark:bg-background shadow-sm"
                 />
               </div>
               <div className="grid min-w-0 gap-2">
-                <Label htmlFor="debt-due-date">Jatuh tempo</Label>
-                <div className="relative min-w-0">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="debt-due-date">Jatuh tempo</Label>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      className="accent-primary"
+                      checked={noDueDate}
+                      onChange={(e) => setNoDueDate(e.target.checked)}
+                    />
+                    Tanpa jatuh tempo
+                  </label>
+                </div>
+                <div className={cn("relative min-w-0 transition-opacity", noDueDate && "opacity-50 pointer-events-none")}>
                   <CalendarDays className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="debt-due-date"
                     type="date"
                     value={dueDate}
                     onChange={(event) => setDueDate(event.target.value)}
-                    className="h-11 w-full min-w-0 rounded-2xl pl-9"
+                    disabled={noDueDate}
+                    className="h-11 w-full min-w-0 rounded-2xl pl-9 bg-white dark:bg-background shadow-sm"
                   />
                 </div>
               </div>
@@ -286,7 +300,7 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
                               })
                             }
                             placeholder="Cari produk atau ketik manual"
-                            className="h-10 rounded-2xl pl-9"
+                            className="h-10 rounded-2xl pl-9 bg-white dark:bg-background shadow-sm"
                           />
                         </div>
                         {matches.length > 0 ? (
@@ -313,7 +327,7 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
                           min={1}
                           value={item.quantity}
                           onChange={(event) => updateItem(item.id, { quantity: Number(event.target.value) })}
-                          className="h-10 rounded-2xl"
+                          className="h-10 rounded-2xl bg-white dark:bg-background shadow-sm"
                         />
                       </div>
                       <div className="grid gap-2">
@@ -322,12 +336,12 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
                           inputMode="numeric"
                           value={formatNumberInput(item.unitPrice)}
                           onChange={(event) => updateItem(item.id, { unitPrice: parseNumberInput(event.target.value) })}
-                          className="h-10 rounded-2xl"
+                          className="h-10 rounded-2xl bg-white dark:bg-background shadow-sm"
                         />
                       </div>
                       <div className="grid gap-2">
                         <Label>Subtotal</Label>
-                        <div className="flex h-10 items-center rounded-2xl border border-border bg-muted/50 px-3 text-sm font-medium">
+                        <div className="flex h-10 items-center rounded-2xl border border-border bg-white dark:bg-background shadow-sm px-3 text-sm font-medium">
                           {formatCurrency(item.quantity * item.unitPrice)}
                         </div>
                       </div>

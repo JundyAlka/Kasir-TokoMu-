@@ -225,6 +225,63 @@ export function PengaturanView({ role }: { role: string }) {
 
           <div className="rounded-[26px] border border-border/70 bg-card/85 p-5">
             <div className="flex items-center gap-2">
+              <BadgeCheck className="size-4 text-primary" />
+              <p className="font-medium">Organisasi / PCM</p>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Isi nama organisasi, jabatan, dan nama ketua/pimpinan agar tampil benar di laporan dan tanda tangan.
+            </p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="pcm-name">Nama organisasi/PCM</Label>
+                <Input
+                  id="pcm-name"
+                  value={form.pcmName}
+                  onChange={(event) => updateField("pcmName", event.target.value)}
+                  className="h-11 rounded-2xl"
+                  placeholder="Contoh: PCM Muhammadiyah Grabag"
+                  disabled={!canMutateSettings}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pcm-address">Alamat organisasi/PCM</Label>
+                <Input
+                  id="pcm-address"
+                  value={form.pcmAddress}
+                  onChange={(event) => updateField("pcmAddress", event.target.value)}
+                  className="h-11 rounded-2xl"
+                  placeholder="Contoh: Grabag, Purworejo"
+                  disabled={!canMutateSettings}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pcm-chairman-title">Jabatan ketua/pimpinan</Label>
+                <Input
+                  id="pcm-chairman-title"
+                  value={form.pcmChairmanTitle}
+                  onChange={(event) => updateField("pcmChairmanTitle", event.target.value)}
+                  className="h-11 rounded-2xl"
+                  placeholder="Contoh: Ketua PCM / Ketua Majelis / Pimpinan"
+                  disabled={!canMutateSettings}
+                />
+                <p className="text-xs text-muted-foreground">Jabatan ini yang akan muncul di laporan dan tanda tangan.</p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pcm-chairman-name">Nama ketua/pimpinan</Label>
+                <Input
+                  id="pcm-chairman-name"
+                  value={form.pcmChairmanName}
+                  onChange={(event) => updateField("pcmChairmanName", event.target.value)}
+                  className="h-11 rounded-2xl"
+                  placeholder="Contoh: Bapak H. Ahmad Fauzi, S.Ag."
+                  disabled={!canMutateSettings}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[26px] border border-border/70 bg-card/85 p-5">
+            <div className="flex items-center gap-2">
               <Bell className="size-4 text-primary" />
               <p className="font-medium">Batas notifikasi stok menipis</p>
             </div>

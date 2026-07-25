@@ -13,6 +13,7 @@ export const emptyAppState: AppState = {
     storeAddress: "",
     pcmName: "",
     pcmChairmanName: "",
+    pcmChairmanTitle: "Ketua PCM",
     pcmAddress: "",
     ownerName: "",
     ownerWhatsapp: "",

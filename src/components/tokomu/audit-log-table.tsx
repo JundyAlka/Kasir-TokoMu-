@@ -33,6 +33,7 @@ import {
   getAuditLabel,
   CATEGORY_STYLES,
   type AuditCategory,
+  translateEntity,
 } from "@/lib/audit-labels";
 import { cn } from "@/lib/utils";
 
@@ -503,7 +504,7 @@ export function AuditLogTable() {
                             <TableCell className="hidden md:table-cell">
                               {entry.entityId ? (
                                 <span className="text-xs text-muted-foreground truncate max-w-[200px] block">
-                                  {entry.entityType || "Item"} #{entry.entityId}
+                                  {translateEntity(entry.entityType)} #{entry.entityId.slice(0, 8)}
                                 </span>
                               ) : (
                                 <span className="text-xs text-muted-foreground">-</span>

@@ -372,6 +372,7 @@ const settings: Settings = {
   storeAddress: "Grabag, Purworejo",
   pcmName: "PCM Muhammadiyah Grabag",
   pcmChairmanName: "[Nama Ketua PCM]",
+  pcmChairmanTitle: "Ketua PCM",
   pcmAddress: "Grabag, Purworejo",
   ownerName: "Pimpinan TokoMu",
   ownerWhatsapp: "081277788899",

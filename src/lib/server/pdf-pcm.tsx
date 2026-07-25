@@ -44,6 +44,7 @@ export type PcmMonthlyReportData = {
     ownerName: string;
     pcmName: string;
     pcmChairmanName: string;
+    pcmChairmanTitle: string;
     pcmAddress: string;
   };
   financial: {
@@ -94,8 +95,9 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   subtitle: {
-    marginTop: 3,
+    marginTop: 2,
     fontSize: 10,
+    textTransform: "capitalize",
   },
   section: {
     marginBottom: 14,
@@ -165,7 +167,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   signatureSpace: {
-    height: 52,
+    height: 64,
+  },
+  signatureName: {
+    fontFamily: "Helvetica-Bold",
+    borderBottomWidth: 1,
+    borderBottomColor: "#111827",
+    paddingBottom: 2,
   },
   bold: {
     fontFamily: "Helvetica-Bold",
@@ -256,15 +264,37 @@ export function PcmMonthlyReportDocument({
   const pcmAddress = normalizeAddress(identity.pcmAddress);
   const ownerName = normalizeOwnerName(identity.ownerName);
   const city = normalizeCity(identity.city);
+  const chairmanTitle = identity.pcmChairmanTitle || "Ketua PCM";
+  // Capitalize "juli 2026" → "Juli 2026"
+  const periodLabel = data.period.label
+    ? data.period.label.charAt(0).toUpperCase() + data.period.label.slice(1)
+    : data.period.label;
 
   return (
-    <Document title={`Laporan Bulanan TokoMu ${data.period.label}`}>
+    <Document title={`Laporan Bulanan TokoMu ${periodLabel}`}>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <Text style={styles.org}>{identity.pcmName || "PCM Muhammadiyah Grabag"}</Text>
           <Text style={styles.title}>Laporan Bulanan TokoMu</Text>
-          <Text style={styles.subtitle}>{data.period.label}</Text>
+          <Text style={styles.subtitle}>{periodLabel}</Text>
           <Text style={styles.subtitle}>{pcmAddress || storeAddress}</Text>
+        </View>
+
+        {/* Formal Opening */}
+        <View style={{ marginBottom: 10 }}>
+          <Text style={{ marginBottom: 3, lineHeight: 1.35 }}>
+            Assalamu&apos;alaikum Warahmatullahi Wabarakatuh
+          </Text>
+          <Text style={{ lineHeight: 1.35 }}>
+            Dengan hormat,
+          </Text>
+          <Text style={{ marginTop: 5, lineHeight: 1.4 }}>
+            Bersama laporan ini kami sampaikan laporan keuangan dan operasional bulanan TokoMu untuk periode {periodLabel}. Laporan ini disusun sebagai bentuk pertanggungjawaban dan transparansi pengelolaan toko amal usaha kepada {identity.pcmName || "PCM"}.
+          </Text>
+          <Text style={{ marginTop: 5, lineHeight: 1.4 }}>
+            Semoga laporan ini dapat menjadi bahan evaluasi dan masukan bagi kemajuan amal usaha kita bersama. Atas perhatian dan bimbingan Bapak/Ibu {chairmanTitle}, kami mengucapkan terima kasih.
+          </Text>
+          <Text style={{ marginTop: 5, lineHeight: 1.35 }}>Wassalamu&apos;alaikum Warahmatullahi Wabarakatuh.</Text>
         </View>
 
         <View style={styles.section}>
@@ -278,7 +308,7 @@ export function PcmMonthlyReportDocument({
             <Text style={styles.identityValue}>{storeAddress}</Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.identityLabel}>Ketua PCM</Text>
+            <Text style={styles.identityLabel}>{chairmanTitle}</Text>
             <Text style={styles.identityValue}>{identity.pcmChairmanName || "-"}</Text>
           </View>
           <View style={styles.row}>
@@ -287,7 +317,7 @@ export function PcmMonthlyReportDocument({
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>2. Ringkasan Keuangan</Text>
           <View style={styles.table}>
             <FinancialRow label="Omzet penjualan" value={financial.revenue} />
@@ -302,7 +332,7 @@ export function PcmMonthlyReportDocument({
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>3. Detail Bagi Hasil Investor</Text>
           <View style={styles.table}>
             <View style={styles.tableHeader}>
@@ -338,7 +368,7 @@ export function PcmMonthlyReportDocument({
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>4. Top 5 Produk Terlaris</Text>
           <View style={styles.table}>
             <View style={styles.tableHeader}>
@@ -366,7 +396,7 @@ export function PcmMonthlyReportDocument({
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.section} wrap={false}>
           <Text style={styles.sectionTitle}>5. Catatan Tambahan Laporan</Text>
           <Text style={styles.note}>{data.note || "Tidak ada catatan tambahan."}</Text>
         </View>
@@ -376,13 +406,13 @@ export function PcmMonthlyReportDocument({
             <Text>{city}, {formatDate(generatedAt)}</Text>
             <Text>Pimpinan TokoMu</Text>
             <View style={styles.signatureSpace} />
-            <Text style={styles.bold}>{ownerName}</Text>
+            <Text style={styles.signatureName}>{ownerName}</Text>
           </View>
           <View style={styles.signatureBox}>
             <Text>Mengetahui,</Text>
-            <Text>Ketua PCM</Text>
+            <Text>{chairmanTitle}</Text>
             <View style={styles.signatureSpace} />
-            <Text style={styles.bold}>{identity.pcmChairmanName || "Ketua PCM"}</Text>
+            <Text style={styles.signatureName}>{identity.pcmChairmanName || chairmanTitle}</Text>
           </View>
         </View>
 
