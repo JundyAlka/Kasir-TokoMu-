@@ -10,7 +10,8 @@ const envVars = {
   "GEMINI_FALLBACK_TEXT_MODEL": "gemini-2.0-flash-lite",
   "GEMINI_FALLBACK_TEXT_MODEL_PINNED": "gemini-2.0-flash-lite-001",
   "GEMINI_VISION_MODEL": "Kimi-K2.6",
-  "GEMINI_FALLBACK_VISION_MODEL": "Kimi-K2.6"
+  "GEMINI_FALLBACK_VISION_MODEL": "Kimi-K2.6",
+  "GEMINI_GOOGLE_API_KEYS": "AIzaSyAAXo25OMoKOiAX6YbiYiI4HbpA4zJDpJo,AIzaSyA3r8oKJhx5UEr9QHeOZzx9JMGX0THnmc0,AIzaSyAvPigOlnm_tgb3hVkquaq0E_57xnYr6Lk,AIzaSyA7JqR3I0WdbDv_xs9S7KlFZMfP-ui54Mc,AIzaSyA4sX-H2oMCGaacvLPDNXQGrm7V26gBrnM"
 };
 
 const jsonStr = JSON.stringify(envVars);

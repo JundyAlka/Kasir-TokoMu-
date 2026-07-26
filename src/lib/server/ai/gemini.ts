@@ -92,11 +92,12 @@ const DEFAULT_BASE_URL =
 const GOOGLE_DIRECT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
 const IS_PROXY = !!process.env.GEMINI_BASE_URL &&
   (process.env.GEMINI_BASE_URL.includes("iamhc.cn") || process.env.GEMINI_BASE_URL.includes("hcnsec.cn"));
-const PROVIDER_NAME = process.env.GEMINI_BASE_URL
-  ? IS_PROXY
-    ? "Gemini Proxy"
-    : "Custom API"
-  : "Gemini API";
+
+// Multiple Google API keys for fallback (comma-separated)
+const GOOGLE_API_KEYS = (process.env.GEMINI_GOOGLE_API_KEYS ?? "")
+  .split(",")
+  .map((k) => k.trim())
+  .filter(Boolean);
 
 async function tryCallGemini(
   baseUrl: string,
@@ -122,20 +123,13 @@ async function tryCallGemini(
       tool_choice: input.tools ? input.toolChoice ?? "auto" : undefined,
       temperature: input.temperature ?? 0.2,
     }),
-    signal: AbortSignal.timeout(15000),
-  }).catch((err) => {
-    if (err.name === 'TimeoutError') {
-      return null;
-    }
-    return null;
-  });
+    signal: AbortSignal.timeout(20000),
+  }).catch(() => null);
 
   if (!response) return null;
-
   if (response.ok) {
     return (await response.json()) as GeminiResponse;
   }
-
   return null;
 }
 
@@ -146,8 +140,8 @@ export async function callGemini(input: {
   model?: string;
   temperature?: number;
 }): Promise<GeminiResponse> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  const proxyKey = process.env.GEMINI_API_KEY;
+  if (!proxyKey && GOOGLE_API_KEYS.length === 0) {
     throw new Error(
       "GEMINI_API_KEY belum diatur di environment. Tambahkan API key server-side untuk mengaktifkan TokoMu AI."
     );
@@ -157,28 +151,29 @@ export async function callGemini(input: {
     ? [input.model]
     : Array.from(new Set([DEFAULT_MODEL, FALLBACK_TEXT_MODEL, FALLBACK_TEXT_MODEL_PINNED]));
 
-  // Determine base URLs to try: primary first, then Google direct if using proxy
-  const baseUrls = IS_PROXY
-    ? [DEFAULT_BASE_URL, GOOGLE_DIRECT_BASE_URL]
-    : [DEFAULT_BASE_URL];
-
-  let lastError: Error | null = null;
-
-  for (const baseUrl of baseUrls) {
+  // --- Step 1: Try proxy (if configured) ---
+  if (proxyKey) {
     for (const model of models) {
-      try {
-        const result = await tryCallGemini(baseUrl, apiKey, model, input);
-        if (result) {
-          return result;
-        }
-      } catch {
-        // Continue to next model/baseUrl
-      }
-      lastError = new Error(
-        `${PROVIDER_NAME} gagal merespons (${model}). Mencoba alternatif berikutnya...`
-      );
+      const result = await tryCallGemini(DEFAULT_BASE_URL, proxyKey, model, input);
+      if (result) return result;
     }
   }
 
-  throw lastError ?? new Error(`Semua penyedia AI gagal merespons. Coba lagi nanti.`);
+  // --- Step 2: Fallback to Google direct with multiple keys ---
+  if (GOOGLE_API_KEYS.length > 0) {
+    // Pick a random starting index so keys get distributed evenly
+    const startIndex = Math.floor(Math.random() * GOOGLE_API_KEYS.length);
+    for (let i = 0; i < GOOGLE_API_KEYS.length; i++) {
+      const keyIndex = (startIndex + i) % GOOGLE_API_KEYS.length;
+      const googleKey = GOOGLE_API_KEYS[keyIndex];
+      // Only try primary model for Google direct (to be fast)
+      const googleModels = input.model ? [input.model] : [DEFAULT_MODEL, FALLBACK_TEXT_MODEL];
+      for (const model of googleModels) {
+        const result = await tryCallGemini(GOOGLE_DIRECT_BASE_URL, googleKey, model, input);
+        if (result) return result;
+      }
+    }
+  }
+
+  throw new Error("Semua penyedia AI gagal merespons. Coba lagi nanti.");
 }
