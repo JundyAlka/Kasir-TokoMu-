@@ -89,11 +89,55 @@ const FALLBACK_TEXT_MODEL_PINNED =
   "gemini-2.0-flash-lite-001";
 const DEFAULT_BASE_URL =
   process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai/";
+const GOOGLE_DIRECT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
+const IS_PROXY = !!process.env.GEMINI_BASE_URL &&
+  (process.env.GEMINI_BASE_URL.includes("iamhc.cn") || process.env.GEMINI_BASE_URL.includes("hcnsec.cn"));
 const PROVIDER_NAME = process.env.GEMINI_BASE_URL
-  ? process.env.GEMINI_BASE_URL.includes("iamhc.cn") || process.env.GEMINI_BASE_URL.includes("hcnsec.cn")
+  ? IS_PROXY
     ? "Gemini Proxy"
     : "Custom API"
   : "Gemini API";
+
+async function tryCallGemini(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  input: {
+    messages: GeminiMessage[];
+    tools?: GeminiToolDef[];
+    toolChoice?: "auto" | "none";
+    temperature?: number;
+  },
+): Promise<GeminiResponse | null> {
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: input.messages,
+      tools: input.tools,
+      tool_choice: input.tools ? input.toolChoice ?? "auto" : undefined,
+      temperature: input.temperature ?? 0.2,
+    }),
+    signal: AbortSignal.timeout(15000),
+  }).catch((err) => {
+    if (err.name === 'TimeoutError') {
+      return null;
+    }
+    return null;
+  });
+
+  if (!response) return null;
+
+  if (response.ok) {
+    return (await response.json()) as GeminiResponse;
+  }
+
+  return null;
+}
 
 export async function callGemini(input: {
   messages: GeminiMessage[];
@@ -112,39 +156,29 @@ export async function callGemini(input: {
   const models = input.model
     ? [input.model]
     : Array.from(new Set([DEFAULT_MODEL, FALLBACK_TEXT_MODEL, FALLBACK_TEXT_MODEL_PINNED]));
+
+  // Determine base URLs to try: primary first, then Google direct if using proxy
+  const baseUrls = IS_PROXY
+    ? [DEFAULT_BASE_URL, GOOGLE_DIRECT_BASE_URL]
+    : [DEFAULT_BASE_URL];
+
   let lastError: Error | null = null;
 
-  for (const model of models) {
-    const response = await fetch(`${DEFAULT_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: input.messages,
-        tools: input.tools,
-        tool_choice: input.tools ? input.toolChoice ?? "auto" : undefined,
-        temperature: input.temperature ?? 0.2,
-      }),
-      signal: AbortSignal.timeout(15000),
-    }).catch((err) => {
-      if (err.name === 'TimeoutError') {
-        throw new Error(`Koneksi ke penyedia AI (${model}) terputus karena terlalu lama merespons (Timeout).`);
+  for (const baseUrl of baseUrls) {
+    for (const model of models) {
+      try {
+        const result = await tryCallGemini(baseUrl, apiKey, model, input);
+        if (result) {
+          return result;
+        }
+      } catch {
+        // Continue to next model/baseUrl
       }
-      throw err;
-    });
-
-    if (response.ok) {
-      return (await response.json()) as GeminiResponse;
+      lastError = new Error(
+        `${PROVIDER_NAME} gagal merespons (${model}). Mencoba alternatif berikutnya...`
+      );
     }
-
-    const text = await response.text().catch(() => response.statusText);
-    lastError = new Error(
-      `${PROVIDER_NAME} ${response.status} (${model}): ${geminiErrorMessage(text)}`
-    );
   }
 
-  throw lastError ?? new Error(`${PROVIDER_NAME} request failed.`);
+  throw lastError ?? new Error(`Semua penyedia AI gagal merespons. Coba lagi nanti.`);
 }

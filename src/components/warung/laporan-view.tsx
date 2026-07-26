@@ -518,7 +518,7 @@ function TrendRevenueChart({
       </div>
 
       {/* Perfectly Aligned X-Axis Date Labels Below Chart */}
-      <div className="relative mt-2.5 h-7 w-full select-none text-[11px] text-muted-foreground">
+      <div className="relative mt-2.5 h-10 w-full select-none text-[11px] text-muted-foreground">
         {visibleTicks.map((item) => (
           <div
             key={item.key}
@@ -536,7 +536,7 @@ function TrendRevenueChart({
 
       {/* Selected Point Status Bar */}
       {displayPoint ? (
-        <div className="mt-3 grid gap-2.5 rounded-[20px] border border-border/60 bg-card/75 p-3 text-xs sm:grid-cols-3">
+        <div className="mt-4 grid gap-2.5 rounded-[20px] border border-border/60 bg-card/75 p-3 text-xs sm:grid-cols-3">
           <div className="flex items-center gap-2.5 rounded-xl bg-muted/40 px-3 py-2">
             <CalendarDays className="size-4 shrink-0 text-primary" />
             <div>
@@ -575,7 +575,7 @@ export function LaporanView() {
   const [reportPreviewLayout, setReportPreviewLayout] = useState<ReportPreviewLayout>("cards");
   const [customOwnerNotes, setCustomOwnerNotes] = useState("");
   const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
-  const [trendRange, setTrendRange] = useState<TrendRange>("bulanan");
+  const [trendRange, setTrendRange] = useState<TrendRange>("mingguan");
   const [trendWeek, setTrendWeek] = useState(() => getDefaultTrendWeek(currentMonthValue()));
 
   const [finalizedReports, setFinalizedReports] = useState<any[]>([]);
@@ -811,7 +811,7 @@ export function LaporanView() {
         />
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(420px,1fr)]">
         <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
           <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
@@ -946,7 +946,7 @@ export function LaporanView() {
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-[26px] border border-border/70 bg-card/80 p-5">
                 <p className="text-sm text-muted-foreground">Rata-rata transaksi</p>
                 <p className="mt-2 font-heading text-3xl font-semibold">
@@ -1068,41 +1068,41 @@ export function LaporanView() {
               </div>
             </div>
 
-            <div className="rounded-[30px] bg-card/78 p-6 shadow-inner ring-1 ring-border/80 dark:bg-muted/35 dark:ring-border/70">
-              <div className="flex items-start justify-between gap-4 border-b border-dashed border-border/80 pb-5">
-                <div>
-                  <p className="text-sm uppercase tracking-[0.22em] text-primary">TokoMu report</p>
-                  <h3 className="mt-2 font-heading text-3xl font-semibold">{settings.storeName}</h3>
+            <div className="rounded-[30px] bg-card/78 p-4 sm:p-6 shadow-inner ring-1 ring-border/80 dark:bg-muted/35 dark:ring-border/70">
+              <div className="flex flex-col gap-3 border-b border-dashed border-border/80 pb-5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm uppercase tracking-[0.22em] text-primary">TokoMu report</p>
+                  <h3 className="mt-2 font-heading text-2xl sm:text-3xl font-semibold">{settings.storeName}</h3>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {[settings.storeTagline, settings.city].filter(Boolean).join(" - ")}
                   </p>
-                  <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+                  <p className="mt-1 max-w-xl text-sm text-muted-foreground">
                     {settings.storeAddress}
                   </p>
                 </div>
-                <div className="rounded-[22px] bg-muted/70 px-4 py-3 text-right text-foreground ring-1 ring-border/70">
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{periodLabel}</p>
-                  <p className="mt-2 font-heading text-2xl font-semibold">{formatCurrency(summary.netProfit)}</p>
+                <div className="shrink-0 self-end sm:self-auto rounded-[18px] bg-muted/70 px-3 py-2.5 sm:px-4 sm:py-3 text-right text-foreground ring-1 ring-border/70">
+                  <p className="text-[10px] sm:text-xs uppercase tracking-[0.18em] text-muted-foreground">{periodLabel}</p>
+                  <p className="mt-1.5 font-heading text-lg sm:text-xl font-semibold whitespace-nowrap tabular-nums">{formatCurrency(summary.netProfit)}</p>
                 </div>
               </div>
 
               {reportPreviewLayout === "cards" ? (
-                <div className="grid gap-4 border-b border-dashed border-border/80 py-5 sm:grid-cols-2">
-                  <div className="rounded-[22px] bg-card p-4 ring-1 ring-border/70">
-                    <p className="text-sm text-muted-foreground">Omzet</p>
-                    <p className="mt-2 text-2xl font-semibold">{formatCurrency(summary.revenue)}</p>
+                <div className="grid grid-cols-2 gap-3 border-b border-dashed border-border/80 py-5">
+                  <div className="rounded-[18px] bg-card p-3 sm:p-4 ring-1 ring-border/70">
+                    <p className="text-xs sm:text-sm text-muted-foreground">Omzet</p>
+                    <p className="mt-1.5 text-base sm:text-lg font-semibold whitespace-nowrap tabular-nums">{formatCurrency(summary.revenue)}</p>
                   </div>
-                  <div className="rounded-[22px] bg-card p-4 ring-1 ring-border/70">
-                    <p className="text-sm text-muted-foreground">HPP</p>
-                    <p className="mt-2 text-2xl font-semibold">{formatCurrency(summary.cogs)}</p>
+                  <div className="rounded-[18px] bg-card p-3 sm:p-4 ring-1 ring-border/70">
+                    <p className="text-xs sm:text-sm text-muted-foreground">HPP</p>
+                    <p className="mt-1.5 text-base sm:text-lg font-semibold whitespace-nowrap tabular-nums">{formatCurrency(summary.cogs)}</p>
                   </div>
-                  <div className="rounded-[22px] bg-card p-4 ring-1 ring-border/70">
-                    <p className="text-sm text-muted-foreground">Beban</p>
-                    <p className="mt-2 text-2xl font-semibold">{formatCurrency(summary.expenseTotal)}</p>
+                  <div className="rounded-[18px] bg-card p-3 sm:p-4 ring-1 ring-border/70">
+                    <p className="text-xs sm:text-sm text-muted-foreground">Beban</p>
+                    <p className="mt-1.5 text-base sm:text-lg font-semibold whitespace-nowrap tabular-nums">{formatCurrency(summary.expenseTotal)}</p>
                   </div>
-                  <div className="rounded-[22px] bg-card p-4 ring-1 ring-border/70">
-                    <p className="text-sm text-muted-foreground">Laba bersih</p>
-                    <p className="mt-2 text-2xl font-semibold">{formatCurrency(summary.netProfit)}</p>
+                  <div className="rounded-[18px] bg-card p-3 sm:p-4 ring-1 ring-border/70">
+                    <p className="text-xs sm:text-sm text-muted-foreground">Laba bersih</p>
+                    <p className="mt-1.5 text-base sm:text-lg font-semibold whitespace-nowrap tabular-nums">{formatCurrency(summary.netProfit)}</p>
                   </div>
                 </div>
               ) : (
@@ -1120,7 +1120,7 @@ export function LaporanView() {
                         className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-border/60 px-4 py-3 last:border-b-0"
                       >
                         <span className="text-sm text-muted-foreground">{label}</span>
-                        <span className="text-right font-medium tabular-nums">{value}</span>
+                        <span className="text-right font-medium tabular-nums whitespace-nowrap">{value}</span>
                       </div>
                     ))}
                   </div>

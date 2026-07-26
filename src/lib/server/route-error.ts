@@ -18,10 +18,10 @@ function friendlyAiError(message: string) {
     };
   }
 
-  if (message.includes("Gemini Proxy")) {
+  if (message.includes("Gemini Proxy") || message.includes("gagal merespons") || message.includes("penyedia AI")) {
     return {
       status: 502,
-      message: "API key Gemini Proxy Anda bermasalah. Silakan ganti API key Anda.",
+      message: "AI sedang tidak tersedia saat ini. Silakan coba lagi dalam beberapa saat.",
     };
   }
 

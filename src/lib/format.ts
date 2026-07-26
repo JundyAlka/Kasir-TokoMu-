@@ -12,10 +12,16 @@ const compactCurrencyFormatter = new Intl.NumberFormat("id-ID", {
 });
 
 export function formatCurrency(value: number) {
+  if (value < 0) {
+    return `- ${currencyFormatter.format(Math.abs(value))}`;
+  }
   return currencyFormatter.format(value);
 }
 
 export function formatCompactCurrency(value: number) {
+  if (value < 0) {
+    return `- ${compactCurrencyFormatter.format(Math.abs(value))}`;
+  }
   return compactCurrencyFormatter.format(value);
 }
 
