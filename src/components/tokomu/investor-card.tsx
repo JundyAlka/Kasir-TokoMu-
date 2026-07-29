@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { ArrowRight, BadgeDollarSign, Check, WalletCards } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { InvestorDeactivateButton, InvestorDeleteButton } from "@/components/tokomu/investor-actions";
+import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

@@ -119,6 +119,30 @@ function MiniBarChart({
   return <HourlyCurveChart data={data} valueKey={valueKey} maxHour={maxHour} />;
 }
 
+function buildSmoothPath(points: Array<{ x: number; y: number }>) {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+
+  const commands = [`M ${points[0].x} ${points[0].y}`];
+  points.slice(1).forEach((point, index) => {
+    const previous = points[index];
+    const beforePrevious = points[index - 1] ?? previous;
+    const next = points[index + 2] ?? point;
+    const tension = 0.18;
+    const controlA = {
+      x: previous.x + (point.x - beforePrevious.x) * tension,
+      y: previous.y + (point.y - beforePrevious.y) * tension,
+    };
+    const controlB = {
+      x: point.x - (next.x - previous.x) * tension,
+      y: point.y - (next.y - previous.y) * tension,
+    };
+    commands.push(`C ${controlA.x} ${controlA.y}, ${controlB.x} ${controlB.y}, ${point.x} ${point.y}`);
+  });
+
+  return commands.join(" ");
+}
+
 function HourlyCurveChart({
   data,
   valueKey,
@@ -143,7 +167,7 @@ function HourlyCurveChart({
     const y = 82 - (value / maxVal) * 62;
     return { hour: d.hour, value, x, y };
   });
-  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const linePath = buildSmoothPath(points);
   const areaPath =
     points.length > 0 ? `${linePath} L ${points.at(-1)?.x ?? 94} 90 L ${points[0].x} 90 Z` : "";
   const valueLabel = valueKey === "total" ? "omzet" : "transaksi";
@@ -156,15 +180,16 @@ function HourlyCurveChart({
   }, []);
 
   return (
-    <div className="mt-4 rounded-2xl border border-border/70 bg-background/35 p-3">
-      <div className="mb-3 flex items-start justify-between gap-3">
+    <div className="mt-4 rounded-[22px] border border-border/70 bg-gradient-to-b from-card/85 to-card/50 p-3.5 shadow-sm">
+      <div className="mb-3 flex items-start justify-between gap-3 border-b border-border/40 pb-3">
         <div>
           <p className="text-xs font-medium text-muted-foreground">Distribusi per jam</p>
-          <p className="mt-1 text-sm font-medium">
+          <p className="mt-1 text-sm font-semibold tabular-nums">
             {totalValue > 0 ? `${formatValue(totalValue)} hari ini` : `Belum ada ${valueLabel}`}
           </p>
         </div>
-        <div className="rounded-full bg-muted/50 px-3 py-1 text-xs text-muted-foreground">
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+          <span className="size-1.5 rounded-full bg-primary" />
           Puncak {String(peak.hour).padStart(2, "0")}:00
         </div>
       </div>
@@ -182,7 +207,7 @@ function HourlyCurveChart({
           </div>
         </div>
       ) : (
-        <div className="relative h-36 overflow-hidden rounded-[18px] bg-card/55">
+        <div className="relative h-36 overflow-hidden rounded-[18px] border border-border/40 bg-background/45 shadow-inner">
           <svg
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
@@ -192,8 +217,14 @@ function HourlyCurveChart({
           >
             <defs>
               <linearGradient id={`metric-hourly-area-${valueKey}`} x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.36" />
-                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.04" />
+                <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.34" />
+                <stop offset="68%" stopColor="var(--primary)" stopOpacity="0.08" />
+                <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id={`metric-hourly-line-${valueKey}`} x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0%" stopColor="var(--primary)" />
+                <stop offset="50%" stopColor="#ffb966" />
+                <stop offset="100%" stopColor="var(--primary)" />
               </linearGradient>
             </defs>
             {[20, 40, 60, 80].map((y) => (
@@ -203,7 +234,7 @@ function HourlyCurveChart({
                 x2="95"
                 y1={y}
                 y2={y}
-                stroke="hsl(var(--border))"
+                stroke="var(--border)"
                 strokeDasharray="2 3"
                 strokeOpacity="0.7"
                 vectorEffect="non-scaling-stroke"
@@ -213,7 +244,17 @@ function HourlyCurveChart({
             <path
               d={linePath}
               fill="none"
-              stroke="hsl(var(--primary))"
+              stroke="var(--primary)"
+              strokeOpacity="0.22"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="7"
+              vectorEffect="non-scaling-stroke"
+            />
+            <path
+              d={linePath}
+              fill="none"
+              stroke={`url(#metric-hourly-line-${valueKey})`}
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth="3"
@@ -224,10 +265,10 @@ function HourlyCurveChart({
                 key={point.hour}
                 cx={point.x}
                 cy={point.y}
-                r={point.value > 0 ? 2.4 : 1.5}
-                fill={point.value > 0 ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))"}
-                stroke="hsl(var(--card))"
-                strokeWidth="2"
+                r={point.value > 0 ? 2.35 : 0.75}
+                fill={point.value > 0 ? "var(--primary)" : "var(--border)"}
+                stroke={point.value > 0 ? "var(--card)" : "none"}
+                strokeWidth={point.value > 0 ? 2 : 0}
                 vectorEffect="non-scaling-stroke"
               >
                 <title>

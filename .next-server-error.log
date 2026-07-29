@@ -1,0 +1,13 @@
+⚠ "next start" does not work with "output: standalone" configuration. Use "node .next/standalone/server.js" instead.
+⨯ Error: UNAUTHORIZED
+    at n (D:\project\Kasir TokoMu\warungos\.next\server\chunks\ssr\_0c6d4gy._.js:27:268)
+    at async o (D:\project\Kasir TokoMu\warungos\.next\server\chunks\ssr\_0c6d4gy._.js:27:485)
+    at async p (D:\project\Kasir TokoMu\warungos\.next\server\chunks\ssr\[root-of-the-server]__0xoveal._.js:1:5304) {
+  digest: '938414315'
+}
+⨯ Error: UNAUTHORIZED
+    at n (D:\project\Kasir TokoMu\warungos\.next\server\chunks\ssr\_0c6d4gy._.js:27:268)
+    at async o (D:\project\Kasir TokoMu\warungos\.next\server\chunks\ssr\_0c6d4gy._.js:27:485)
+    at async p (D:\project\Kasir TokoMu\warungos\.next\server\chunks\ssr\[root-of-the-server]__0xoveal._.js:1:5304) {
+  digest: '938414315'
+}

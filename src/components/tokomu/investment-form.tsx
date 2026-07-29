@@ -48,6 +48,7 @@ export type InvestmentRowData = {
   unitCount: number | null;
   unitCost: number | null;
   profitSharePerUnitPct: number | null;
+  profitSharePerUnitAmount: number | null;
   startDate: string;
   endDate?: string | null;
   isActive: number;
@@ -118,6 +119,7 @@ type BatchProductItem = {
   unitCost: string;
   scheme: ProfitScheme;
   profitSharePerUnitPct: string;
+  profitSharePerUnitAmount: string;
   flatNominalRp: string;
 };
 
@@ -166,10 +168,13 @@ export function InvestmentForm({
       const sellPrice = prod?.sellPrice ?? buyPrice * 1.2;
       const margin = Math.max(sellPrice - buyPrice, 1);
       const sharePct = initialData.profitSharePerUnitPct ?? 15;
+      const nominalPerUnit = initialData.profitSharePerUnitAmount;
       const flatRp = Math.round(margin * (sharePct / 100));
 
-      let scheme: ProfitScheme = "percentage";
-      if (sharePct === 0) scheme = "consignment_pure";
+      let scheme: ProfitScheme = nominalPerUnit !== null && nominalPerUnit !== undefined
+        ? "flat_nominal"
+        : "percentage";
+      if (nominalPerUnit === 0 || (nominalPerUnit === null && sharePct === 0)) scheme = "consignment_pure";
 
       return [
         {
@@ -182,7 +187,8 @@ export function InvestmentForm({
           unitCost: String(buyPrice),
           scheme,
           profitSharePerUnitPct: String(sharePct),
-          flatNominalRp: String(flatRp),
+          profitSharePerUnitAmount: String(nominalPerUnit ?? 0),
+          flatNominalRp: String(nominalPerUnit ?? flatRp),
         },
       ];
     }
@@ -215,6 +221,7 @@ export function InvestmentForm({
         unitCost: String(product.buyPrice > 0 ? product.buyPrice : 1000),
         scheme: "percentage",
         profitSharePerUnitPct: String(defaultSharePct),
+        profitSharePerUnitAmount: "0",
         flatNominalRp: String(defaultFlatRp),
       },
     ]);
@@ -234,6 +241,7 @@ export function InvestmentForm({
         if (field === "scheme") {
           if (val === "consignment_pure") {
             updated.profitSharePerUnitPct = "0";
+            updated.profitSharePerUnitAmount = "0";
             updated.flatNominalRp = "0";
           }
         } else if (field === "flatNominalRp" && updated.scheme === "flat_nominal") {
@@ -289,7 +297,12 @@ export function InvestmentForm({
           payload.productId = item.productId;
           payload.unitCount = Number(item.unitCount);
           payload.unitCost = Number(item.unitCost);
-          payload.profitSharePerUnitPct = Number(item.profitSharePerUnitPct);
+          if (item.scheme === "flat_nominal") {
+            payload.profitSharePerUnitAmount = Number(item.flatNominalRp);
+          } else {
+            payload.profitSharePerUnitPct = Number(item.profitSharePerUnitPct);
+            payload.profitSharePerUnitAmount = null;
+          }
         }
 
         const res = await fetch(`/api/investments/${initialData.id}`, {
@@ -334,7 +347,12 @@ export function InvestmentForm({
           productId: item.productId,
           unitCount: Number(item.unitCount),
           unitCost: Number(item.unitCost),
-          profitSharePerUnitPct: Number(item.profitSharePerUnitPct),
+          ...(item.scheme === "flat_nominal"
+            ? { profitSharePerUnitAmount: Number(item.flatNominalRp) }
+            : {
+                profitSharePerUnitPct: Number(item.profitSharePerUnitPct),
+                profitSharePerUnitAmount: null,
+              }),
           startDate: draft.startDate,
         }));
 
@@ -624,7 +642,7 @@ export function InvestmentForm({
                     </Button>
                   </div>
 
-                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-[120px_140px_1fr]">
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[120px_150px_minmax(0,1fr)]">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Jumlah Unit</Label>
                       <Input
@@ -773,7 +791,7 @@ export function InvestmentFormDialog({
         <Plus className="size-4" />
         Investasi Baru
       </DialogTrigger>
-      <DialogContent className="max-w-3xl sm:max-w-[840px] rounded-2xl p-0 shadow-2xl">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-[960px] sm:max-w-[960px] rounded-2xl p-0 shadow-2xl">
         <DialogHeader className="p-6 sm:p-8 pb-2">
           <DialogTitle className="font-heading text-2xl font-bold">Tambah Investasi & Titip Jual</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground mt-1">
@@ -827,7 +845,7 @@ export function InvestmentEditDialog({
           </Button>
         }
       />
-      <DialogContent className="max-w-3xl sm:max-w-[820px] rounded-2xl p-0 shadow-2xl">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-[960px] sm:max-w-[960px] rounded-2xl p-0 shadow-2xl">
         <DialogHeader className="p-6 sm:p-8 pb-2">
           <div className="flex items-center justify-between pr-8">
             <DialogTitle className="font-heading text-2xl font-bold">Kelola Investasi</DialogTitle>

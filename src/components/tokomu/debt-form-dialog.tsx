@@ -168,7 +168,7 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
       </DialogTrigger>
       <DialogContent
         className={cn(
-          "max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] overflow-x-hidden rounded-[28px] p-0 sm:max-w-3xl",
+          "max-h-[calc(100dvh-2rem)] w-[calc(100vw-1rem)] overflow-x-hidden rounded-[28px] p-0 sm:max-w-[960px]",
           withItems ? "overflow-y-auto" : "overflow-y-hidden"
         )}
       >
@@ -285,8 +285,8 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
                       ) : null}
                     </div>
 
-                    <div className="grid gap-3 md:grid-cols-[1fr_100px_150px_150px]">
-                      <div className="grid gap-2">
+                    <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(220px,1.4fr)_88px_minmax(140px,1fr)_minmax(145px,1fr)] md:items-start">
+                      <div className="grid min-w-0 gap-2">
                         <Label>Produk atau nama manual</Label>
                         <div className="relative">
                           <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -300,7 +300,7 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
                               })
                             }
                             placeholder="Cari produk atau ketik manual"
-                            className="h-10 rounded-2xl pl-9 bg-white dark:bg-background shadow-sm"
+                            className="h-10 w-full min-w-0 rounded-2xl bg-white pl-9 shadow-sm dark:bg-background"
                           />
                         </div>
                         {matches.length > 0 ? (
@@ -320,26 +320,26 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
                           </div>
                         ) : null}
                       </div>
-                      <div className="grid gap-2">
+                      <div className="grid min-w-0 gap-2">
                         <Label>Qty</Label>
                         <Input
                           type="number"
                           min={1}
                           value={item.quantity}
                           onChange={(event) => updateItem(item.id, { quantity: Number(event.target.value) })}
-                          className="h-10 rounded-2xl bg-white dark:bg-background shadow-sm"
+                          className="h-10 w-full min-w-0 rounded-2xl bg-white shadow-sm dark:bg-background"
                         />
                       </div>
-                      <div className="grid gap-2">
+                      <div className="grid min-w-0 gap-2">
                         <Label>Harga</Label>
                         <Input
                           inputMode="numeric"
                           value={formatNumberInput(item.unitPrice)}
                           onChange={(event) => updateItem(item.id, { unitPrice: parseNumberInput(event.target.value) })}
-                          className="h-10 rounded-2xl bg-white dark:bg-background shadow-sm"
+                          className="h-10 w-full min-w-0 rounded-2xl bg-white shadow-sm dark:bg-background"
                         />
                       </div>
-                      <div className="grid gap-2">
+                      <div className="grid min-w-0 gap-2">
                         <Label>Subtotal</Label>
                         <div className="flex h-10 items-center rounded-2xl border border-border bg-white dark:bg-background shadow-sm px-3 text-sm font-medium">
                           {formatCurrency(item.quantity * item.unitPrice)}

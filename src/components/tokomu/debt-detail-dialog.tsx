@@ -306,7 +306,8 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
             <section className="grid gap-3">
               <h4 className="font-heading text-lg font-semibold">Daftar barang</h4>
               {detail.items.length > 0 ? (
-                <Table>
+                <div className="overflow-x-auto rounded-[18px] border border-border/60">
+                  <Table className="min-w-[520px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Nama</TableHead>
@@ -325,7 +326,8 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
+                  </Table>
+                </div>
               ) : (
                 <p className="rounded-[18px] bg-muted/45 p-4 text-sm text-muted-foreground">Kasbon ini dicatat tanpa rincian barang.</p>
               )}

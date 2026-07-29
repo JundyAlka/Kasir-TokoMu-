@@ -37,6 +37,7 @@ function investmentRateLabel(investment: {
   monthlyReturnRatePct: number;
   profitSharePct: number | null;
   profitSharePerUnitPct: number | null;
+  profitSharePerUnitAmount: number | null;
 }) {
   if (investment.akadType === "murabahah_bil_wakalah") {
     return `${investment.monthlyReturnRatePct ?? 2.5}% / bulan`;
@@ -50,7 +51,9 @@ function investmentRateLabel(investment: {
     return "Tanpa bagi hasil";
   }
 
-  return `${investment.profitSharePerUnitPct ?? 0}% margin`;
+  return investment.profitSharePerUnitAmount !== null && investment.profitSharePerUnitAmount !== undefined
+    ? `${formatCurrency(investment.profitSharePerUnitAmount)} / pcs`
+    : `${investment.profitSharePerUnitPct ?? 0}% margin`;
 }
 
 export default async function InvestorDetailPage({
@@ -199,12 +202,13 @@ export default async function InvestorDetailPage({
               ) : null}
             </CardHeader>
             <CardContent>
-              <Table className="min-w-[820px]">
+              <div className="overflow-x-auto rounded-[18px] border border-border/60">
+                <Table className="min-w-[820px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Tipe akad</TableHead>
                     <TableHead>Nilai</TableHead>
-                    <TableHead>Share/Rate</TableHead>
+                    <TableHead>Skema bagi hasil</TableHead>
                     <TableHead>Produk</TableHead>
                     <TableHead>Mulai</TableHead>
                     <TableHead>Status</TableHead>
@@ -258,6 +262,7 @@ export default async function InvestorDetailPage({
                             unitCount: investment.unitCount,
                             unitCost: investment.unitCost,
                             profitSharePerUnitPct: investment.profitSharePerUnitPct,
+                            profitSharePerUnitAmount: investment.profitSharePerUnitAmount,
                             startDate: investment.startDate,
                             endDate: investment.endDate,
                             isActive: investment.isActive,
@@ -268,7 +273,8 @@ export default async function InvestorDetailPage({
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -280,12 +286,13 @@ export default async function InvestorDetailPage({
               <CardDescription>Payout investor yang sudah dibuat dari laporan periode tertentu.</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table className="min-w-[760px]">
+              <div className="overflow-x-auto rounded-[18px] border border-border/60">
+                <Table className="min-w-[760px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Periode</TableHead>
                     <TableHead>Profit dasar</TableHead>
-                    <TableHead>Share</TableHead>
+                    <TableHead>Skema bagi hasil</TableHead>
                     <TableHead>Nominal</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Catatan</TableHead>
@@ -298,7 +305,11 @@ export default async function InvestorDetailPage({
                         {formatDate(payout.periodStart)} - {formatDate(payout.periodEnd)}
                       </TableCell>
                       <TableCell>{formatCurrency(payout.baseProfit)}</TableCell>
-                      <TableCell>{payout.sharePct}%</TableCell>
+                      <TableCell>
+                        {payout.shareMode === "per_unit_amount"
+                          ? `${formatCurrency(payout.perUnitAmount ?? 0)} / pcs`
+                          : `${payout.sharePct}%`}
+                      </TableCell>
                       <TableCell>{formatCurrency(payout.amount)}</TableCell>
                       <TableCell>
                         <Badge variant={payout.status === "dibayar" ? "default" : "secondary"}>
@@ -316,7 +327,8 @@ export default async function InvestorDetailPage({
                     </TableRow>
                   ) : null}
                 </TableBody>
-              </Table>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

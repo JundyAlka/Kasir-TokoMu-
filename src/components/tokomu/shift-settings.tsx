@@ -182,8 +182,8 @@ export function ShiftSettings({ role }: { role: string }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <section className="flex flex-wrap items-end gap-4 rounded-[24px] border border-border/70 bg-card/85 p-4">
-          <div className="grid flex-1 min-w-[120px] gap-2">
+        <section className="grid w-full grid-cols-1 items-end gap-3 rounded-[24px] border border-border/70 bg-card/85 p-4 sm:grid-cols-2 lg:grid-cols-12">
+          <div className="grid min-w-0 gap-2 lg:col-span-4">
             <Label htmlFor="shift-name">Nama shift</Label>
             <Input
               id="shift-name"
@@ -194,7 +194,7 @@ export function ShiftSettings({ role }: { role: string }) {
               disabled={!canEditShift}
             />
           </div>
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2 lg:col-span-2">
             <Label htmlFor="shift-start">Mulai</Label>
             <Input
               id="shift-start"
@@ -205,7 +205,7 @@ export function ShiftSettings({ role }: { role: string }) {
               disabled={!canEditShift}
             />
           </div>
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2 lg:col-span-2">
             <Label htmlFor="shift-end">Selesai</Label>
             <Input
               id="shift-end"
@@ -216,10 +216,10 @@ export function ShiftSettings({ role }: { role: string }) {
               disabled={!canEditShift}
             />
           </div>
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2 lg:col-span-2">
             <Label>Kasir</Label>
             <Select disabled={!canEditShift} value={draft.assignedUserId} onValueChange={(value) => setDraft({ ...draft, assignedUserId: value ?? "none" })}>
-              <SelectTrigger className="h-11 w-full min-w-[180px] rounded-2xl bg-card">
+              <SelectTrigger className="h-11 w-full rounded-2xl bg-card">
                 <SelectValue placeholder="Pilih kasir">
                   {draft.assignedUserId === "none" ? "Belum ditugaskan" : users.find(u => u.id === draft.assignedUserId)?.name ?? "Pilih..."}
                 </SelectValue>
@@ -234,23 +234,24 @@ export function ShiftSettings({ role }: { role: string }) {
               </SelectContent>
             </Select>
           </div>
-          <Button type="button" className="h-11 rounded-2xl" onClick={() => void createShift()} disabled={!canEditShift}>
+          <Button type="button" className="h-11 w-full rounded-2xl lg:col-span-2" onClick={() => void createShift()} disabled={!canEditShift}>
             <Plus className="size-4" />
             Tambah
           </Button>
         </section>
 
-        <Table>
-          <TableHeader>
+        <div className="overflow-x-auto rounded-[20px] border border-border/60">
+          <Table className="min-w-[900px] table-fixed">
+            <TableHeader>
             <TableRow>
-              <TableHead>Shift</TableHead>
-              <TableHead>Jam</TableHead>
-              <TableHead>Kasir</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Aksi</TableHead>
+              <TableHead className="w-[22%]">Shift</TableHead>
+              <TableHead className="w-[29%]">Jam</TableHead>
+              <TableHead className="w-[21%]">Kasir</TableHead>
+              <TableHead className="w-[10%]">Status</TableHead>
+              <TableHead className="w-[18%] text-right">Aksi</TableHead>
             </TableRow>
-          </TableHeader>
-          <TableBody>
+            </TableHeader>
+            <TableBody>
             {loading ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-muted-foreground">Memuat shift...</TableCell>
@@ -284,7 +285,7 @@ export function ShiftSettings({ role }: { role: string }) {
                       />
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
+                      <div className="grid grid-cols-2 gap-2">
                         <Input
                           type="time"
                           value={row.startTime}
@@ -294,7 +295,7 @@ export function ShiftSettings({ role }: { role: string }) {
                               [shift.id]: { ...row, startTime: event.target.value },
                             }))
                           }
-                          className="h-10 w-28 rounded-2xl"
+                          className="h-10 w-full min-w-0 rounded-2xl"
                           disabled={!canEditShift}
                         />
                         <Input
@@ -306,7 +307,7 @@ export function ShiftSettings({ role }: { role: string }) {
                               [shift.id]: { ...row, endTime: event.target.value },
                             }))
                           }
-                          className="h-10 w-28 rounded-2xl"
+                          className="h-10 w-full min-w-0 rounded-2xl"
                           disabled={!canEditShift}
                         />
                       </div>
@@ -322,7 +323,7 @@ export function ShiftSettings({ role }: { role: string }) {
                           }))
                         }
                       >
-                        <SelectTrigger className="h-10 w-full min-w-[160px] max-w-[200px] rounded-2xl bg-card">
+              <SelectTrigger className="h-10 w-full min-w-[160px] rounded-2xl bg-card">
                           <SelectValue placeholder="Pilih kasir">
                             {row.assignedUserId === "none" ? "Belum ditugaskan" : users.find(u => u.id === row.assignedUserId)?.name ?? "Pilih..."}
                           </SelectValue>
@@ -365,8 +366,9 @@ export function ShiftSettings({ role }: { role: string }) {
                 );
               })
             )}
-          </TableBody>
-        </Table>
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );

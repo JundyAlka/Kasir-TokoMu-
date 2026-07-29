@@ -33,6 +33,8 @@ export type PayoutPreview = {
   baseProfit: number;
   ratePct: number;
   sharePct: number;
+  shareMode: "percentage" | "per_unit_amount";
+  perUnitAmount?: number;
   amount: number;
   note: string;
   quantitySold?: number;
@@ -67,6 +69,7 @@ type InvestmentRow = {
   productName: string | null;
   unitCost: number | null;
   profitSharePerUnitPct: number | null;
+  profitSharePerUnitAmount: number | null;
   startDate: string;
   endDate: string | null;
 };
@@ -257,6 +260,7 @@ function calculatePayoutForInvestment(
       baseProfit: baseAmount,
       ratePct,
       sharePct: ratePct,
+      shareMode: "percentage",
       amount: roundCurrency(baseAmount * (ratePct / 100)),
       note: `Murabahah fixed-rate ${ratePct}% per bulan dari modal.`,
     };
@@ -276,27 +280,30 @@ function calculatePayoutForInvestment(
       baseProfit: baseAmount,
       ratePct,
       sharePct: ratePct,
+      shareMode: "percentage",
       amount: roundCurrency(baseAmount * (ratePct / 100)),
       note: `${akadType === "mudharabah" ? "Mudharabah" : "Musyarakah"} ${ratePct}% dari laba bersih periode.`,
     };
   }
 
   if (akadType === "barang_titip_jual" || akadType === "sales_titipan") {
-    const ratePct = investment.profitSharePerUnitPct ?? investment.profitSharePct ?? 0;
-    
-    let amount = roundCurrency(consignmentBaseAmount * (ratePct / 100));
-    let perUnit = 0;
-    
-    if (quantitySold && quantitySold > 0) {
-      const marginPerUnit = consignmentBaseAmount / quantitySold;
-      perUnit = Math.round(marginPerUnit * (ratePct / 100));
-      amount = perUnit * quantitySold;
-    }
-    
-    let note = `Titipan ${investment.productName ?? "produk"} terjual. ${ratePct}% dari margin produk.`;
-    if (quantitySold && quantitySold > 0) {
-      note = `Titipan ${investment.productName ?? "produk"} terjual ${quantitySold} pcs (Bagi hasil Rp ${perUnit.toLocaleString("id-ID")}/pcs).`;
-    }
+    const nominalPerUnit = investment.profitSharePerUnitAmount;
+    const isNominal = nominalPerUnit !== null && nominalPerUnit !== undefined;
+    const ratePct = isNominal
+      ? quantitySold && quantitySold > 0 && consignmentBaseAmount > 0
+        ? (nominalPerUnit / (consignmentBaseAmount / quantitySold)) * 100
+        : 0
+      : investment.profitSharePerUnitPct ?? investment.profitSharePct ?? 0;
+    const percentagePerUnit = quantitySold && quantitySold > 0
+      ? roundCurrency((consignmentBaseAmount / quantitySold) * (ratePct / 100))
+      : 0;
+    const perUnit = isNominal ? Math.max(0, Math.round(nominalPerUnit)) : percentagePerUnit;
+    const amount = quantitySold && quantitySold > 0
+      ? perUnit * quantitySold
+      : roundCurrency(consignmentBaseAmount * (ratePct / 100));
+    const note = quantitySold && quantitySold > 0
+      ? `Titipan ${investment.productName ?? "produk"} terjual ${quantitySold} pcs (Bagi hasil Rp ${perUnit.toLocaleString("id-ID")}/pcs).`
+      : `Titipan ${investment.productName ?? "produk"} menggunakan bagi hasil ${isNominal ? `Rp ${perUnit.toLocaleString("id-ID")}/pcs` : `${ratePct}% margin`}.`;
 
     return {
       investmentId: investment.id,
@@ -308,6 +315,8 @@ function calculatePayoutForInvestment(
       baseProfit: consignmentBaseAmount,
       ratePct,
       sharePct: ratePct,
+      shareMode: isNominal ? "per_unit_amount" : "percentage",
+      ...(quantitySold && quantitySold > 0 ? { perUnitAmount: perUnit } : {}),
       amount,
       note,
       quantitySold,
@@ -324,6 +333,7 @@ function calculatePayoutForInvestment(
     baseProfit: investment.amount ?? 0,
     ratePct: 0,
     sharePct: 0,
+    shareMode: "percentage",
     amount: 0,
     note: "Pinjaman qardh tidak menghasilkan payout bagi hasil.",
   };
@@ -357,6 +367,7 @@ export async function calculatePayouts(
           p.name as "productName",
           i.unit_cost as "unitCost",
           i.profit_share_per_unit_pct as "profitSharePerUnitPct",
+          i.profit_share_per_unit_amount as "profitSharePerUnitAmount",
           i.start_date as "startDate",
           i.end_date as "endDate"
         from investments i
@@ -468,6 +479,8 @@ export async function saveDraftPayouts(
         periodEnd,
         baseProfit: payout.baseAmount,
         sharePct: payout.ratePct,
+        shareMode: payout.shareMode,
+        perUnitAmount: payout.perUnitAmount ?? null,
         amount: payout.amount,
         status: "draft",
         paidAt: null,

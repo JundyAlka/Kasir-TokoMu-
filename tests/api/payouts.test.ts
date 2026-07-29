@@ -125,6 +125,46 @@ describe("payout calculation", () => {
     });
   });
 
+  it("calculates a flat nominal consignment payout exactly per sold unit", async () => {
+    const { pool } = await setupTestDb();
+    const timestamp = "2026-06-10T00:00:00.000Z";
+
+    await pool.query(
+      `insert into investors (id, workspace_owner_id, name, whatsapp, address, notes, is_active, created_at, updated_at)
+       values ('inv_flat', $1, 'H. Arif', '0812', 'Alamat', '', 1, $2, $2)`,
+      [WORKSPACE_ID, timestamp]
+    );
+    await pool.query(
+      `insert into investments (
+        id, investor_id, workspace_owner_id, type, akad_type, product_id, unit_count, unit_cost,
+        profit_share_per_unit_amount, start_date, is_active, created_at, updated_at
+      )
+      values ('ivt_flat', 'inv_flat', $1, 'barang_titip_jual', 'barang_titip_jual', 'prd_roti', 3, 3000, 1000, $2, 1, $2, $2)`,
+      [WORKSPACE_ID, timestamp]
+    );
+    await pool.query(
+      `insert into transactions (id, user_id, total, payment_method, created_at)
+       values ('trx_flat', $1, 36000, 'Tunai', $2)`,
+      [WORKSPACE_ID, timestamp]
+    );
+    await pool.query(
+      `insert into transaction_items (id, transaction_id, product_id, product_name, quantity, unit_price, cost_price)
+       values ('itm_flat', 'trx_flat', 'prd_roti', 'Roti', 3, 12000, 3000)`
+    );
+
+    const { calculatePayouts } = await import("@/lib/server/profit-sharing");
+    const result = await calculatePayouts(WORKSPACE_ID, 2026, 6);
+    const payout = result.payouts.find((row) => row.investmentId === "ivt_flat");
+
+    expect(payout).toMatchObject({
+      investorName: "H. Arif",
+      quantitySold: 3,
+      perUnitAmount: 1000,
+      shareMode: "per_unit_amount",
+      amount: 3000,
+    });
+  });
+
   it("previews, stores, lists, approves, and pays payout drafts via API", async () => {
     const { pool } = await setupTestDb();
     const timestamp = "2026-06-10T00:00:00.000Z";

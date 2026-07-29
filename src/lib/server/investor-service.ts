@@ -31,6 +31,7 @@ type InvestmentDraft = {
   unitCount?: unknown;
   unitCost?: unknown;
   profitSharePerUnitPct?: unknown;
+  profitSharePerUnitAmount?: unknown;
   startDate?: unknown;
   endDate?: unknown;
 };
@@ -204,6 +205,8 @@ function normalizeCreateInvestmentDraft(draft: InvestmentDraft) {
   const type = parseInvestmentType(draft.type);
   const startDate = parseDate(draft.startDate, "Tanggal mulai");
   const endDate = parseNullableDate(draft.endDate, "Tanggal selesai") ?? null;
+  const nominalPerUnit = draft.profitSharePerUnitAmount;
+  const hasNominalPerUnit = nominalPerUnit !== undefined && nominalPerUnit !== null && nominalPerUnit !== "";
 
   if (type === "uang") {
     const akadType = parseAkadType(draft.akadType, "murabahah_bil_wakalah");
@@ -237,10 +240,12 @@ function normalizeCreateInvestmentDraft(draft: InvestmentDraft) {
     productId: parseText(draft.productId, "Produk titipan", true),
     unitCount: parsePositiveNumber(draft.unitCount, "Jumlah unit"),
     unitCost: parsePositiveNumber(draft.unitCost, "Modal per unit"),
-    profitSharePerUnitPct: parsePercentage(
-      draft.profitSharePerUnitPct,
-      "Persentase bagi hasil per unit"
-    ),
+    profitSharePerUnitPct: hasNominalPerUnit
+      ? null
+      : parsePercentage(draft.profitSharePerUnitPct ?? 0, "Persentase bagi hasil per unit"),
+    profitSharePerUnitAmount: hasNominalPerUnit
+      ? parsePositiveNumber(nominalPerUnit, "Nominal bagi hasil per unit")
+      : null,
     startDate,
     endDate,
   };
@@ -256,6 +261,8 @@ function normalizeUpdateInvestmentDraft(
     draft.endDate === undefined
       ? current.endDate
       : parseNullableDate(draft.endDate, "Tanggal selesai") ?? null;
+  const nominalPerUnit = draft.profitSharePerUnitAmount;
+  const hasNominalPerUnit = nominalPerUnit !== undefined;
 
   if (type === "uang") {
     const currentAkadType = (current.akadType ?? "murabahah_bil_wakalah") as AkadType;
@@ -305,9 +312,17 @@ function normalizeUpdateInvestmentDraft(
         ? current.unitCost ?? 0
         : parsePositiveNumber(draft.unitCost, "Modal per unit"),
     profitSharePerUnitPct:
-      draft.profitSharePerUnitPct === undefined
+      hasNominalPerUnit
+        ? null
+        : draft.profitSharePerUnitPct === undefined
         ? current.profitSharePerUnitPct ?? 0
         : parsePercentage(draft.profitSharePerUnitPct, "Persentase bagi hasil per unit"),
+    profitSharePerUnitAmount:
+      !hasNominalPerUnit
+        ? current.profitSharePerUnitAmount ?? null
+        : nominalPerUnit === null || nominalPerUnit === ""
+        ? null
+        : parsePositiveNumber(nominalPerUnit, "Nominal bagi hasil per unit"),
     startDate,
     endDate,
   };
@@ -547,6 +562,7 @@ export async function listInvestments(workspaceOwnerId: string, investorId?: str
       unitCount: investments.unitCount,
       unitCost: investments.unitCost,
       profitSharePerUnitPct: investments.profitSharePerUnitPct,
+      profitSharePerUnitAmount: investments.profitSharePerUnitAmount,
       startDate: investments.startDate,
       endDate: investments.endDate,
       isActive: investments.isActive,
@@ -747,4 +763,3 @@ export async function createInvestmentBatch(
     return results;
   });
 }
-

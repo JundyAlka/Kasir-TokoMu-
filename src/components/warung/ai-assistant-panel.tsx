@@ -146,17 +146,29 @@ function MessageBubble({
   );
 }
 
-function parseMarkdown(text: string): React.ReactNode {
-  const lines = text.split("\n");
+export function normalizeAssistantMarkdown(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line))
+    .map((line) => line.replace(/^\s*#{1,6}\s+/, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+export function parseMarkdown(text: string): React.ReactNode {
+  const lines = normalizeAssistantMarkdown(text).split("\n");
   const elements: React.ReactNode[] = [];
   let inList = false;
   let listItems: React.ReactNode[] = [];
 
   const parseInline = (str: string): React.ReactNode[] => {
-    const parts = str.split(/(\*\*.*?\*\*)/g);
+    const parts = str.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g);
     return parts.map((part, index) => {
       if (part.startsWith("**") && part.endsWith("**")) {
         return <strong key={index} className="font-bold text-primary">{part.slice(2, -2)}</strong>;
+      }
+      if (part.startsWith("*") && part.endsWith("*")) {
+        return <strong key={index} className="font-semibold text-primary">{part.slice(1, -1)}</strong>;
       }
       return part;
     });

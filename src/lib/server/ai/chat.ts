@@ -55,6 +55,7 @@ export async function runUserTurn(input: {
   await renameChatIfDefault(userId, chatId, userText);
 
   const systemContent = await buildSystemContext(userId);
+  let previousInteractionId: string | undefined;
 
   for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter += 1) {
     const history = await listMessages(chatId);
@@ -66,7 +67,9 @@ export async function runUserTurn(input: {
     const response = await callGemini({
       messages: geminiMessages,
       tools: toolDefinitions,
+      previousInteractionId,
     });
+    previousInteractionId = response.interactionId;
 
     const choice = response.choices[0];
     if (!choice) break;

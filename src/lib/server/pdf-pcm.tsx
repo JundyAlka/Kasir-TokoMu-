@@ -79,25 +79,27 @@ const styles = StyleSheet.create({
   header: {
     borderBottomWidth: 1,
     borderBottomColor: "#111827",
-    paddingBottom: 12,
-    marginBottom: 16,
+    paddingBottom: 10,
+    marginBottom: 14,
     textAlign: "center",
   },
   org: {
     fontSize: 11,
     fontFamily: "Helvetica-Bold",
     textTransform: "uppercase",
+    marginBottom: 2,
   },
   title: {
-    marginTop: 6,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: "Helvetica-Bold",
     textTransform: "uppercase",
+    lineHeight: 1.15,
   },
   subtitle: {
-    marginTop: 2,
-    fontSize: 10,
+    marginTop: 1,
+    fontSize: 9,
     textTransform: "capitalize",
+    lineHeight: 1.2,
   },
   section: {
     marginBottom: 14,
@@ -109,16 +111,36 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: "#111827",
   },
-  row: {
+  identityRow: {
     flexDirection: "row",
+    marginBottom: 1,
   },
   identityLabel: {
-    width: 105,
+    width: 108,
+    color: "#4b5563",
+  },
+  identitySeparator: {
+    width: 10,
     color: "#4b5563",
   },
   identityValue: {
     flex: 1,
     fontFamily: "Helvetica-Bold",
+  },
+  opening: {
+    marginBottom: 12,
+  },
+  openingGreeting: {
+    marginBottom: 5,
+    lineHeight: 1.3,
+  },
+  openingParagraph: {
+    marginTop: 7,
+    lineHeight: 1.4,
+  },
+  openingClosing: {
+    marginTop: 7,
+    lineHeight: 1.3,
   },
   table: {
     borderWidth: 1,
@@ -207,6 +229,13 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatPeriodLabel(year: number, month: number) {
+  return new Intl.DateTimeFormat("id-ID", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(year, month - 1, 1));
+}
+
 function col(width: string | number) {
   return { width };
 }
@@ -265,10 +294,7 @@ export function PcmMonthlyReportDocument({
   const ownerName = normalizeOwnerName(identity.ownerName);
   const city = normalizeCity(identity.city);
   const chairmanTitle = identity.pcmChairmanTitle || "Ketua PCM";
-  // Capitalize "juli 2026" → "Juli 2026"
-  const periodLabel = data.period.label
-    ? data.period.label.charAt(0).toUpperCase() + data.period.label.slice(1)
-    : data.period.label;
+  const periodLabel = formatPeriodLabel(data.period.year, data.period.month);
 
   return (
     <Document title={`Laporan Bulanan TokoMu ${periodLabel}`}>
@@ -281,39 +307,43 @@ export function PcmMonthlyReportDocument({
         </View>
 
         {/* Formal Opening */}
-        <View style={{ marginBottom: 10 }}>
-          <Text style={{ marginBottom: 3, lineHeight: 1.35 }}>
+        <View style={styles.opening}>
+          <Text style={styles.openingGreeting}>
             Assalamu&apos;alaikum Warahmatullahi Wabarakatuh
           </Text>
-          <Text style={{ lineHeight: 1.35 }}>
+          <Text style={styles.openingGreeting}>
             Dengan hormat,
           </Text>
-          <Text style={{ marginTop: 5, lineHeight: 1.4 }}>
+          <Text style={styles.openingParagraph}>
             Bersama laporan ini kami sampaikan laporan keuangan dan operasional bulanan TokoMu untuk periode {periodLabel}. Laporan ini disusun sebagai bentuk pertanggungjawaban dan transparansi pengelolaan toko amal usaha kepada {identity.pcmName || "PCM"}.
           </Text>
-          <Text style={{ marginTop: 5, lineHeight: 1.4 }}>
+          <Text style={styles.openingParagraph}>
             Semoga laporan ini dapat menjadi bahan evaluasi dan masukan bagi kemajuan amal usaha kita bersama. Atas perhatian dan bimbingan Bapak/Ibu {chairmanTitle}, kami mengucapkan terima kasih.
           </Text>
-          <Text style={{ marginTop: 5, lineHeight: 1.35 }}>Wassalamu&apos;alaikum Warahmatullahi Wabarakatuh.</Text>
+          <Text style={styles.openingClosing}>Wassalamu&apos;alaikum Warahmatullahi Wabarakatuh.</Text>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1. Identitas</Text>
-          <View style={styles.row}>
+          <View style={styles.identityRow}>
             <Text style={styles.identityLabel}>Nama toko</Text>
+            <Text style={styles.identitySeparator}>:</Text>
             <Text style={styles.identityValue}>{identity.storeName}</Text>
           </View>
-          <View style={styles.row}>
+          <View style={styles.identityRow}>
             <Text style={styles.identityLabel}>Alamat toko</Text>
+            <Text style={styles.identitySeparator}>:</Text>
             <Text style={styles.identityValue}>{storeAddress}</Text>
           </View>
-          <View style={styles.row}>
+          <View style={styles.identityRow}>
             <Text style={styles.identityLabel}>{chairmanTitle}</Text>
+            <Text style={styles.identitySeparator}>:</Text>
             <Text style={styles.identityValue}>{identity.pcmChairmanName || "-"}</Text>
           </View>
-          <View style={styles.row}>
+          <View style={styles.identityRow}>
             <Text style={styles.identityLabel}>Periode</Text>
-            <Text style={styles.identityValue}>{data.period.label}</Text>
+            <Text style={styles.identitySeparator}>:</Text>
+            <Text style={styles.identityValue}>{periodLabel}</Text>
           </View>
         </View>
 

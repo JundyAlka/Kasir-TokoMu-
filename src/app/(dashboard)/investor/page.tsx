@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { InactiveInvestorManager } from "@/components/tokomu/inactive-investor-manager";
 import { InvestorCard, type InvestorSummary } from "@/components/tokomu/investor-card";
+import { InvestorOverviewDialog } from "@/components/tokomu/investor-overview-dialog";
 import { InvestorFormDialog } from "@/components/tokomu/investor-form-dialog";
 import { getRequestUser } from "@/lib/server/app-service";
 import { listInvestors } from "@/lib/server/investor-service";
@@ -31,7 +32,10 @@ export default async function InvestorPage({
   const { workspaceOwnerId } = await getRequestUser();
   const params = searchParams ? await searchParams : {};
   const status = parseStatus(params.status);
-  const investors = (await listInvestors(workspaceOwnerId, { status })) as InvestorSummary[];
+  const [investors, allInvestors] = (await Promise.all([
+    listInvestors(workspaceOwnerId, { status }),
+    listInvestors(workspaceOwnerId, { status: "all" }),
+  ])) as [InvestorSummary[], InvestorSummary[]];
 
   return (
     <div className="space-y-4">
@@ -52,9 +56,10 @@ export default async function InvestorPage({
             </Link>
           ))}
         </div>
-        {status !== "inactive" ? (
-          <InvestorFormDialog />
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {allInvestors.length > 0 ? <InvestorOverviewDialog investors={allInvestors} /> : null}
+          {status !== "inactive" ? <InvestorFormDialog /> : null}
+        </div>
       </div>
 
       {investors.length > 0 ? (

@@ -28,6 +28,7 @@ function applySchema(mem: TestDb) {
     "0009_product_sku.sql",
     "0009_shifts.sql",
     "0010_transaction_cash_change.sql",
+    "0016_investment_unit_amount.sql",
   ]) {
     for (const statement of sqlFromMigration(fileName)) {
       mem.public.none(statement);
@@ -65,7 +66,7 @@ async function seedBase(pool: InstanceType<ReturnType<TestDb["adapters"]["create
       profit_share_pcm_pct, profit_share_reserve_pct, enabled_payments, created_at, updated_at
     )
     values ($1, 'TokoMu', 'Toko PCM', 'Jl. Pasar', 'PCM', 'Ketua PCM', 'Alamat PCM',
-      'Pimpinan', '081234567890', 'Purworejo', '', 5, 0, 0, $2::jsonb, $3, $3)`,
+      'Pimpinan', '081234567890', 'Purworejo', '', 5, 30, 0, $2::jsonb, $3, $3)`,
     [WORKSPACE_ID, JSON.stringify(["Tunai", "QRIS", "Transfer"]), timestamp]
   );
 

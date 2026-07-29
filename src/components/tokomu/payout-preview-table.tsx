@@ -36,6 +36,8 @@ type PayoutRow = {
   akadType: AkadType;
   baseAmount: number;
   ratePct: number;
+  shareMode?: "percentage" | "per_unit_amount";
+  perUnitAmount?: number | null;
   amount: number;
   status?: PayoutStatus;
   paidAt?: string | null;
@@ -127,7 +129,7 @@ export function PayoutPreviewTable({
           <TableHead>Investor</TableHead>
           <TableHead>Tipe akad</TableHead>
           <TableHead>Base profit / Qty</TableHead>
-          <TableHead>Share/Rate</TableHead>
+          <TableHead>Skema bagi hasil</TableHead>
           <TableHead>Payout</TableHead>
           <TableHead>Catatan</TableHead>
           {mode === "saved" ? <TableHead className="text-right">Status</TableHead> : null}
@@ -156,10 +158,10 @@ export function PayoutPreviewTable({
             </TableCell>
             <TableCell>
               {row.akadType === "barang_titip_jual" || row.akadType === "sales_titipan" ? (
-                row.quantitySold ? (
-                  `${formatCurrency(row.amount / row.quantitySold)} / pcs`
+                row.shareMode === "per_unit_amount" ? (
+                  `${formatCurrency(row.perUnitAmount ?? row.amount / (row.quantitySold || 1))} / pcs`
                 ) : (
-                  `${row.ratePct}%`
+                  `${row.ratePct}% margin`
                 )
               ) : (
                 `${row.ratePct}%`

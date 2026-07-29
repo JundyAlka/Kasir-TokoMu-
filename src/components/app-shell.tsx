@@ -9,6 +9,7 @@ import {
   FileChartColumn,
   HandCoins,
   Gauge,
+  Info,
   Landmark,
   ListChecks,
   Package2,
@@ -241,7 +242,7 @@ export function AppShell({
       <div className="flex flex-1 min-h-0 w-full max-w-none gap-2 p-2 sm:gap-2.5 sm:p-2.5 lg:gap-3 lg:p-3">
         <aside
           className={cn(
-            "glass-panel hidden h-full shrink-0 flex-col overflow-hidden rounded-[26px] border border-border/60 shadow-[0_32px_80px_-50px_rgba(68,39,20,0.65)] transition-[width] duration-200 ease-out md:flex",
+            "glass-panel flex max-md:hidden h-full shrink-0 flex-col overflow-hidden rounded-[26px] border border-border/60 shadow-[0_32px_80px_-50px_rgba(68,39,20,0.65)] transition-[width] duration-200 ease-out",
             tabletSidebarExpanded
               ? "w-[260px] items-stretch p-3"
               : "w-[60px] items-center px-1.5 py-2.5",
@@ -364,11 +365,11 @@ export function AppShell({
                     <>
                       {/* Expanded Pill Badge */}
                       <span className={cn(
-                        "relative ml-auto hidden shrink-0 items-center gap-1.5 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-600 transition-all dark:text-rose-400 border border-rose-500/30 animate-pulse",
+                        "relative ml-auto hidden shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-extrabold leading-none tracking-tight text-amber-900 shadow-sm transition-all dark:bg-amber-300/25 dark:text-amber-100 dark:border-amber-200/45 border border-amber-500/45 animate-pulse",
                         !leftCollapsed && (tabletSidebarExpanded ? "flex" : "2xl:flex"),
-                        isActive && "bg-white/20 text-white border-white/40"
+                        isActive && "!border-[#f0ae67] !bg-[#fff7ea] !text-[#9a4c1d] shadow-md dark:!border-[#ffbd7b]/80 dark:!bg-[#3c2419] dark:!text-[#ffbd7b]"
                       )}>
-                        <span className={cn("relative inline-flex size-1.5 rounded-full", isActive ? "bg-white" : "bg-rose-500")} />
+                        <Info className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
                         Perbarui
                       </span>
                       {/* Collapsed Dot Badge */}
@@ -381,8 +382,8 @@ export function AppShell({
                       >
                         <span
                           className={cn(
-                            "relative inline-flex size-2.5 rounded-full ring-2 ring-background",
-                            isActive ? "bg-white" : "bg-rose-500"
+                            "relative inline-flex size-2.5 rounded-full ring-2 ring-sidebar",
+                            isActive ? "!bg-[#9a4c1d] !ring-[#fff7ea] dark:!bg-[#3c2419] dark:!ring-[#ffbd7b]" : "bg-amber-400"
                           )}
                         />
                       </span>
@@ -394,11 +395,11 @@ export function AppShell({
                     <>
                       {/* Expanded Pill Badge */}
                       <span className={cn(
-                        "relative ml-auto hidden shrink-0 items-center gap-1.5 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-600 transition-all dark:text-rose-400 border border-rose-500/30 animate-pulse",
+                        "relative ml-auto hidden shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-extrabold leading-none tracking-tight text-amber-900 shadow-sm transition-all dark:bg-amber-300/25 dark:text-amber-100 dark:border-amber-200/45 border border-amber-500/45 animate-pulse",
                         !leftCollapsed && (tabletSidebarExpanded ? "flex" : "2xl:flex"),
-                        isActive && "bg-white/20 text-white border-white/40"
+                        isActive && "!border-[#f0ae67] !bg-[#fff7ea] !text-[#9a4c1d] shadow-md dark:!border-[#ffbd7b]/80 dark:!bg-[#3c2419] dark:!text-[#ffbd7b]"
                       )}>
-                        <span className={cn("relative inline-flex size-1.5 rounded-full", isActive ? "bg-white" : "bg-rose-500")} />
+                        <Info className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
                         Update
                       </span>
                       {/* Collapsed Dot Badge */}
@@ -411,8 +412,8 @@ export function AppShell({
                       >
                         <span
                           className={cn(
-                            "relative inline-flex size-2.5 rounded-full ring-2 ring-background",
-                            isActive ? "bg-white" : "bg-rose-500"
+                            "relative inline-flex size-2.5 rounded-full ring-2 ring-sidebar",
+                            isActive ? "!bg-[#9a4c1d] !ring-[#fff7ea] dark:!bg-[#3c2419] dark:!ring-[#ffbd7b]" : "bg-amber-400"
                           )}
                         />
                       </span>
@@ -443,7 +444,7 @@ export function AppShell({
         ) : null}
 
         <RoleProvider role={role}>
-          <main ref={mainRef} className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto px-1 py-0.5 sm:px-2 sm:py-1 2xl:min-w-[680px]">
+          <main ref={mainRef} className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto px-1 py-0.5 sm:px-2 sm:py-1 2xl:min-w-[680px] pb-20 md:pb-0">
             {children}
           </main>
         </RoleProvider>
@@ -462,6 +463,85 @@ export function AppShell({
 
         <AIAssistantPanel open={aiOpen} onOpenChange={handleAiOpenChange} width={aiWidth} role={role} />
       </div>
+
+      {/* Mobile Bottom Navigation - only shown on screens smaller than md */}
+      <nav className="md:hidden flex-shrink-0 border-t border-border/60 bg-card/90 backdrop-blur-md">
+        <div className="flex items-center justify-around px-1 py-1.5">
+          {visibleNavigation.slice(0, 5).map((item) => {
+            const Icon = item.icon;
+            const isActive = exactActiveHref
+              ? pathname === item.href
+              : pathname.startsWith(`${item.href}/`);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={item.label}
+                className={cn(
+                  "relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] font-medium transition-colors",
+                  isActive
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className={cn(
+                  "flex size-8 items-center justify-center rounded-xl transition-colors",
+                  isActive ? "bg-primary/15" : ""
+                )}>
+                  <Icon className="size-4" />
+                </span>
+                <span className="truncate">{item.label}</span>
+                {/* Red dot for laporan */}
+                {hasPendingMonthlyReport && item.href === "/laporan" && (
+                  <span className="absolute top-1 right-3 size-2 rounded-full bg-rose-500" />
+                )}
+                {hasPendingPcmReport && item.href === "/laporan-pcm" && (
+                  <span className="absolute top-1 right-3 size-2 rounded-full bg-rose-500" />
+                )}
+              </Link>
+            );
+          })}
+          {visibleNavigation.length > 5 && (
+            <button
+              type="button"
+              onClick={() => setTabletSidebarExpanded((v) => !v)}
+              className="relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <span className="flex size-8 items-center justify-center rounded-xl">
+                <Settings2 className="size-4" />
+              </span>
+              <span>Lainnya</span>
+            </button>
+          )}
+        </div>
+        {/* Expanded mobile menu for extra nav items */}
+        {tabletSidebarExpanded && visibleNavigation.length > 5 && (
+          <div className="border-t border-border/40 px-2 pb-2 pt-1.5 grid grid-cols-3 gap-1.5">
+            {visibleNavigation.slice(5).map((item) => {
+              const Icon = item.icon;
+              const isActive = exactActiveHref
+                ? pathname === item.href
+                : pathname.startsWith(`${item.href}/`);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setTabletSidebarExpanded(false)}
+                  className={cn(
+                    "relative flex flex-col items-center gap-0.5 rounded-xl p-2 text-[10px] font-medium transition-colors",
+                    isActive
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  )}
+                >
+                  <Icon className="size-4" />
+                  <span className="truncate text-center">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </nav>
     </div>
   );
 }
