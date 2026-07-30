@@ -24,6 +24,7 @@ function getTrustedAuthOrigins(request?: Request) {
 
   for (const value of [
     process.env.BETTER_AUTH_URL,
+    process.env.NEXT_PUBLIC_BETTER_AUTH_URL,
     process.env.VERCEL_PROJECT_PRODUCTION_URL,
     process.env.VERCEL_BRANCH_URL,
     process.env.VERCEL_URL,
@@ -33,6 +34,16 @@ function getTrustedAuthOrigins(request?: Request) {
     }
 
     origins.add(toOrigin(value));
+  }
+
+  // Support daftar origin tambahan dipisah koma
+  // Contoh: BETTER_AUTH_TRUSTED_ORIGINS=https://domain.com,http://1.2.3.4:3000
+  const extraOrigins = process.env.BETTER_AUTH_TRUSTED_ORIGINS;
+  if (extraOrigins) {
+    for (const raw of extraOrigins.split(",")) {
+      const trimmed = raw.trim();
+      if (trimmed) origins.add(toOrigin(trimmed));
+    }
   }
 
   if (request) {
