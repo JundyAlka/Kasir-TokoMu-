@@ -223,14 +223,14 @@ export const toolDefinitions: GeminiToolDef[] = [
         type: "object",
         properties: {
           borrowerName: { type: "string" },
-          whatsapp: { type: "string", description: "Nomor WhatsApp pelanggan." },
+          whatsapp: { type: "string", description: "Nomor WhatsApp pelanggan bila tersedia." },
           amount: { type: "number" },
           dueDate: {
             type: "string",
             description: "Tanggal jatuh tempo (ISO 8601, contoh 2026-05-15).",
           },
         },
-        required: ["borrowerName", "whatsapp", "amount"],
+        required: ["borrowerName", "amount"],
         additionalProperties: false,
       },
     },
@@ -553,7 +553,7 @@ async function execListUnpaidDebts(userId: string): Promise<ToolResult> {
 
 async function execCreateDebt(
   userId: string,
-  args: { borrowerName: string; whatsapp: string; amount: number; dueDate?: string }
+  args: { borrowerName: string; whatsapp?: string; amount: number; dueDate?: string }
 ): Promise<ToolResult> {
   const debt = await createDebt(userId, args);
   return {
@@ -563,7 +563,7 @@ async function execCreateDebt(
     summary: debt.borrowerName,
     rows: [
       { label: "Nominal", value: rupiah(debt.amount) },
-      { label: "WhatsApp", value: debt.whatsapp },
+      { label: "WhatsApp", value: debt.whatsapp || "Belum diisi" },
       { label: "Jatuh tempo", value: debt.dueDate ? debt.dueDate.slice(0, 10) : "Tanpa batas" },
     ],
     data: debt,

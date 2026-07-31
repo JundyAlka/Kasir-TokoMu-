@@ -236,7 +236,9 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
                   <h3 className="font-heading text-2xl font-semibold break-words truncate max-w-full">{detail.borrowerName}</h3>
                   <Badge className={statusClassName(detail.status)}>{statusLabel(detail.status)}</Badge>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground break-words">{detail.whatsapp}</p>
+                <p className="mt-1 text-sm text-muted-foreground break-words">
+                  {detail.whatsapp || "Nomor WhatsApp belum diisi"}
+                </p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   {editingDueDate ? (
                     <div className="flex flex-wrap items-center gap-2 bg-muted/40 p-1 pr-2 rounded-2xl border border-border/70">
@@ -427,6 +429,7 @@ Terima kasih banyak ya, semoga sehat selalu dan dilancarkan rezekinya! 😊`}</d
                   </button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {detail.whatsapp ? (
                   <Button
                     render={
                       <a
@@ -441,6 +444,7 @@ Terima kasih banyak ya, semoga sehat selalu dan dilancarkan rezekinya! 😊`}</d
                     <MessageSquareShare className="size-4" />
                     Kirim pengingat
                   </Button>
+                  ) : null}
                   {detail.status !== "lunas" ? (
                     <Button type="button" onClick={() => void handleMarkPaid()} disabled={submitting}>
                       <BadgeCheck className="size-4" />

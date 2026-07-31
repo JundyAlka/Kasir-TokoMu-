@@ -136,7 +136,7 @@ export interface ProductDraft {
 
 export interface DebtDraft {
   borrowerName: string;
-  whatsapp: string;
+  whatsapp?: string;
   amount?: number;
   dueDate?: string | null;
   items?: Array<{

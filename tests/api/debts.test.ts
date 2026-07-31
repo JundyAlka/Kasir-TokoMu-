@@ -10,7 +10,7 @@ describe("debts service", () => {
       borrowerName: "Pak Budi",
       whatsapp: "081234567891",
       amount: 75000,
-      dueDate: "2026-06-30",
+      dueDate: "2026-08-30",
     });
 
     const reminded = await remindDebt(WORKSPACE_ID, debt.id);
@@ -40,7 +40,7 @@ describe("debts service", () => {
       borrowerName: "Bu Siti",
       whatsapp: "081234567892",
       amount: 1,
-      dueDate: "2026-06-30",
+      dueDate: "2026-08-30",
       items: [
         {
           productId: "prd_kopi",
@@ -89,6 +89,39 @@ describe("debts service", () => {
       { amount: 6000, note: "Cicilan pertama" },
       { amount: 10000, note: "Pelunasan" },
     ]);
+  });
+
+  it("allows an empty WhatsApp number and no due date", async () => {
+    const { pool } = await setupTestDb();
+    const { createDebt } = await import("@/lib/server/app-service");
+
+    const debt = await createDebt(WORKSPACE_ID, {
+      borrowerName: "Bu Rina",
+      whatsapp: "",
+      amount: 45000,
+      dueDate: null,
+    });
+
+    expect(debt.whatsapp).toBe("");
+    expect(debt.dueDate).toBeNull();
+
+    const row = await pool.query("select whatsapp, due_date from debts where id = $1", [debt.id]);
+    expect(row.rows[0]).toMatchObject({ whatsapp: "", due_date: null });
+  });
+
+  it("allows a due date to be cleared after a debt is created", async () => {
+    await setupTestDb();
+    const { createDebt, updateDebt } = await import("@/lib/server/app-service");
+
+    const debt = await createDebt(WORKSPACE_ID, {
+      borrowerName: "Pak Agus",
+      whatsapp: "081234567890",
+      amount: 25000,
+      dueDate: "2026-06-30",
+    });
+    const updated = await updateDebt(WORKSPACE_ID, debt.id, { dueDate: null });
+
+    expect(updated.dueDate).toBeNull();
   });
 
   it("rejects invalid debt and missing paid target", async () => {

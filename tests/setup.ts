@@ -29,6 +29,7 @@ function applySchema(mem: TestDb) {
     "0009_shifts.sql",
     "0010_transaction_cash_change.sql",
     "0016_investment_unit_amount.sql",
+    "0017_debt_optional_contact_deadline.sql",
   ]) {
     for (const statement of sqlFromMigration(fileName)) {
       mem.public.none(statement);

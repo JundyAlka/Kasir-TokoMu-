@@ -118,11 +118,6 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
         return;
       }
 
-      if (whatsapp.trim().length < 10) {
-        toast.error("Nomor WhatsApp minimal 10 karakter.");
-        return;
-      }
-
       if (effectiveAmount <= 0) {
         toast.error("Nominal hutang harus lebih dari 0.");
         return;
@@ -193,9 +188,10 @@ export function DebtFormDialog({ products, onSubmit }: DebtFormDialogProps) {
                 />
               </div>
               <div className="grid min-w-0 gap-2">
-                <Label htmlFor="debt-whatsapp">Nomor WhatsApp</Label>
+                <Label htmlFor="debt-whatsapp">Nomor WhatsApp (opsional)</Label>
                 <Input
                   id="debt-whatsapp"
+                  inputMode="tel"
                   value={whatsapp}
                   onChange={(event) => setWhatsapp(event.target.value)}
                   placeholder="08xxxxxxxxxx"

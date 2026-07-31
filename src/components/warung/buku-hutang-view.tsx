@@ -171,7 +171,9 @@ export function BukuHutangView() {
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <p className="font-heading text-xl font-semibold">{debt.borrowerName}</p>
-                          <p className="mt-1 text-sm text-muted-foreground">{debt.whatsapp}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {debt.whatsapp || "Nomor WhatsApp belum diisi"}
+                          </p>
                         </div>
                         <Badge className={statusClassName(debt.status)}>
                           {statusLabel(debt.status)}
