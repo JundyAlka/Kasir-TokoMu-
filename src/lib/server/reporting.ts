@@ -11,7 +11,7 @@ import {
 
 export type ReportRange = "harian" | "mingguan" | "bulanan";
 
-type ReportTransaction = Pick<Transaction, "createdAt" | "total" | "items">;
+type ReportTransaction = Pick<Transaction, "occurredAt" | "total" | "items">;
 type ReportExpense = Pick<Expense, "createdAt" | "amount">;
 
 function getRange(range: ReportRange, now = new Date()) {
@@ -32,7 +32,7 @@ export function summarizeReport(
 ) {
   const selectedRange = getRange(range);
   const filteredTransactions = transactions.filter(
-    (transaction) => isWithinJakartaRange(transaction.createdAt, selectedRange)
+    (transaction) => isWithinJakartaRange(transaction.occurredAt, selectedRange)
   );
   const filteredExpenses = expenses.filter(
     (expense) => isWithinJakartaRange(expense.createdAt, selectedRange)
@@ -78,7 +78,7 @@ export function buildSeries(range: ReportRange, transactions: ReportTransaction[
         timeZone: JAKARTA_TIME_ZONE,
       }).format(new Date(itemRange.start));
       const rows = transactions.filter((transaction) => {
-        return isWithinJakartaRange(transaction.createdAt, itemRange);
+        return isWithinJakartaRange(transaction.occurredAt, itemRange);
       });
 
       return {
@@ -95,7 +95,7 @@ export function buildSeries(range: ReportRange, transactions: ReportTransaction[
       anchor.setDate(now.getDate() - (5 - index) * 7);
       const itemRange = getJakartaWeekRange(anchor);
       const rows = transactions.filter((transaction) => {
-        return isWithinJakartaRange(transaction.createdAt, itemRange);
+        return isWithinJakartaRange(transaction.occurredAt, itemRange);
       });
       const startLabel = new Intl.DateTimeFormat("id-ID", {
         day: "numeric",
@@ -120,7 +120,7 @@ export function buildSeries(range: ReportRange, transactions: ReportTransaction[
     const month = date.getMonth() + 1;
     const itemRange = getJakartaMonthRange(year, month);
     const rows = transactions.filter((transaction) => {
-      return isWithinJakartaRange(transaction.createdAt, itemRange);
+      return isWithinJakartaRange(transaction.occurredAt, itemRange);
     });
 
     return {
@@ -180,8 +180,8 @@ export async function getTopProductsForPeriod(
       from transaction_items ti
       join transactions t on t.id = ti.transaction_id
       where t.user_id = $1
-        and t.created_at >= $2::timestamptz
-        and t.created_at < $3::timestamptz
+        and t.occurred_at >= $2::timestamptz
+        and t.occurred_at < $3::timestamptz
       group by ti.product_id, ti.product_name
       order by sold desc, revenue desc
       limit $4
@@ -223,15 +223,26 @@ export async function getOmzetDetail(
     grossProfit: string;
   }>(
     `
-    select
-      coalesce(sum(t.total), 0)::text as "revenue",
-      count(t.id)::text as "txnCount",
-      coalesce(sum((ti.unit_price - ti.cost_price) * ti.quantity), 0)::text as "grossProfit"
-    from transactions t
-    left join transaction_items ti on ti.transaction_id = t.id
-    where t.user_id = $1
-      and t.created_at >= $2::timestamptz
-      and t.created_at < $3::timestamptz
+    with scoped_transactions as (
+      select id, total
+      from transactions
+      where user_id = $1
+        and occurred_at >= $2::timestamptz
+        and occurred_at < $3::timestamptz
+    ),
+    transaction_totals as (
+      select
+        coalesce(sum(total), 0)::text as "revenue",
+        count(*)::text as "txnCount"
+      from scoped_transactions
+    ),
+    item_profit as (
+      select coalesce(sum((ti.unit_price - ti.cost_price) * ti.quantity), 0)::text as "grossProfit"
+      from transaction_items ti
+      join scoped_transactions t on t.id = ti.transaction_id
+    )
+    select "revenue", "txnCount", "grossProfit"
+    from transaction_totals, item_profit
     `,
     [workspaceOwnerId, todayRange.start, todayRange.end]
   );
@@ -248,8 +259,8 @@ export async function getOmzetDetail(
     select coalesce(sum(total), 0)::text as "revenue"
     from transactions
     where user_id = $1
-      and created_at >= $2::timestamptz
-      and created_at < $3::timestamptz
+      and occurred_at >= $2::timestamptz
+      and occurred_at < $3::timestamptz
     `,
     [workspaceOwnerId, yesterdayRange.start, yesterdayRange.end]
   );
@@ -272,8 +283,8 @@ export async function getOmzetDetail(
       count(*)::text as count
     from transactions
     where user_id = $1
-      and created_at >= $2::timestamptz
-      and created_at < $3::timestamptz
+      and occurred_at >= $2::timestamptz
+      and occurred_at < $3::timestamptz
     group by payment_method
     order by total desc
     `,
@@ -289,12 +300,12 @@ export async function getOmzetDetail(
   const hourlyResult = await pool.query<{ hour: string; total: string }>(
     `
     select
-      extract(hour from created_at at time zone 'Asia/Jakarta')::int::text as hour,
+      extract(hour from occurred_at at time zone 'Asia/Jakarta')::int::text as hour,
       coalesce(sum(total), 0)::text as total
     from transactions
     where user_id = $1
-      and created_at >= $2::timestamptz
-      and created_at < $3::timestamptz
+      and occurred_at >= $2::timestamptz
+      and occurred_at < $3::timestamptz
     group by 1
     order by 1
     `,
@@ -349,8 +360,8 @@ export async function getTransaksiDetail(
     from transactions t
     left join transaction_items ti on ti.transaction_id = t.id
     where t.user_id = $1
-      and t.created_at >= $2::timestamptz
-      and t.created_at < $3::timestamptz
+      and t.occurred_at >= $2::timestamptz
+      and t.occurred_at < $3::timestamptz
     `,
     [workspaceOwnerId, todayRange.start, todayRange.end]
   );
@@ -374,8 +385,8 @@ export async function getTransaksiDetail(
       count(*)::text as count
     from transactions
     where user_id = $1
-      and created_at >= $2::timestamptz
-      and created_at < $3::timestamptz
+      and occurred_at >= $2::timestamptz
+      and occurred_at < $3::timestamptz
     group by payment_method
     order by count desc
     `,
@@ -391,12 +402,12 @@ export async function getTransaksiDetail(
   const hourlyResult = await pool.query<{ hour: string; count: string }>(
     `
     select
-      extract(hour from created_at at time zone 'Asia/Jakarta')::int::text as hour,
+      extract(hour from occurred_at at time zone 'Asia/Jakarta')::int::text as hour,
       count(*)::text as count
     from transactions
     where user_id = $1
-      and created_at >= $2::timestamptz
-      and created_at < $3::timestamptz
+      and occurred_at >= $2::timestamptz
+      and occurred_at < $3::timestamptz
     group by 1
     order by 1
     `,
@@ -452,7 +463,8 @@ export async function getStokMenipisDetail(
       from transaction_items ti
       join transactions t on t.id = ti.transaction_id
       where ti.product_id = p.id
-        and t.created_at >= now() - interval '7 days'
+        and t.user_id = p.user_id
+        and t.occurred_at >= now() - interval '7 days'
     ) s on true
     where p.user_id = $1
       and p.stock <= greatest(p.minimum_stock, sp.stock_alert_threshold)
@@ -631,13 +643,21 @@ export async function getBottomProductsForPeriod(
       select
         p.id as "productId",
         p.name as name,
-        coalesce(sum(ti.quantity), 0)::int as sold,
-        coalesce(sum(ti.quantity * ti.unit_price), 0)::int as revenue
+        coalesce(sales.sold, 0)::int as sold,
+        coalesce(sales.revenue, 0)::int as revenue
       from products p
-      left join transaction_items ti on ti.product_id = p.id
-      left join transactions t on t.id = ti.transaction_id
-        and t.created_at >= $2::timestamptz
-        and t.created_at < $3::timestamptz
+      left join (
+        select
+          ti.product_id,
+          sum(ti.quantity) as sold,
+          sum(ti.quantity * ti.unit_price) as revenue
+        from transaction_items ti
+        join transactions t on t.id = ti.transaction_id
+        where t.user_id = $1
+          and t.occurred_at >= $2::timestamptz
+          and t.occurred_at < $3::timestamptz
+        group by ti.product_id
+      ) sales on sales.product_id = p.id
       where p.user_id = $1
       group by p.id, p.name
       order by sold asc, revenue asc

@@ -10,7 +10,7 @@ import {
   getTopProductsForPeriod,
 } from "@/lib/server/reporting";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { PcmMonthlyReportData } from "@/lib/server/pdf-pcm";
 import { JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
 
@@ -168,7 +168,7 @@ async function buildReportData(
 
 export async function GET() {
   try {
-    await requireRole(["pimpinan"]);
+    await requireRoutePolicy("/api/reports/monthly-pcm", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     const reports = await db
       .select()
@@ -184,7 +184,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan"]);
+    await requireRoutePolicy("/api/reports/monthly-pcm", "POST");
     const { workspaceOwnerId } = await getRequestUser();
     const { periodYear, periodMonth, note, range } = parsePeriodPayload(await request.json());
     const data = await buildReportData(workspaceOwnerId, periodYear, periodMonth, note, range);
@@ -221,7 +221,12 @@ export async function POST(request: NextRequest) {
             finalizedAt: null,
             updatedAt: timestamp,
           })
-          .where(eq(monthlyReports.id, existing.id))
+          .where(
+            and(
+              eq(monthlyReports.id, existing.id),
+              eq(monthlyReports.workspaceOwnerId, workspaceOwnerId)
+            )
+          )
           .returning()
       : await db
           .insert(monthlyReports)
@@ -247,7 +252,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    await requireRole(["pimpinan"]);
+    await requireRoutePolicy("/api/reports/monthly-pcm", "PATCH");
     const { userId, workspaceOwnerId } = await getRequestUser();
     const body = (await request.json()) as { id?: unknown; status?: unknown };
 

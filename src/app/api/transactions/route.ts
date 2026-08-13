@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createTransaction, getRequestUser } from "@/lib/server/app-service";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 import { resolveRecordedBy } from "@/lib/server/shift-service";
 import { TransactionCheckoutSchema } from "@/lib/server/validation";
@@ -8,6 +9,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
+    await requireRoutePolicy("/api/transactions", "POST");
     const body = TransactionCheckoutSchema.parse(await request.json());
     const { userId, workspaceOwnerId } = await getRequestUser();
     const recordedBy = await resolveRecordedBy(workspaceOwnerId, userId);

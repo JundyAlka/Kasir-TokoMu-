@@ -26,11 +26,11 @@ import type { Transaction } from "@/lib/types";
 
 export function DashboardView() {
   const currentRole = useCurrentRole();
-  const { debts, lowStockProducts, products, transactions } = useAppState();
+  const { debts, lowStockProducts, products, transactions, dataState, retryWorkspace } = useAppState();
   const todayRange = getJakartaDayRange();
 
   const todayTransactions = transactions.filter((transaction) => {
-    return isWithinJakartaRange(transaction.createdAt, todayRange);
+    return isWithinJakartaRange(transaction.occurredAt, todayRange);
   });
 
   const todaySales = todayTransactions.reduce(
@@ -57,6 +57,8 @@ export function DashboardView() {
           value={formatCurrency(todaySales)}
           description="Akumulasi transaksi yang sudah masuk sejak pagi."
           onClick={() => setActiveMetric("omzet")}
+          dataState={dataState}
+          onRetry={retryWorkspace}
         />
         <StatCard
           title="Transaksi hari ini"
@@ -64,6 +66,8 @@ export function DashboardView() {
           description="Ringkasan cepat untuk memantau ritme kasir."
           tone="accent"
           onClick={() => setActiveMetric("transaksi")}
+          dataState={dataState}
+          onRetry={retryWorkspace}
         />
         <StatCard
           title="Stok menipis"
@@ -71,12 +75,16 @@ export function DashboardView() {
           description="Barang yang mulai rawan kosong dan sebaiknya segera dicek."
           tone="warn"
           onClick={() => setActiveMetric("stok")}
+          dataState={dataState}
+          onRetry={retryWorkspace}
         />
         <StatCard
           title="Kasbon aktif"
           value={formatCurrency(outstandingDebt)}
           description="Total piutang pelanggan yang belum lunas."
           onClick={() => setActiveMetric("kasbon")}
+          dataState={dataState}
+          onRetry={retryWorkspace}
         />
       </section>
 
@@ -102,7 +110,7 @@ export function DashboardView() {
                       {formatCurrency(latestTransaction.total)}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
-                      {latestTransaction.paymentMethod} • {formatTime(latestTransaction.createdAt)}
+                      {latestTransaction.paymentMethod} • {formatTime(latestTransaction.occurredAt)}
                     </p>
                     <div className="mt-3.5 space-y-2 border-t border-primary/15 pt-3">
                       {latestTransaction.items.slice(0, 3).map((item) => (
@@ -147,7 +155,18 @@ export function DashboardView() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2.5">
-                {lowStockProducts.length > 0 ? (
+                {dataState === "error" ? (
+                  <div role="alert" className="flex h-[116px] flex-col items-center justify-center gap-2 rounded-[20px] bg-destructive/10 p-4 text-center text-xs font-medium text-destructive sm:text-sm">
+                    <span>Gagal memuat data, coba lagi</span>
+                    <button type="button" onClick={retryWorkspace} className="rounded-lg border border-current/30 px-2.5 py-1 text-xs font-semibold">
+                      Muat ulang
+                    </button>
+                  </div>
+                ) : dataState === "loading" ? (
+                  <div className="flex h-[116px] items-center justify-center rounded-[20px] bg-muted/50 p-4 text-center text-xs text-muted-foreground sm:text-sm">
+                    Memuat data stok...
+                  </div>
+                ) : lowStockProducts.length > 0 ? (
                   lowStockProducts.slice(0, 3).map((product) => (
                     <div
                       key={product.id}
@@ -186,10 +205,19 @@ export function DashboardView() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex items-center justify-between gap-4 pb-6 pt-3">
-                <div>
-                  <p className="font-heading text-3xl font-bold sm:text-4xl">{products.length}</p>
-                  <p className="mt-1 text-xs text-muted-foreground sm:text-sm">Produk siap jual di POS</p>
-                </div>
+                {dataState === "error" ? (
+                  <div role="alert" className="space-y-2 text-sm text-destructive">
+                    <p className="font-semibold">Gagal memuat data, coba lagi</p>
+                    <button type="button" onClick={retryWorkspace} className="rounded-lg border border-current/30 px-2.5 py-1 text-xs font-semibold">
+                      Muat ulang
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="font-heading text-3xl font-bold sm:text-4xl">{dataState === "loading" ? "..." : products.length}</p>
+                    <p className="mt-1 text-xs text-muted-foreground sm:text-sm">Produk siap jual di POS</p>
+                  </div>
+                )}
                 <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
                   <Clock3 className="size-6" />
                 </div>
@@ -239,7 +267,7 @@ export function DashboardView() {
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                        <span>{formatDateTime(transaction.createdAt)}</span>
+                        <span>{formatDateTime(transaction.occurredAt)}</span>
                         <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-card/70 text-muted-foreground transition group-hover:border-primary/50 group-hover:text-primary">
                           <Eye className="size-3.5" />
                         </span>
@@ -340,7 +368,7 @@ export function DashboardView() {
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
-                        <span>{formatDateTime(transaction.createdAt)}</span>
+                        <span>{formatDateTime(transaction.occurredAt)}</span>
                         <span className="flex size-9 items-center justify-center rounded-full border border-border/70 bg-card transition group-hover:border-primary/50 group-hover:text-primary">
                           <Eye className="size-4" />
                         </span>

@@ -228,6 +228,8 @@ const transactions: Transaction[] = [
     paidAmount: 24000,
     changeAmount: 0,
     createdAt: daysAgo(0, 8, 15),
+    occurredAt: daysAgo(0, 8, 15),
+    entrySource: "pos",
     items: [
       { productId: "prd_mi_goreng", productName: "Mi Instan Goreng", quantity: 2, unitPrice: 4000, costPrice: 3000 },
       { productId: "prd_air_mineral", productName: "Air Mineral 600ml", quantity: 2, unitPrice: 4000, costPrice: 2500 },
@@ -241,6 +243,8 @@ const transactions: Transaction[] = [
     paidAmount: 40000,
     changeAmount: 3500,
     createdAt: daysAgo(0, 11, 40),
+    occurredAt: daysAgo(0, 11, 40),
+    entrySource: "pos",
     items: [
       { productId: "prd_roti_bakar", productName: "Roti Bakar", quantity: 2, unitPrice: 10000, costPrice: 6500 },
       { productId: "prd_teh_botol", productName: "Teh Botol", quantity: 1, unitPrice: 6000, costPrice: 4200 },
@@ -255,6 +259,8 @@ const transactions: Transaction[] = [
     paidAmount: 91500,
     changeAmount: 0,
     createdAt: daysAgo(1, 17, 5),
+    occurredAt: daysAgo(1, 17, 5),
+    entrySource: "pos",
     items: [
       { productId: "prd_beras_5kg", productName: "Beras 5kg", quantity: 1, unitPrice: 72000, costPrice: 64500 },
       { productId: "prd_gula_pasir", productName: "Gula Pasir 1kg", quantity: 1, unitPrice: 17000, costPrice: 14500 },
@@ -268,6 +274,8 @@ const transactions: Transaction[] = [
     paidAmount: 50000,
     changeAmount: 5500,
     createdAt: daysAgo(2, 9, 25),
+    occurredAt: daysAgo(2, 9, 25),
+    entrySource: "pos",
     items: [
       { productId: "prd_minyak_goreng", productName: "Minyak Goreng 1L", quantity: 1, unitPrice: 19500, costPrice: 17000 },
       { productId: "prd_sabun_cuci", productName: "Sabun Cuci", quantity: 1, unitPrice: 11000, costPrice: 8500 },
@@ -283,6 +291,8 @@ const transactions: Transaction[] = [
     paidAmount: 32000,
     changeAmount: 0,
     createdAt: daysAgo(5, 13, 10),
+    occurredAt: daysAgo(5, 13, 10),
+    entrySource: "pos",
     items: [
       { productId: "prd_roti_bakar", productName: "Roti Bakar", quantity: 1, unitPrice: 10000, costPrice: 6500 },
       { productId: "prd_teh_botol", productName: "Teh Botol", quantity: 2, unitPrice: 6000, costPrice: 4200 },
@@ -296,6 +306,8 @@ const transactions: Transaction[] = [
     paidAmount: 50000,
     changeAmount: 2000,
     createdAt: daysAgo(9, 10, 30),
+    occurredAt: daysAgo(9, 10, 30),
+    entrySource: "pos",
     items: [
       { productId: "prd_mi_goreng", productName: "Mi Instan Goreng", quantity: 3, unitPrice: 4000, costPrice: 3000 },
       { productId: "prd_sabun_cuci", productName: "Sabun Cuci", quantity: 2, unitPrice: 11000, costPrice: 8500 },

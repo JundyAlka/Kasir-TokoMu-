@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/server/app-service";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 import { runUserTurn } from "@/lib/server/ai/chat";
 import { getChat, listMessages } from "@/lib/server/ai/persist";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 45;
 
 export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { workspaceOwnerId } = await getRequestUser();
+    await requireRoutePolicy("/api/ai/chats/[id]/messages", "GET");
+    const { userId } = await getRequestUser();
     const { id } = await context.params;
-    const chat = await getChat(workspaceOwnerId, id);
+    const chat = await getChat(userId, id);
     if (!chat) {
       return NextResponse.json({ error: "Chat tidak ditemukan." }, { status: 404 });
     }
@@ -30,12 +32,13 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { workspaceOwnerId } = await getRequestUser();
+    await requireRoutePolicy("/api/ai/chats/[id]/messages", "POST");
+    const { userId } = await getRequestUser();
     const { id } = await context.params;
-    console.log(`[POST /messages] chatId=${id} workspaceOwnerId=${workspaceOwnerId}`);
-    const chat = await getChat(workspaceOwnerId, id);
+    console.log(`[POST /messages] chatId=${id} userId=${userId}`);
+    const chat = await getChat(userId, id);
     if (!chat) {
-      console.log(`[POST /messages] getChat returned null for chatId=${id} and userId=${workspaceOwnerId}`);
+      console.log(`[POST /messages] getChat returned null for chatId=${id} and userId=${userId}`);
       return NextResponse.json({ error: "Chat tidak ditemukan." }, { status: 404 });
     }
     const body = (await request.json()) as { text?: string };
@@ -44,7 +47,7 @@ export async function POST(
       return NextResponse.json({ error: "Pesan kosong." }, { status: 400 });
     }
     const { newMessages } = await runUserTurn({
-      userId: workspaceOwnerId,
+      userId,
       chatId: id,
       userText: text,
     });

@@ -3,7 +3,7 @@ import { getRequestUser } from "@/lib/server/app-service";
 import { calculatePeriodProfit } from "@/lib/server/profit-sharing";
 import { getPeriodRange } from "@/lib/server/reporting";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -18,7 +18,7 @@ function parsePeriod(value: string | null) {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/reports/profit-loss", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     const range = parsePeriod(request.nextUrl.searchParams.get("period"));
     const summary = await calculatePeriodProfit(workspaceOwnerId, range.start, range.end);

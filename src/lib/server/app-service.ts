@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { timingSafeEqual } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, pool } from "@/db/client";
+import { createScopedQuery } from "@/lib/server/scoped-query";
 import {
   debts,
   debtItems,
@@ -33,6 +34,7 @@ import {
 } from "@/lib/server/validation";
 import { AppState, Debt, DebtDetail, DebtDraft, ExpenseDraft, PaymentMethod, ProductDraft, Settings, Transaction } from "@/lib/types";
 import { getJakartaDayRange } from "@/lib/server/timezone";
+import { notFoundError } from "@/lib/server/route-error";
 
 let initializationPromise: Promise<void> | null = null;
 const supportedPaymentMethods: PaymentMethod[] = ["Tunai", "QRIS", "Transfer"];
@@ -296,48 +298,21 @@ function normalizeSettings(settings: Settings): Settings {
 export async function getBootstrapState(userId: string): Promise<AppState> {
   await ensureAppReady();
 
-  const [profile] = await db
-    .select()
-    .from(storeProfiles)
-    .where(eq(storeProfiles.userId, userId))
-    .limit(1);
+  const q = createScopedQuery(userId);
 
+  const profile = await q.storeProfile();
   if (!profile) {
     throw new Error("Profil warung tidak ditemukan.");
   }
 
-  const productRows = await db
-    .select()
-    .from(products)
-    .where(eq(products.userId, userId))
-    .orderBy(desc(products.createdAt));
-
-  const transactionRows = await db
-    .select()
-    .from(transactions)
-    .where(eq(transactions.userId, userId))
-    .orderBy(desc(transactions.createdAt));
+  const productRows = await q.productList();
+  const transactionRows = await q.transactionList();
 
   const transactionIds = transactionRows.map((transaction) => transaction.id);
-  const itemRows =
-    transactionIds.length > 0
-      ? await db
-          .select()
-          .from(transactionItems)
-          .where(inArray(transactionItems.transactionId, transactionIds))
-      : [];
+  const itemRows = await q.transactionItemsForIds(transactionIds);
 
-  const debtRows = await db
-    .select()
-    .from(debts)
-    .where(eq(debts.userId, userId))
-    .orderBy(desc(debts.createdAt));
-
-  const expenseRows = await db
-    .select()
-    .from(expenses)
-    .where(eq(expenses.userId, userId))
-    .orderBy(desc(expenses.createdAt));
+  const debtRows = await q.debtList();
+  const expenseRows = await q.expenseList();
 
   const itemsByTransaction = new Map<string, Transaction["items"]>();
   for (const item of itemRows) {
@@ -373,6 +348,9 @@ export async function getBootstrapState(userId: string): Promise<AppState> {
       paidAmount: transaction.paidAmount,
       changeAmount: transaction.changeAmount,
       createdAt: transaction.createdAt,
+      occurredAt: transaction.occurredAt,
+      entrySource: transaction.entrySource as Transaction["entrySource"],
+      externalRef: transaction.externalRef,
       recordedByUserId: transaction.recordedByUserId || transaction.userId,
       recordedByName: transaction.recordedByName || "",
       shiftSessionId: transaction.shiftSessionId,
@@ -443,7 +421,7 @@ export async function updateProduct(userId: string, productId: string, draft: Pr
     .returning();
 
   if (!updated) {
-    throw new Error("Produk tidak ditemukan.");
+    throw notFoundError();
   }
 
   return {
@@ -466,7 +444,7 @@ export async function deleteProduct(userId: string, productId: string) {
     .returning();
 
   if (!deleted) {
-    throw new Error("Produk tidak ditemukan.");
+    throw notFoundError();
   }
 
   return {
@@ -491,7 +469,7 @@ export async function restockProduct(userId: string, productId: string, quantity
     .limit(1);
 
   if (!existing) {
-    throw new Error("Produk tidak ditemukan.");
+    throw notFoundError();
   }
 
   const [updated] = await db
@@ -583,6 +561,9 @@ export async function createTransaction(
       recordedByName: payload.recordedByName ?? "",
       shiftSessionId: payload.shiftSessionId ?? null,
       createdAt,
+      occurredAt: createdAt,
+      entrySource: "pos",
+      externalRef: null,
     });
 
     await tx.insert(transactionItems).values(
@@ -716,7 +697,7 @@ export async function getDebtDetail(userId: string, debtId: string): Promise<Deb
     .limit(1);
 
   if (!debt) {
-    throw new Error("Data hutang tidak ditemukan.");
+    throw notFoundError();
   }
 
   const [items, payments] = await Promise.all([
@@ -768,7 +749,7 @@ export async function updateDebt(
     .limit(1);
 
   if (!existing) {
-    throw new Error("Data hutang tidak ditemukan.");
+    throw notFoundError();
   }
 
   const [updated] = await db
@@ -813,7 +794,7 @@ export async function recordDebtPayment(
       .limit(1);
 
     if (!existing) {
-      throw new Error("Data hutang tidak ditemukan.");
+      throw notFoundError();
     }
 
     if (effectiveDebtStatus(existing) === "lunas") {
@@ -876,7 +857,7 @@ export async function markDebtPaid(userId: string, debtId: string, recordedByUse
     .limit(1);
 
   if (!existing) {
-    throw new Error("Data hutang tidak ditemukan.");
+    throw notFoundError();
   }
 
   if (effectiveDebtStatus(existing) === "lunas") {
@@ -907,7 +888,7 @@ export async function remindDebt(userId: string, debtId: string) {
     .returning();
 
   if (!updated) {
-    throw new Error("Data hutang tidak ditemukan.");
+    throw notFoundError();
   }
 
   return mapDebt(updated);
@@ -967,42 +948,17 @@ export async function updateStoreSettings(userId: string, settings: Settings) {
 export async function resetWorkspace(userId: string) {
   await ensureAppReady();
 
-  const transactionIds = (
-    await db
-      .select({ id: transactions.id })
-      .from(transactions)
-      .where(eq(transactions.userId, userId))
-  ).map((transaction) => transaction.id);
+  const q = createScopedQuery(userId);
 
-  if (transactionIds.length > 0) {
-    await db
-      .delete(transactionItems)
-      .where(inArray(transactionItems.transactionId, transactionIds));
-  }
-
-  const debtIds = (
-    await db
-      .select({ id: debts.id })
-      .from(debts)
-      .where(eq(debts.userId, userId))
-  ).map((debt) => debt.id);
-
-  if (debtIds.length > 0) {
-    await db.delete(debtPayments).where(inArray(debtPayments.debtId, debtIds));
-    await db.delete(debtItems).where(inArray(debtItems.debtId, debtIds));
-  }
-
-  await db.delete(transactions).where(eq(transactions.userId, userId));
-  await db.delete(shiftSessions).where(eq(shiftSessions.workspaceOwnerId, userId));
-  await db.delete(shifts).where(eq(shifts.workspaceOwnerId, userId));
-  await db.delete(debts).where(eq(debts.userId, userId));
-  await db.delete(expenses).where(eq(expenses.userId, userId));
-  await db.delete(restockLogs).where(eq(restockLogs.workspaceOwnerId, userId));
-  await db.delete(monthlyReports).where(eq(monthlyReports.workspaceOwnerId, userId));
-  await db.delete(investments).where(eq(investments.workspaceOwnerId, userId));
-  await db.delete(investors).where(eq(investors.workspaceOwnerId, userId));
-  await db.delete(products).where(eq(products.userId, userId));
-  await db.delete(storeProfiles).where(eq(storeProfiles.userId, userId));
+  await q.deleteAllTransactions();
+  await q.deleteAllDebts();
+  await q.deleteAllShifts();
+  await q.deleteAllExpenses();
+  await q.deleteAllRestock();
+  await q.deleteAllMonthlyReports();
+  await q.deleteAllInvestors();
+  await q.deleteAllProducts();
+  await q.deleteStoreProfile();
 
   const timestamp = nowIso();
   await db.insert(storeProfiles).values({

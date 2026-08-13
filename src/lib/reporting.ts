@@ -30,7 +30,7 @@ export function summarizeReport(
 ) {
   const selectedRange = getRange(range);
   const filteredTransactions = transactions.filter(
-    (transaction) => isWithinJakartaRange(transaction.createdAt, selectedRange)
+    (transaction) => isWithinJakartaRange(transaction.occurredAt, selectedRange)
   );
   const filteredExpenses = expenses.filter(
     (expense) => isWithinJakartaRange(expense.createdAt, selectedRange)
@@ -83,7 +83,7 @@ export function buildSeries(range: ReportRange, transactions: Transaction[]) {
       }).format(new Date(itemRange.start));
       const revenue = transactions
         .filter((transaction) => {
-          return isWithinJakartaRange(transaction.createdAt, itemRange);
+          return isWithinJakartaRange(transaction.occurredAt, itemRange);
         })
         .reduce((sum, transaction) => sum + transaction.total, 0);
       return { label, revenue };
@@ -106,7 +106,7 @@ export function buildSeries(range: ReportRange, transactions: Transaction[]) {
       const label = `${startLabel}-${endLabel}`;
       const revenue = transactions
         .filter((transaction) => {
-          return isWithinJakartaRange(transaction.createdAt, itemRange);
+          return isWithinJakartaRange(transaction.occurredAt, itemRange);
         })
         .reduce((sum, transaction) => sum + transaction.total, 0);
       return { label, revenue };
@@ -122,7 +122,7 @@ export function buildSeries(range: ReportRange, transactions: Transaction[]) {
     }).format(new Date(itemRange.start));
     const revenue = transactions
       .filter((transaction) => {
-        return isWithinJakartaRange(transaction.createdAt, itemRange);
+        return isWithinJakartaRange(transaction.occurredAt, itemRange);
       })
       .reduce((sum, transaction) => sum + transaction.total, 0);
     return { label, revenue };

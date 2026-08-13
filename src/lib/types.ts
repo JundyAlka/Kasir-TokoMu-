@@ -38,6 +38,9 @@ export interface Transaction {
   paidAmount: number;
   changeAmount: number;
   createdAt: string;
+  occurredAt: string;
+  entrySource: "pos" | "import";
+  externalRef?: string | null;
   recordedByUserId?: string;
   recordedByName?: string;
   shiftSessionId?: string | null;

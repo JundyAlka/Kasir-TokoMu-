@@ -99,7 +99,7 @@ function buildReceiptHtml(transaction: Transaction, settings: Settings) {
 
       <section>
         <div class="row"><span>No</span><span>${escapeHtml(transaction.id)}</span></div>
-        <div class="row"><span>Tanggal</span><span>${escapeHtml(formatDateTime(transaction.createdAt))}</span></div>
+        <div class="row"><span>Tanggal</span><span>${escapeHtml(formatDateTime(transaction.occurredAt))}</span></div>
         <div class="row"><span>Bayar</span><span>${escapeHtml(transaction.paymentMethod)}</span></div>
       </section>
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { createProduct, getRequestUser } from "@/lib/server/app-service";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 import { logEvent } from "@/lib/server/audit";
 import { generateSku } from "@/lib/sku";
@@ -146,7 +146,7 @@ interface ImportRow {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/products/import", "POST");
     const { workspaceOwnerId, userId } = await getRequestUser();
 
     const formData = await request.formData();

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/server/app-service";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { logEvent } from "@/lib/server/audit";
 import { getToolMessageForCommit, updateToolMessageResult } from "@/lib/server/ai/persist";
 import {
@@ -45,11 +46,12 @@ function parseBody(value: unknown) {
 
 export async function POST(request: NextRequest) {
   try {
+    await requireRoutePolicy("/api/ai/tools/commit", "POST");
     const body = parseBody(await request.json());
     const { userId, workspaceOwnerId } = await getRequestUser();
     const message = await getToolMessageForCommit({
       messageId: body.messageId,
-      userId: workspaceOwnerId,
+      userId,
       toolCallId: body.toolCallId,
     });
 
@@ -78,7 +80,7 @@ export async function POST(request: NextRequest) {
     const result = await executeCommittedTool(workspaceOwnerId, body.toolName, body.payload);
     await updateToolMessageResult({
       messageId: body.messageId,
-      userId: workspaceOwnerId,
+      userId,
       result,
     });
 

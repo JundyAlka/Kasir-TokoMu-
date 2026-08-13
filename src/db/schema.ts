@@ -188,7 +188,28 @@ export const transactions = pgTable("transactions", {
   recordedByName: text("recorded_by_name").notNull().default(""),
   shiftSessionId: text("shift_session_id"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
+  occurredAt: timestamp("occurred_at", { withTimezone: true, mode: "string" }).notNull(),
+  entrySource: text("entry_source").notNull().default("pos"),
+  externalRef: text("external_ref"),
+  importBatchId: text("import_batch_id"),
 });
+
+export const transactionImportBatches = pgTable(
+  "transaction_import_batches",
+  {
+    id: text("id").primaryKey(),
+    workspaceOwnerId: text("workspace_owner_id").notNull(),
+    fileName: text("file_name").notNull(),
+    invoiceCount: integer("invoice_count").notNull(),
+    itemCount: integer("item_count").notNull(),
+    totalAmount: integer("total_amount").notNull(),
+    importedByUserId: text("imported_by_user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
+    rolledBackAt: timestamp("rolled_back_at", { withTimezone: true, mode: "string" }),
+    rolledBackByUserId: text("rolled_back_by_user_id"),
+  },
+  (table) => [index("transaction_import_batches_workspace_idx").on(table.workspaceOwnerId, table.createdAt)]
+);
 
 export const shifts = pgTable(
   "shifts",

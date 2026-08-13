@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDebtDetail, getRequestUser, updateDebt } from "@/lib/server/app-service";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { logEvent } from "@/lib/server/audit";
 import { handleRouteError } from "@/lib/server/route-error";
 import { DebtUpdateSchema } from "@/lib/server/validation";
@@ -11,6 +12,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requireRoutePolicy("/api/debts/[id]", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
 
@@ -26,6 +28,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requireRoutePolicy("/api/debts/[id]", "PATCH");
     const body = DebtUpdateSchema.parse(await request.json());
     const { userId, workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;

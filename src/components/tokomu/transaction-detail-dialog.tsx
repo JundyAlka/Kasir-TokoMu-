@@ -107,7 +107,7 @@ export function TransactionDetailDialog({
                       Waktu
                     </div>
                     <p className="mt-2 text-sm font-medium">
-                      {formatDateTime(transaction.createdAt)}
+                      {formatDateTime(transaction.occurredAt)}
                     </p>
                   </div>
                   <div className="rounded-xl border border-border/60 p-3">

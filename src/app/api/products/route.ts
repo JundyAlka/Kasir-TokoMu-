@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createProduct, getRequestUser } from "@/lib/server/app-service";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { logEvent } from "@/lib/server/audit";
 import { ProductCreateSchema } from "@/lib/server/validation";
 
@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   try {
     const draft = ProductCreateSchema.parse(await request.json());
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/products", "POST");
     const { workspaceOwnerId, userId } = await getRequestUser();
     const product = await createProduct(workspaceOwnerId, draft);
     await logEvent(

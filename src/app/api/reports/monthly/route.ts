@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { monthlyReports } from "@/db/schema";
 import { getRequestUser } from "@/lib/server/app-service";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
@@ -22,6 +23,7 @@ function createId(prefix: string) {
 
 export async function GET(request: NextRequest) {
   try {
+    await requireRoutePolicy("/api/reports/monthly", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     
     const list = await db
@@ -48,6 +50,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await requireRoutePolicy("/api/reports/monthly", "POST");
     const body = await request.json();
     const parsed = MonthlyReportCreateSchema.parse(body);
     const { workspaceOwnerId } = await getRequestUser();
@@ -80,7 +83,12 @@ export async function POST(request: NextRequest) {
           finalizedAt: timestamp,
           updatedAt: timestamp,
         })
-        .where(eq(monthlyReports.id, existing[0].id))
+        .where(
+          and(
+            eq(monthlyReports.id, existing[0].id),
+            eq(monthlyReports.workspaceOwnerId, workspaceOwnerId)
+          )
+        )
         .returning();
       return NextResponse.json({ report: updated });
     }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createShift, listShiftSettings } from "@/lib/server/shift-service";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 
 export const runtime = "nodejs";
@@ -17,7 +17,7 @@ const ShiftSchema = z
 
 export async function GET() {
   try {
-    const { workspaceOwnerId } = await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    const { workspaceOwnerId } = await requireRoutePolicy("/api/shifts", "GET");
     const data = await listShiftSettings(workspaceOwnerId);
     return NextResponse.json(data);
   } catch (error) {
@@ -28,7 +28,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = ShiftSchema.parse(await request.json());
-    const { workspaceOwnerId } = await requireRole(["pimpinan"]);
+    const { workspaceOwnerId } = await requireRoutePolicy("/api/shifts", "POST");
     const shift = await createShift(workspaceOwnerId, body);
     return NextResponse.json({ shift });
   } catch (error) {

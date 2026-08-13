@@ -5,7 +5,7 @@ import { products, restockLogs } from "@/db/schema";
 import { getRequestUser } from "@/lib/server/app-service";
 import { logEvent } from "@/lib/server/audit";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -68,7 +68,7 @@ function parseItems(value: unknown) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/restock/batch", "POST");
     const { userId, workspaceOwnerId } = await getRequestUser();
     const body = (await request.json()) as {
       items?: unknown;

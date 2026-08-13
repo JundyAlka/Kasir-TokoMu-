@@ -1,4 +1,5 @@
 import { callGemini } from "@/lib/server/ai/gemini";
+import { eq } from "drizzle-orm";
 
 export type ReceiptExtractedItem = {
   rawName: string;
@@ -478,7 +479,10 @@ async function callVisionModel(imageDataUrl: string, model: string, userPrompt: 
   return response.choices[0]?.message.content ?? "";
 }
 
-export async function extractReceiptItems(imageDataUrl: string): Promise<ReceiptExtractedItem[]> {
+export async function extractReceiptItems(
+  imageDataUrl: string,
+  workspaceOwnerId: string
+): Promise<ReceiptExtractedItem[]> {
   const models = Array.from(new Set([DEFAULT_VISION_MODEL, FALLBACK_VISION_MODEL]));
   let lastError: unknown = null;
   let sawResponse = false;
@@ -509,7 +513,11 @@ export async function extractReceiptItems(imageDataUrl: string): Promise<Receipt
     console.log("Vision API failed or returned no items. Using dynamic mock fallback...");
     const { db } = await import("@/db/client");
     const { products } = await import("@/db/schema");
-    const dbProducts = await db.select().from(products).limit(3);
+    const dbProducts = await db
+      .select()
+      .from(products)
+      .where(eq(products.userId, workspaceOwnerId))
+      .limit(3);
     if (dbProducts.length > 0) {
       return dbProducts.map((p) => {
         const qty = Math.floor(Math.random() * 5) + 2;

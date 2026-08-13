@@ -13,6 +13,8 @@
     "db:reset": "node --env-file=.env ./scripts/reset-db.mjs",
     "db:generate": "node --env-file=.env ./node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "node --env-file=.env ./node_modules/drizzle-kit/bin.cjs migrate",
+    "db:local:status": "node ./scripts/local-migrations.mjs --check",
+    "db:local:migrate": "node ./scripts/local-migrations.mjs --apply",
     "db:seed": "node --env-file=.env --import tsx ./scripts/seed.ts",
     "db:studio": "node --env-file=.env ./node_modules/drizzle-kit/bin.cjs studio",
     "auth:generate": "better-auth generate --config src/lib/auth.ts",

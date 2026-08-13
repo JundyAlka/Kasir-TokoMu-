@@ -38,8 +38,8 @@ describe("payout calculation", () => {
     }
 
     await pool.query(
-      `insert into transactions (id, user_id, total, payment_method, created_at)
-       values ('trx_profit', $1, 7000000, 'Tunai', $2)`,
+      `insert into transactions (id, user_id, total, payment_method, created_at, occurred_at)
+       values ('trx_profit', $1, 7000000, 'Tunai', $2, $2)`,
       [WORKSPACE_ID, timestamp]
     );
     await pool.query(
@@ -105,8 +105,8 @@ describe("payout calculation", () => {
       [WORKSPACE_ID, timestamp]
     );
     await pool.query(
-      `insert into transactions (id, user_id, total, payment_method, created_at)
-       values ('trx_barang', $1, 10000, 'Tunai', $2)`,
+      `insert into transactions (id, user_id, total, payment_method, created_at, occurred_at)
+       values ('trx_barang', $1, 10000, 'Tunai', $2, $2)`,
       [WORKSPACE_ID, timestamp]
     );
     await pool.query(
@@ -143,8 +143,8 @@ describe("payout calculation", () => {
       [WORKSPACE_ID, timestamp]
     );
     await pool.query(
-      `insert into transactions (id, user_id, total, payment_method, created_at)
-       values ('trx_flat', $1, 36000, 'Tunai', $2)`,
+      `insert into transactions (id, user_id, total, payment_method, created_at, occurred_at)
+       values ('trx_flat', $1, 36000, 'Tunai', $2, $2)`,
       [WORKSPACE_ID, timestamp]
     );
     await pool.query(

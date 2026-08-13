@@ -73,6 +73,11 @@ next-env.d.ts
 deploy_instructions.txt
 models-out.txt
 test-output.txt
+db-export.json
+db-seed-full.sql
+vps-import.sql
+dev-server-*.err.log
+dev-server-*.out.log
 
 # Dev/test scripts (not for production)
 scripts/test-*.ts
@@ -82,6 +87,7 @@ scripts/fix-*.ts
 scripts/recover.ts
 scripts/capture-screenshots.mjs
 scripts/transfer-data.ts
+scratch/*.mjs
 
 # Screenshot assets (large binary files)
 screenshots/

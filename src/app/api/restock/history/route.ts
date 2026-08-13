@@ -1,10 +1,10 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { products, restockLogs } from "@/db/schema";
 import { getRequestUser } from "@/lib/server/app-service";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -16,7 +16,7 @@ export const runtime = "nodejs";
  */
 export async function GET() {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/restock/history", "GET");
     const { workspaceOwnerId } = await getRequestUser();
 
     const logs = await db
@@ -34,7 +34,13 @@ export async function GET() {
         productStock: products.stock,
       })
       .from(restockLogs)
-      .leftJoin(products, eq(restockLogs.productId, products.id))
+      .leftJoin(
+        products,
+        and(
+          eq(restockLogs.productId, products.id),
+          eq(products.userId, workspaceOwnerId)
+        )
+      )
       .where(eq(restockLogs.workspaceOwnerId, workspaceOwnerId))
       .orderBy(desc(restockLogs.createdAt))
       .limit(100);

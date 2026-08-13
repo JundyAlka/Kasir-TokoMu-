@@ -5,7 +5,7 @@ import { logEvent } from "@/lib/server/audit";
 import { saveDraftPayouts } from "@/lib/server/profit-sharing";
 import { getPeriodRange } from "@/lib/server/reporting";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -36,7 +36,7 @@ function parseSearchPeriod(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/payouts", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     const range = parseSearchPeriod(request);
     let result;
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/payouts", "POST");
     const { userId, workspaceOwnerId } = await getRequestUser();
     const period = parseBodyPeriod(await request.json());
     const calculation = await saveDraftPayouts(workspaceOwnerId, period.year, period.month);

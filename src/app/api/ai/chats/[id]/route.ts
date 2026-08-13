@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/server/app-service";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 import { deleteChat } from "@/lib/server/ai/persist";
 
@@ -10,18 +11,11 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { workspaceOwnerId, role } = await getRequestUser();
+    await requireRoutePolicy("/api/ai/chats/[id]", "DELETE");
+    const { userId } = await getRequestUser();
     const { id } = await context.params;
 
-    // Kasir cannot delete chat history
-    if (role === "kasir") {
-      return NextResponse.json(
-        { error: "Anda tidak memiliki izin untuk menghapus riwayat chat." },
-        { status: 403 }
-      );
-    }
-
-    const deleted = await deleteChat(workspaceOwnerId, id);
+    const deleted = await deleteChat(userId, id);
     if (!deleted) {
       return NextResponse.json(
         { error: "Chat tidak ditemukan." },

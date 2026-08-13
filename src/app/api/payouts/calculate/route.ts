@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/server/app-service";
 import { calculatePayouts } from "@/lib/server/profit-sharing";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -25,7 +25,7 @@ function parseBodyPeriod(body: unknown) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/payouts/calculate", "POST");
     const { workspaceOwnerId } = await getRequestUser();
     const period = parseBodyPeriod(await request.json());
     const calculation = await calculatePayouts(workspaceOwnerId, period.year, period.month);

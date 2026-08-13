@@ -3,13 +3,14 @@ import { and, eq } from "drizzle-orm";
 import { Readable } from "node:stream";
 import { db } from "@/db/client";
 import { monthlyReports } from "@/db/schema";
+import { NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/server/app-service";
 import {
   PcmMonthlyReportData,
   PcmMonthlyReportDocument,
 } from "@/lib/server/pdf-pcm";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { getJakartaMonthRange, JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
 
 export const runtime = "nodejs";
@@ -93,7 +94,7 @@ function legacyToReportData(
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
-    await requireRole(["pimpinan"]);
+    await requireRoutePolicy("/api/reports/monthly-pcm/[id]/pdf", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const [report] = await db
@@ -108,7 +109,7 @@ export async function GET(_request: Request, context: RouteContext) {
       .limit(1);
 
     if (!report) {
-      throw new Error("Laporan tidak ditemukan.");
+      return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
     }
 
     const data = legacyToReportData(report.data, {

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { setupTestDb, WORKSPACE_ID } from "../setup";
 
 function jsonRequest(url: string, body: unknown, method = "POST") {
@@ -11,13 +11,66 @@ function jsonRequest(url: string, body: unknown, method = "POST") {
 }
 
 describe("profit-loss report", () => {
+  it("counts a three-item transaction once in the omzet detail", async () => {
+    const { pool } = await setupTestDb();
+    const timestamp = "2026-06-10T03:00:00.000Z";
+
+    await pool.query(
+      `insert into transactions (id, user_id, total, payment_method, created_at, occurred_at)
+       values ('trx_three_items', $1, 25500, 'Tunai', $2, $2)`,
+      [WORKSPACE_ID, timestamp]
+    );
+    await pool.query(
+      `insert into transaction_items (id, transaction_id, product_id, product_name, quantity, unit_price, cost_price)
+       values
+         ('itm_three_1', 'trx_three_items', 'prd_beras', 'Beras', 1, 10000, 7000),
+         ('itm_three_2', 'trx_three_items', 'prd_kopi', 'Kopi', 1, 8500, 5000),
+         ('itm_three_3', 'trx_three_items', 'prd_roti', 'Roti', 1, 7000, 4000)`
+    );
+
+    const originalQuery = pool.query.bind(pool);
+    vi.spyOn(pool, "query").mockImplementation(async (query: unknown, ...args: unknown[]) => {
+      if (typeof query === "string" && query.includes("extract(hour")) {
+        return { rows: [] } as never;
+      }
+      return (originalQuery as (...callArgs: unknown[]) => Promise<unknown>)(query, ...args) as never;
+    });
+    const { getOmzetDetail } = await import("@/lib/server/reporting");
+    const detail = await getOmzetDetail(WORKSPACE_ID, new Date(timestamp));
+
+    expect(detail.revenue).toBe(25500);
+    expect(detail.txnCount).toBe(1);
+    expect(detail.grossProfit).toBe(9500);
+  });
+
+  it("does not aggregate another workspace transaction into bottom products", async () => {
+    const { pool } = await setupTestDb();
+    const start = "2026-06-01T00:00:00.000Z";
+    const end = "2026-07-01T00:00:00.000Z";
+
+    await pool.query(
+      `insert into transactions (id, user_id, total, payment_method, created_at, occurred_at)
+       values ('trx_other_workspace', 'usr_other', 50000, 'Tunai', '2026-06-10T03:00:00.000Z', '2026-06-10T03:00:00.000Z')`
+    );
+    await pool.query(
+      `insert into transaction_items (id, transaction_id, product_id, product_name, quantity, unit_price, cost_price)
+       values ('itm_other_workspace', 'trx_other_workspace', 'prd_roti', 'Roti', 9, 5000, 3000)`
+    );
+
+    const { getBottomProductsForPeriod } = await import("@/lib/server/reporting");
+    const rows = await getBottomProductsForPeriod(WORKSPACE_ID, start, end, 10);
+    const roti = rows.find((row) => row.productId === "prd_roti");
+
+    expect(roti).toMatchObject({ productId: "prd_roti", sold: 0, revenue: 0 });
+  });
+
   it("calculates revenue 10m - cogs 7m - expenses 1m = net profit 2m", async () => {
     const { pool } = await setupTestDb();
     const timestamp = "2026-06-10T00:00:00.000Z";
 
     await pool.query(
-      `insert into transactions (id, user_id, total, payment_method, created_at)
-       values ('trx_report', $1, 10000000, 'Tunai', $2)`,
+      `insert into transactions (id, user_id, total, payment_method, created_at, occurred_at)
+       values ('trx_report', $1, 10000000, 'Tunai', $2, $2)`,
       [WORKSPACE_ID, timestamp]
     );
     await pool.query(
@@ -48,11 +101,12 @@ describe("profit-loss report", () => {
     const { getJakartaDayRange } = await import("@/lib/server/timezone");
     const today = getJakartaDayRange();
     const todayTimestamp = new Date(new Date(today.start).getTime() + 60_000).toISOString();
+    const juneTimestamp = "2026-06-10T03:00:00.000Z";
 
     await pool.query(
-      `insert into transactions (id, user_id, total, payment_method, created_at)
-       values ('trx_top_a', $1, 10000, 'Tunai', $2)`,
-      [WORKSPACE_ID, todayTimestamp]
+      `insert into transactions (id, user_id, total, payment_method, created_at, occurred_at)
+       values ('trx_top_a', $1, 10000, 'Tunai', $2, $2)`,
+      [WORKSPACE_ID, juneTimestamp]
     );
     await pool.query(
       `insert into transaction_items (id, transaction_id, product_id, product_name, quantity, unit_price, cost_price)
@@ -65,7 +119,7 @@ describe("profit-loss report", () => {
       "harian",
       [
         {
-          createdAt: todayTimestamp,
+          occurredAt: todayTimestamp,
           total: 10000,
           items: [{ productId: "prd_roti", productName: "Roti", quantity: 2, unitPrice: 5000, costPrice: 3000 }],
         },
@@ -80,7 +134,7 @@ describe("profit-loss report", () => {
 
     const dailySeries = reporting.buildSeries("harian", [
       {
-        createdAt: todayTimestamp,
+        occurredAt: todayTimestamp,
         total: 10000,
         items: [],
       },
@@ -107,7 +161,7 @@ describe("profit-loss report", () => {
       ],
       [
         {
-          createdAt: todayTimestamp,
+          occurredAt: todayTimestamp,
           total: 10000,
           items: [{ productId: "prd_roti", productName: "Roti", quantity: 2, unitPrice: 5000, costPrice: 3000 }],
         },
@@ -125,6 +179,83 @@ describe("profit-loss report", () => {
 });
 
 describe("monthly PCM report", () => {
+  it("does not overwrite another workspace monthly report with the same period", async () => {
+    const { pool } = await setupTestDb();
+    const timestamp = "2026-06-18T00:00:00.000Z";
+
+    await pool.query(
+      `insert into monthly_reports (
+        id, workspace_owner_id, period_year, period_month, data, status,
+        finalized_at, created_at, updated_at
+      ) values ('mrep_other', 'usr_other', 2026, 6, $1::jsonb, 'final', $2, $2, $2)`,
+      [JSON.stringify({ owner: "other" }), timestamp]
+    );
+    await pool.query(
+      `insert into monthly_reports (
+        id, workspace_owner_id, period_year, period_month, data, status,
+        finalized_at, created_at, updated_at
+      ) values ('mrep_current', $1, 2026, 6, $2::jsonb, 'draft', null, $3, $3)`,
+      [WORKSPACE_ID, JSON.stringify({ owner: "current-before" }), timestamp]
+    );
+
+    const updateSql: string[] = [];
+    const originalQuery = pool.query.bind(pool);
+    vi.spyOn(pool, "query").mockImplementation(async (query: unknown, ...args: unknown[]) => {
+      const text = typeof query === "string" ? query : (query as { text?: string }).text ?? "";
+      if (text.startsWith('update "monthly_reports"')) updateSql.push(text);
+      return (originalQuery as (...callArgs: unknown[]) => Promise<unknown>)(query, ...args) as never;
+    });
+
+    const route = await import("@/app/api/reports/monthly/route");
+    const response = await route.POST(
+      jsonRequest("http://localhost/api/reports/monthly", {
+        periodYear: 2026,
+        periodMonth: 6,
+        data: { owner: "current" },
+      })
+    );
+    expect(response.status).toBe(200);
+
+    const other = await pool.query(
+      "select data from monthly_reports where id = 'mrep_other'"
+    );
+    expect(other.rows[0]?.data).toEqual({ owner: "other" });
+    expect(updateSql).toHaveLength(1);
+    expect(updateSql[0]).toContain('"workspace_owner_id"');
+  });
+
+  it("scopes the monthly PCM draft update by workspace", async () => {
+    const { pool } = await setupTestDb();
+    const timestamp = "2026-06-18T00:00:00.000Z";
+    await pool.query(
+      `insert into monthly_reports (
+        id, workspace_owner_id, period_year, period_month, data, status,
+        finalized_at, created_at, updated_at
+      ) values ('mrp_draft', $1, 2026, 6, $2::jsonb, 'draft', null, $3, $3)`,
+      [WORKSPACE_ID, JSON.stringify({ version: 1 }), timestamp]
+    );
+
+    const updateSql: string[] = [];
+    const originalQuery = pool.query.bind(pool);
+    vi.spyOn(pool, "query").mockImplementation(async (query: unknown, ...args: unknown[]) => {
+      const text = typeof query === "string" ? query : (query as { text?: string }).text ?? "";
+      if (text.startsWith('update "monthly_reports"')) updateSql.push(text);
+      return (originalQuery as (...callArgs: unknown[]) => Promise<unknown>)(query, ...args) as never;
+    });
+    const reportRoute = await import("@/app/api/reports/monthly-pcm/route");
+    const response = await reportRoute.POST(
+      jsonRequest("http://localhost/api/reports/monthly-pcm", {
+        periodYear: 2026,
+        periodMonth: 6,
+        note: "Uji scope",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSql).toHaveLength(1);
+    expect(updateSql[0]).toContain('"workspace_owner_id"');
+  });
+
   it("reopens a final report as draft and allows finalizing it again", async () => {
     const { pool } = await setupTestDb();
     const timestamp = "2026-06-18T00:00:00.000Z";

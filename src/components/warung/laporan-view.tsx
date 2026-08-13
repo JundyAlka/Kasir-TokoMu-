@@ -206,13 +206,13 @@ function buildTrendSeries(
   period: string,
   range: TrendRange,
   weekNumber: number,
-  transactions: Array<{ createdAt: string; total: number }>
+  transactions: Array<{ occurredAt: string; total: number }>
 ) {
   const keys = getTrendKeys(period, range, weekNumber);
   const values = new Map(keys.map((key) => [key, { revenue: 0, transactions: 0 }]));
 
   for (const transaction of transactions) {
-    const key = getJakartaDateKey(transaction.createdAt);
+    const key = getJakartaDateKey(transaction.occurredAt);
     const current = values.get(key);
     if (!current) {
       continue;
@@ -235,8 +235,8 @@ function buildTrendSeries(
   });
 }
 
-function filterTransactionsByMonth<T extends { createdAt: string }>(period: string, transactions: T[]) {
-  return transactions.filter((transaction) => getJakartaDateKey(transaction.createdAt).startsWith(period));
+function filterTransactionsByMonth<T extends { occurredAt: string }>(period: string, transactions: T[]) {
+  return transactions.filter((transaction) => getJakartaDateKey(transaction.occurredAt).startsWith(period));
 }
 
 function formatTrendPeriodLabel(series: TrendPoint[]) {

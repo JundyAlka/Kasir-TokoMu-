@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/server/app-service";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 import { createChat, listChats } from "@/lib/server/ai/persist";
 
@@ -7,9 +8,10 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const { workspaceOwnerId } = await getRequestUser();
-    const chats = await listChats(workspaceOwnerId);
-    console.log("[GET /chats] user:", workspaceOwnerId, "found chats:", chats.length);
+    await requireRoutePolicy("/api/ai/chats", "GET");
+    const { userId } = await getRequestUser();
+    const chats = await listChats(userId);
+    console.log("[GET /chats] user:", userId, "found chats:", chats.length);
     return NextResponse.json({ chats });
   } catch (error) {
     return handleRouteError(error, "Gagal memuat daftar chat AI.");
@@ -18,10 +20,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { workspaceOwnerId } = await getRequestUser();
+    await requireRoutePolicy("/api/ai/chats", "POST");
+    const { userId } = await getRequestUser();
     const body = (await request.json().catch(() => ({}))) as { title?: string };
-    const chat = await createChat(workspaceOwnerId, body.title?.trim() || "Percakapan baru");
-    console.log("[POST /chats] created chat:", chat.id, "for user:", workspaceOwnerId);
+    const chat = await createChat(userId, body.title?.trim() || "Percakapan baru");
+    console.log("[POST /chats] created chat:", chat.id, "for user:", userId);
     return NextResponse.json({ chat });
   } catch (error) {
     return handleRouteError(error, "Gagal membuat chat baru.");

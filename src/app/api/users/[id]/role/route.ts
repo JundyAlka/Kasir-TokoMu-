@@ -7,8 +7,8 @@ import {
   assignRole,
   countActivePimpinan,
   getWorkspaceUserRole,
-  requireRole,
 } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,7 @@ export async function PATCH(
 ) {
   try {
     const actor = await getRequestUser();
-    const { workspaceOwnerId } = await requireRole(["pimpinan"]);
+    const { workspaceOwnerId } = await requireRoutePolicy("/api/users/[id]/role", "PATCH");
     const { id } = await context.params;
     const body = RoleUpdateSchema.parse(await request.json());
 

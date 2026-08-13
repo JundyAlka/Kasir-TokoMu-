@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser, recordDebtPayment } from "@/lib/server/app-service";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { logEvent } from "@/lib/server/audit";
 import { handleRouteError } from "@/lib/server/route-error";
 import { DebtPaymentCreateSchema } from "@/lib/server/validation";
@@ -11,6 +12,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requireRoutePolicy("/api/debts/[id]/payments", "POST");
     const body = DebtPaymentCreateSchema.parse(await request.json());
     const { userId, workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;

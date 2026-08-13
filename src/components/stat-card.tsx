@@ -1,4 +1,4 @@
-import { ArrowUpRight, Info } from "lucide-react";
+import { ArrowUpRight, Info, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -8,6 +8,8 @@ interface StatCardProps {
   description: string;
   tone?: "default" | "accent" | "warn";
   onClick?: () => void;
+  dataState?: "ready" | "loading" | "error";
+  onRetry?: () => void;
 }
 
 export function StatCard({
@@ -16,8 +18,12 @@ export function StatCard({
   description,
   tone = "default",
   onClick,
+  dataState = "ready",
+  onRetry,
 }: StatCardProps) {
-  const isClickable = !!onClick;
+  const isClickable = !!onClick && dataState === "ready";
+  const isLoading = dataState === "loading";
+  const hasError = dataState === "error";
 
   return (
     <Card
@@ -54,8 +60,33 @@ export function StatCard({
             <ArrowUpRight className="size-4 opacity-70" />
           </div>
         </div>
-        <p className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl xl:text-4xl">{value}</p>
-        <p className="line-clamp-2 text-xs opacity-75 sm:text-sm">{description}</p>
+        {hasError ? (
+          <div role="alert" className="space-y-2">
+            <p className="font-heading text-base font-semibold">Gagal memuat data, coba lagi</p>
+            {onRetry ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRetry();
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-current/30 px-2.5 py-1.5 text-xs font-semibold transition hover:bg-black/5 dark:hover:bg-white/10"
+              >
+                <RefreshCw className="size-3.5" />
+                Muat ulang
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <p className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl xl:text-4xl">
+              {isLoading ? "Memuat data..." : value}
+            </p>
+            <p className="line-clamp-2 text-xs opacity-75 sm:text-sm">
+              {isLoading ? "Sedang mengambil data terbaru." : description}
+            </p>
+          </>
+        )}
       </CardContent>
     </Card>
   );

@@ -7,7 +7,9 @@ import {
 } from "./persist";
 import { buildSystemContext, executeTool, toolDefinitions } from "./tools";
 
-const MAX_TOOL_ITERATIONS = 5;
+// One model turn may request data, then one follow-up turn summarizes it.
+// More iterations make the sidebar wait behind a long tool chain.
+const MAX_TOOL_ITERATIONS = 2;
 
 function storedToGemini(messages: StoredMessage[]): GeminiMessage[] {
   const out: GeminiMessage[] = [];

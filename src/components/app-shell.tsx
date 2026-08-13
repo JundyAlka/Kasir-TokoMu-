@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronsLeft,
@@ -26,16 +26,19 @@ import { AIAssistantPanel } from "@/components/warung/ai-assistant-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { RoleProvider } from "@/components/role-gate";
 import { cn } from "@/lib/utils";
+import { isCashierRestrictedPath } from "@/lib/transaction-import-ui";
+import { isReportReminderWindow } from "@/lib/report-reminder";
 import type { Role } from "@/lib/server/rbac";
+import { toast } from "sonner";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/kasir", label: "Kasir", icon: ShoppingBasket, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/inventaris", label: "Inventaris", icon: Package2, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/buku-hutang", label: "Buku Hutang", icon: Wallet, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
-  { href: "/investor", label: "Investor", icon: Landmark, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
-  { href: "/bagi-hasil", label: "Bagi Hasil", icon: HandCoins, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
-  { href: "/laporan", label: "Laporan", icon: FileChartColumn, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
+  { href: "/investor", label: "Investor", icon: Landmark, roles: ["pimpinan", "pengelola_keuangan"] },
+  { href: "/bagi-hasil", label: "Bagi Hasil", icon: HandCoins, roles: ["pimpinan", "pengelola_keuangan"] },
+  { href: "/laporan", label: "Laporan", icon: FileChartColumn, roles: ["pimpinan", "pengelola_keuangan"] },
   { href: "/laporan-pcm", label: "Laporan PCM", icon: ScrollText, roles: ["pimpinan"] },
   { href: "/pengaturan", label: "Pengaturan", icon: Settings2, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/pengaturan/karyawan", label: "Kelola Karyawan", icon: UserCog, roles: ["pimpinan"] },
@@ -62,6 +65,8 @@ export function AppShell({
   role: Role;
 }>) {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const visibleNavigation = navigation.filter((item) => item.roles.includes(role));
   const exactActiveHref = visibleNavigation.find((item) => pathname === item.href)?.href;
   const [aiOpen, setAiOpen] = useState(false);
@@ -74,6 +79,18 @@ export function AppShell({
   const [hasPendingPcmReport, setHasPendingPcmReport] = useState(false);
   const unsavedTransactionsRef = useRef(false);
   const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (isCashierRestrictedPath(role, pathname)) {
+      router.replace("/dashboard?notice=akses-dibatasi");
+      return;
+    }
+
+    if (searchParams.get("notice") === "akses-dibatasi") {
+      toast.error("Halaman ini hanya tersedia untuk pimpinan atau pengelola keuangan.");
+      router.replace("/dashboard");
+    }
+  }, [pathname, role, router, searchParams]);
 
   useEffect(() => {
     if (mainRef.current) {
@@ -104,8 +121,11 @@ export function AppShell({
           r.periodYear === currentYear && r.periodMonth === currentMonth
         );
 
+        // The sidebar reminder is intentionally quiet until H-2 at month end.
+        const inReportReminderWindow = isReportReminderWindow(now);
+
         // 1. Pending Monthly Report (/laporan):
-        const monthlyPending = !currentSnapshot || unsavedTransactionsRef.current;
+        const monthlyPending = inReportReminderWindow && (!currentSnapshot || unsavedTransactionsRef.current);
         setHasPendingMonthlyReport(monthlyPending);
 
         // 2. Pending PCM Report (/laporan-pcm):
@@ -130,7 +150,7 @@ export function AppShell({
             }
           }
         }
-        setHasPendingPcmReport(pcmPending);
+        setHasPendingPcmReport(inReportReminderWindow && pcmPending);
       });
     }
 
@@ -140,18 +160,18 @@ export function AppShell({
       if (e.detail?.action === "unsaved_changes") {
         const unsaved = !!e.detail?.hasUnsaved;
         unsavedTransactionsRef.current = unsaved;
-        setHasPendingMonthlyReport(unsaved);
+        setHasPendingMonthlyReport(isReportReminderWindow(new Date()) && unsaved);
       } else if (e.detail?.action === "transaction_added") {
         unsavedTransactionsRef.current = true;
-        setHasPendingMonthlyReport(true);
+        setHasPendingMonthlyReport(isReportReminderWindow(new Date()));
       } else if (e.detail?.action === "snapshot_updated") {
         unsavedTransactionsRef.current = false;
         setHasPendingMonthlyReport(false);
-        setHasPendingPcmReport(true);
+        setHasPendingPcmReport(isReportReminderWindow(new Date()));
       } else if (e.detail?.action === "updated" || e.detail?.action === "finalized") {
         setHasPendingPcmReport(false);
       } else if (e.detail?.action === "reopened") {
-        setHasPendingPcmReport(true);
+        setHasPendingPcmReport(isReportReminderWindow(new Date()));
       }
       if (refetchTimer) clearTimeout(refetchTimer);
       refetchTimer = setTimeout(fetchReportsStatus, 800);

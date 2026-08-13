@@ -169,11 +169,11 @@ export function formatValidationIssues(error: ZodError) {
 }
 
 export function validationErrorResponse(error: ZodError) {
+  console.error("[api] request validation failed", error);
   return NextResponse.json(
     {
-      error: {
-        issues: formatValidationIssues(error),
-      },
+      error: "Permintaan tidak valid.",
+      code: "INVALID_REQUEST",
     },
     { status: 400 }
   );

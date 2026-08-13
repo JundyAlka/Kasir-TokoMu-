@@ -1,9 +1,14 @@
 import { LaporanView } from "@/components/warung/laporan-view";
 import { LaporanAsetView } from "@/components/warung/laporan-aset-view";
 import { PengeluaranRestokView } from "@/components/warung/pengeluaran-restok-view";
+import { TransactionImportPanel } from "@/components/tokomu/transaction-import-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getRequestUser } from "@/lib/server/app-service";
 
-export default function LaporanPage() {
+export default async function LaporanPage() {
+  const { role } = await getRequestUser();
+  const canManageImports = role === "pimpinan" || role === "pengelola_keuangan";
+
   return (
     <div className="w-full space-y-6">
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
@@ -25,6 +30,11 @@ export default function LaporanPage() {
             <TabsTrigger value="restok_pengeluaran" className="rounded-xl px-6 py-2.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">
               Pengeluaran & Restok
             </TabsTrigger>
+            {canManageImports ? (
+              <TabsTrigger value="impor_transaksi" className="rounded-xl px-6 py-2.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">
+                Impor Transaksi
+              </TabsTrigger>
+            ) : null}
           </TabsList>
         </div>
         <TabsContent value="laba_rugi" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
@@ -36,6 +46,11 @@ export default function LaporanPage() {
         <TabsContent value="restok_pengeluaran" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
           <PengeluaranRestokView />
         </TabsContent>
+        {canManageImports ? (
+          <TabsContent value="impor_transaksi" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+            <TransactionImportPanel />
+          </TabsContent>
+        ) : null}
       </Tabs>
     </div>
   );

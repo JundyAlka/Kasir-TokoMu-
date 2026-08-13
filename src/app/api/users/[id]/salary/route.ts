@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/db/client";
 import { userRoles } from "@/db/schema";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { getRequestUser } from "@/lib/server/app-service";
 import { handleRouteError } from "@/lib/server/route-error";
 
@@ -14,7 +14,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["pimpinan"]);
+    await requireRoutePolicy("/api/users/[id]/salary", "PATCH");
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
 

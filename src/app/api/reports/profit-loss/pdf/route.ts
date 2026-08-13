@@ -10,7 +10,8 @@ import {
 import { calculatePayouts } from "@/lib/server/profit-sharing";
 import { getPeriodRange, getTopProductsForPeriod, getBottomProductsForPeriod } from "@/lib/server/reporting";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole, listWorkspaceUsers } from "@/lib/server/rbac";
+import { listWorkspaceUsers } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
 import { getRequestUser } from "@/lib/server/app-service";
 
@@ -94,7 +95,7 @@ async function getLowStockProducts(workspaceOwnerId: string) {
 
 export async function GET(request: Request) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/reports/profit-loss/pdf", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     const url = new URL(request.url);
     const period = parsePeriod(url.searchParams.get("period"));

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/server/app-service";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 import {
   getKasbonDetail,
@@ -27,7 +27,7 @@ function isValidMetric(value: string | null): value is Metric {
  */
 export async function GET(request: NextRequest) {
   try {
-    const context = await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    const context = await requireRoutePolicy("/api/dashboard/detail", "GET");
     const { workspaceOwnerId } = await getRequestUser();
 
     const metric = request.nextUrl.searchParams.get("metric");

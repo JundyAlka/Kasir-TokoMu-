@@ -6,8 +6,8 @@ import {
   countActivePimpinan,
   deactivateWorkspaceUser,
   getWorkspaceUserRole,
-  requireRole,
 } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -17,7 +17,7 @@ export async function DELETE(
 ) {
   try {
     const actor = await getRequestUser();
-    const { workspaceOwnerId } = await requireRole(["pimpinan"]);
+    const { workspaceOwnerId } = await requireRoutePolicy("/api/users/[id]", "DELETE");
     const { id } = await context.params;
 
     const before = await getWorkspaceUserRole(id, workspaceOwnerId);

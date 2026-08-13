@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db, pool } from "@/db/client";
+import { notFoundError } from "@/lib/server/route-error";
 import { investorPayouts } from "@/db/schema";
 import { getJakartaMonthRange } from "@/lib/server/timezone";
 
@@ -142,16 +143,16 @@ export async function calculatePeriodProfit(
           count(*)::int as transaction_count
         from transactions
         where user_id = $1
-          and created_at >= $2::timestamptz
-          and created_at < $3::timestamptz
+          and occurred_at >= $2::timestamptz
+          and occurred_at < $3::timestamptz
       ),
       item_cost as (
         select coalesce(sum(ti.quantity * ti.cost_price), 0)::int as cogs
         from transaction_items ti
         join transactions t on t.id = ti.transaction_id
         where t.user_id = $1
-          and t.created_at >= $2::timestamptz
-          and t.created_at < $3::timestamptz
+          and t.occurred_at >= $2::timestamptz
+          and t.occurred_at < $3::timestamptz
       ),
       exp as (
         select coalesce(sum(amount), 0)::int as expenses
@@ -222,8 +223,8 @@ async function calculateConsignmentBaseAmount(
       join transactions t on t.id = ti.transaction_id
       where t.user_id = $1
         and ti.product_id = $2
-        and t.created_at >= $3::timestamptz
-        and t.created_at < $5::timestamptz
+        and t.occurred_at >= $3::timestamptz
+        and t.occurred_at < $5::timestamptz
     `,
     [workspaceOwnerId, investment.productId, activeStart, investment.unitCost, activeEnd]
   );
@@ -519,7 +520,7 @@ export async function updatePayoutStatus(
     .returning();
 
   if (!payout) {
-    throw new Error("Payout tidak ditemukan.");
+    throw notFoundError();
   }
 
   return payout;

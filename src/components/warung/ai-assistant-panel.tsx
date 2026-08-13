@@ -102,8 +102,8 @@ function friendlyErrorMessage(value: unknown, fallback = "Permintaan gagal.") {
       : raw;
   }
 
-  if (raw.includes("GEMINI_API_KEY")) {
-    return "API key AI belum dikonfigurasi di server.";
+  if (raw.includes("GEMINI_API_KEY") || raw.includes("JUAN_ROUTER_API_KEY")) {
+    return "API key Juan Router belum dikonfigurasi di server.";
   }
 
   return raw.length > 180 ? `${raw.slice(0, 177)}...` : raw;
@@ -795,7 +795,7 @@ res = await api<{ newMessages: ServerMessage[] }>(
                 {chat?.title ?? "WarungOS AI"}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                Asisten kontekstual · Gemini 2.5 Flash · Tool calling
+                Asisten kontekstual · Gemini Flash · Tool calling
               </p>
             </div>
             <Button

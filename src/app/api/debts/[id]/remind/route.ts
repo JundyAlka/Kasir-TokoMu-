@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRequestUser, remindDebt } from "@/lib/server/app-service";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 
 export const runtime = "nodejs";
@@ -9,6 +10,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requireRoutePolicy("/api/debts/[id]/remind", "POST");
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const debt = await remindDebt(workspaceOwnerId, id);

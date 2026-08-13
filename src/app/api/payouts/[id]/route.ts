@@ -3,7 +3,7 @@ import { getRequestUser } from "@/lib/server/app-service";
 import { logEvent } from "@/lib/server/audit";
 import { updatePayoutStatus } from "@/lib/server/profit-sharing";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -20,7 +20,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/payouts/[id]", "PATCH");
     const { userId, workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const body = (await request.json()) as { status?: unknown; paidAt?: string | null };

@@ -4,7 +4,7 @@ import { getRequestUser } from "@/lib/server/app-service";
 import { logEvent } from "@/lib/server/audit";
 import { createInvestor, listInvestors } from "@/lib/server/investor-service";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -19,7 +19,7 @@ const InvestorCreateSchema = z
 
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/investors", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     const statusParam = request.nextUrl.searchParams.get("status");
     const status =
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/investors", "POST");
     const { userId, workspaceOwnerId } = await getRequestUser();
     const draft = InvestorCreateSchema.parse(await request.json());
     const investor = await createInvestor(workspaceOwnerId, draft);

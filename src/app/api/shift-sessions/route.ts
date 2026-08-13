@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getRequestUser } from "@/lib/server/app-service";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { getActiveShift, getOpenSession, openShift, resolveRecordedBy } from "@/lib/server/shift-service";
 import { handleRouteError } from "@/lib/server/route-error";
 
@@ -16,6 +17,7 @@ const OpenShiftSchema = z
 
 export async function GET() {
   try {
+    await requireRoutePolicy("/api/shift-sessions", "GET");
     const { userId, workspaceOwnerId } = await getRequestUser();
     const [session, activeShift, recordedBy] = await Promise.all([
       getOpenSession(workspaceOwnerId),
@@ -30,6 +32,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    await requireRoutePolicy("/api/shift-sessions", "POST");
     const body = OpenShiftSchema.parse(await request.json());
     const { userId, workspaceOwnerId } = await getRequestUser();
     const session = await openShift(

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { emptyAppState } from "@/lib/empty-state";
@@ -13,6 +13,7 @@ type CartLine = {
 };
 
 type AppStateContextValue = AppState & {
+  dataState: "loading" | "ready" | "error";
   cartLines: CartLine[];
   cartTotal: number;
   lowStockProducts: Product[];
@@ -31,6 +32,7 @@ type AppStateContextValue = AppState & {
   updateSettings: (settings: Settings) => Promise<void>;
   resetWorkspace: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
+  retryWorkspace: () => void;
 };
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -51,7 +53,7 @@ async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T
       throw new Error("UNAUTHORIZED");
     }
 
-    throw new Error(data?.error ?? "Permintaan ke server gagal.");
+    throw new Error(typeof data?.error === "string" ? data.error : "Permintaan ke server gagal.");
   }
 
   return data as T;
@@ -64,11 +66,37 @@ export function AppStateProvider({
 }>) {
   const router = useRouter();
   const [state, setState] = useState<AppState>(emptyAppState);
+  const [dataState, setDataState] = useState<"loading" | "ready" | "error">("loading");
   const { data: session, isPending } = useSession();
   const sessionUserId = session?.user?.id ?? null;
 
+  const loadWorkspace = useCallback(async () => {
+    setDataState("loading");
+    try {
+      const response = await requestJson<{ appState: AppState }>("/api/bootstrap");
+      setState((current) => ({
+        ...response.appState,
+        cart: current.cart,
+        paymentMethod: response.appState.settings.enabledPayments.includes(current.paymentMethod)
+          ? current.paymentMethod
+          : response.appState.paymentMethod,
+      }));
+      setDataState("ready");
+    } catch (error) {
+      if (error instanceof Error && error.message === "UNAUTHORIZED") {
+        setState(emptyAppState);
+        router.replace("/auth");
+        throw error;
+      }
+
+      setDataState("error");
+      throw error;
+    }
+  }, [router]);
+
   useEffect(() => {
     if (isPending) {
+      setDataState("loading");
       return;
     }
 
@@ -76,37 +104,8 @@ export function AppStateProvider({
       return;
     }
 
-    let isActive = true;
-
-    void requestJson<{ appState: AppState }>("/api/bootstrap")
-      .then((response) => {
-        if (!isActive) {
-          return;
-        }
-
-        setState((current) => ({
-          ...response.appState,
-          cart: current.cart,
-          paymentMethod: response.appState.settings.enabledPayments.includes(current.paymentMethod)
-            ? current.paymentMethod
-            : response.appState.paymentMethod,
-        }));
-      })
-      .catch((error) => {
-        if (!isActive) {
-          return;
-        }
-
-        if (error instanceof Error && error.message === "UNAUTHORIZED") {
-          setState(emptyAppState);
-          router.replace("/auth");
-        }
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, [isPending, router, sessionUserId]);
+    void loadWorkspace().catch(() => undefined);
+  }, [isPending, loadWorkspace, sessionUserId]);
 
   const cartLines = state.cart.flatMap((line) => {
     const product = state.products.find((item) => item.id === line.productId);
@@ -347,20 +346,14 @@ export function AppStateProvider({
   }
 
   async function refreshWorkspace() {
-    const response = await requestJson<{ appState: AppState }>("/api/bootstrap");
-    setState((current) => ({
-      ...response.appState,
-      cart: current.cart,
-      paymentMethod: response.appState.settings.enabledPayments.includes(current.paymentMethod)
-        ? current.paymentMethod
-        : response.appState.paymentMethod,
-    }));
+    await loadWorkspace();
   }
 
   return (
     <AppStateContext.Provider
       value={{
         ...state,
+        dataState,
         cartLines,
         cartTotal,
         lowStockProducts,
@@ -379,6 +372,7 @@ export function AppStateProvider({
         updateSettings,
         resetWorkspace,
         refreshWorkspace,
+        retryWorkspace: () => void loadWorkspace().catch(() => undefined),
       }}
     >
       {children}

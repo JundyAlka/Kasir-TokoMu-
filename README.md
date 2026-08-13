@@ -67,14 +67,34 @@ npm install
 cp .env.example .env
 # Edit .env — isi DATABASE_URL, BETTER_AUTH_SECRET, dan GEMINI_API_KEY
 
-# 4. Push skema & seed database
-npm run db:push
-npm run db:seed
+# 4. Terapkan migrasi ke database lokal dan pastikan tidak ada yang tertunda
+npm run db:local:migrate
+npm run db:local:status
 
 # 5. Jalankan server
 npm run dev
 # → http://localhost:3000
 ```
+
+---
+
+## Urutan migrasi yang aman
+
+Jangan menerapkan file SQL hanya ke InsForge. Setiap perubahan skema harus memakai urutan ini:
+
+```bash
+# 1. Terapkan ke PostgreSQL lokal (localhost:5439) dan lihat statusnya.
+npm run db:local:migrate
+npm run db:local:status
+
+# 2. Jalankan test lokal sebelum menyentuh data cloud.
+npm test
+
+# 3. Setelah test hijau, terapkan migration yang sama ke InsForge.
+npx @insforge/cli db migrations up --all
+```
+
+`npm run dev` memeriksa migrasi lokal saat mulai. Jika ada yang tertunda, terminal menampilkan peringatan dan perintah perbaikannya. Perintah lokal hanya menerima database `localhost:5439`; ini mencegah migrasi dev tidak sengaja diterapkan ke InsForge.
 
 ---
 
@@ -143,6 +163,8 @@ warungos/
 | `npm run start` | Jalankan production |
 | `npm run db:push` | Push skema Drizzle ke database |
 | `npm run db:seed` | Isi database dengan data dummy |
+| `npm run db:local:status` | Menampilkan migrasi InsForge yang masih tertunda di PostgreSQL lokal |
+| `npm run db:local:migrate` | Menerapkan migrasi InsForge tertunda ke PostgreSQL lokal |
 | `npm run db:reset` | Reset database |
 | `npm run db:studio` | Buka Drizzle Studio |
 | `npm run auth:migrate` | Migrasi tabel Better Auth |

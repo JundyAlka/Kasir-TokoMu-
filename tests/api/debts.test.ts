@@ -137,8 +137,6 @@ describe("debts service", () => {
       })
     ).rejects.toThrow();
 
-    await expect(markDebtPaid(WORKSPACE_ID, "debt_missing")).rejects.toThrow(
-      "Data hutang tidak ditemukan."
-    );
+    await expect(markDebtPaid(WORKSPACE_ID, "debt_missing")).rejects.toThrow("NOT_FOUND");
   });
 });

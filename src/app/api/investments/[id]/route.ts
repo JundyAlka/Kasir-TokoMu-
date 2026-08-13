@@ -6,7 +6,7 @@ import {
   updateInvestment,
 } from "@/lib/server/investor-service";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -54,7 +54,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/investments/[id]", "PATCH");
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const draft = InvestmentUpdateSchema.parse(await request.json());
@@ -70,7 +70,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/investments/[id]", "DELETE");
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const investment = await deactivateInvestment(workspaceOwnerId, id);

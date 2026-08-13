@@ -39,6 +39,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ProductForm } from "@/components/warung/product-form";
 import { FIELD_HELP } from "@/lib/field-help";
 import { formatCurrency } from "@/lib/format";
+import {
+  areAllIdsSelected,
+  toggleAllIds,
+  toggleSelectedId,
+} from "@/lib/inventory-selection";
 import { generateSku } from "@/lib/sku";
 import { Product, ProductDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -64,6 +69,8 @@ export function InventarisView() {
     restockProduct,
     lowStockProducts,
     refreshWorkspace,
+    dataState,
+    retryWorkspace,
   } = useAppState();
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -76,7 +83,13 @@ export function InventarisView() {
   const [activeSummaryMetric, setActiveSummaryMetric] =
     useState<InventorySummaryMetric | null>(null);
   const [pendingDeletedIds, setPendingDeletedIds] = useState<Set<string>>(() => new Set());
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(() => new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkRestockOpen, setBulkRestockOpen] = useState(false);
+  const [bulkRestockAmount, setBulkRestockAmount] = useState(1);
+  const [isBulkActionPending, setIsBulkActionPending] = useState(false);
   const deleteTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const timers = deleteTimersRef.current;
@@ -106,7 +119,18 @@ export function InventarisView() {
   const visibleLowStockProducts = lowStockProducts.filter(
     (product) => !pendingDeletedIds.has(product.id)
   );
+  const filteredProductIds = filteredProducts.map((product) => product.id);
+  const selectedProducts = visibleProducts.filter((product) => selectedProductIds.has(product.id));
+  const allFilteredProductsSelected = areAllIdsSelected(selectedProductIds, filteredProductIds);
+  const hasPartiallySelectedFilteredProducts =
+    filteredProductIds.some((id) => selectedProductIds.has(id)) && !allFilteredProductsSelected;
   const canMutateInventory = true;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = hasPartiallySelectedFilteredProducts;
+    }
+  }, [hasPartiallySelectedFilteredProducts]);
 
   function validateProduct(nextDraft: ProductDraft) {
     return (
@@ -228,6 +252,62 @@ export function InventarisView() {
     });
   }
 
+  async function handleBulkDeleteProducts() {
+    const productIds = selectedProducts.map((product) => product.id);
+    if (productIds.length === 0) {
+      return;
+    }
+
+    setIsBulkActionPending(true);
+    const results = await Promise.allSettled(productIds.map((id) => deleteProduct(id)));
+    const failedIds = new Set(
+      results.flatMap((result, index) => (result.status === "rejected" ? [productIds[index]] : []))
+    );
+
+    setSelectedProductIds(failedIds);
+    setIsBulkActionPending(false);
+    setBulkDeleteOpen(false);
+
+    if (failedIds.size > 0) {
+      toast.error(
+        `${productIds.length - failedIds.size} produk dihapus, ${failedIds.size} produk gagal dihapus.`
+      );
+      return;
+    }
+
+    toast.success(`${productIds.length} produk berhasil dihapus.`);
+  }
+
+  async function handleBulkRestockProducts() {
+    const productIds = selectedProducts.map((product) => product.id);
+    if (productIds.length === 0 || bulkRestockAmount <= 0) {
+      toast.error("Masukkan jumlah restok yang valid.");
+      return;
+    }
+
+    setIsBulkActionPending(true);
+    const results = await Promise.allSettled(
+      productIds.map((id) => restockProduct(id, bulkRestockAmount))
+    );
+    const failedIds = new Set(
+      results.flatMap((result, index) => (result.status === "rejected" ? [productIds[index]] : []))
+    );
+
+    setSelectedProductIds(failedIds);
+    setIsBulkActionPending(false);
+    setBulkRestockOpen(false);
+
+    if (failedIds.size > 0) {
+      toast.error(
+        `${productIds.length - failedIds.size} produk direstok, ${failedIds.size} produk gagal diperbarui.`
+      );
+      return;
+    }
+
+    setBulkRestockAmount(1);
+    toast.success(`${productIds.length} produk berhasil direstok ${bulkRestockAmount} pcs.`);
+  }
+
   return (
     <div className="space-y-4">
       <section className="grid gap-4 md:grid-cols-3">
@@ -236,6 +316,8 @@ export function InventarisView() {
           value={`${visibleProducts.length} produk`}
           description="Produk siap jual yang sedang aktif di warung."
           onClick={() => setActiveSummaryMetric("total_sku")}
+          dataState={dataState}
+          onRetry={retryWorkspace}
         />
         <StatCard
           title="Stok menipis"
@@ -243,6 +325,8 @@ export function InventarisView() {
           description="Pantau dan restok sebelum pelanggan kehabisan pilihan."
           tone="warn"
           onClick={() => setActiveSummaryMetric("stok_menipis")}
+          dataState={dataState}
+          onRetry={retryWorkspace}
         />
         {canMutateInventory ? (
           <StatCard
@@ -251,6 +335,8 @@ export function InventarisView() {
             description="Perkiraan modal yang sedang tersimpan di inventaris."
             tone="accent"
             onClick={() => setActiveSummaryMetric("nilai_stok")}
+            dataState={dataState}
+            onRetry={retryWorkspace}
           />
         ) : (
           <StatCard
@@ -259,6 +345,8 @@ export function InventarisView() {
             description="Produk yang masih bisa dipilih dari layar kasir."
             tone="accent"
             onClick={() => setActiveSummaryMetric("produk_aktif")}
+            dataState={dataState}
+            onRetry={retryWorkspace}
           />
         )}
       </section>
@@ -345,9 +433,41 @@ export function InventarisView() {
           </div>
         </CardHeader>
         <CardContent>
+          {canMutateInventory && selectedProducts.length > 0 ? (
+            <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-medium">
+                {selectedProducts.length} produk terpilih
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" onClick={() => setSelectedProductIds(new Set())}>
+                  Batalkan pilihan
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setBulkRestockOpen(true)}>
+                  <Warehouse className="size-4" />
+                  Restok terpilih
+                </Button>
+                <Button type="button" variant="destructive" onClick={() => setBulkDeleteOpen(true)}>
+                  <Trash2 className="size-4" />
+                  Hapus terpilih
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <Table className="min-w-[760px]">
             <TableHeader>
               <TableRow>
+                {canMutateInventory ? (
+                  <TableHead className="w-12 px-3">
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      checked={allFilteredProductsSelected}
+                      onChange={() => setSelectedProductIds((current) => toggleAllIds(current, filteredProductIds))}
+                      aria-label="Pilih semua produk yang terlihat"
+                      className="size-4 cursor-pointer accent-primary"
+                    />
+                  </TableHead>
+                ) : null}
                 <TableHead>
                   <span className="inline-flex items-center gap-2">
                     SKU
@@ -384,7 +504,24 @@ export function InventarisView() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProducts.map((product) => {
+              {dataState === "error" ? (
+                <TableRow>
+                  <TableCell colSpan={10}>
+                    <div role="alert" className="flex min-h-44 flex-col items-center justify-center gap-3 text-center">
+                      <p className="font-medium">Gagal memuat data, coba lagi</p>
+                      <Button type="button" variant="outline" onClick={retryWorkspace}>Muat ulang</Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : dataState === "loading" ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="h-44 text-center text-muted-foreground">Memuat inventaris...</TableCell>
+                </TableRow>
+              ) : filteredProducts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="h-44 text-center text-muted-foreground">Belum ada produk di inventaris.</TableCell>
+                </TableRow>
+              ) : filteredProducts.map((product) => {
                 const lowStock = product.stock <= product.minimumStock;
                 const sku = product.sku || generateSku(product.name, product.category);
                 const margin = Math.max(0, product.sellPrice - product.buyPrice);
@@ -398,6 +535,19 @@ export function InventarisView() {
                       newlyAddedIds.includes(product.id) && "bg-emerald-500/15 transition-colors duration-1000 dark:bg-emerald-500/20"
                     )}
                   >
+                    {canMutateInventory ? (
+                      <TableCell className="px-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedProductIds.has(product.id)}
+                          onChange={() =>
+                            setSelectedProductIds((current) => toggleSelectedId(current, product.id))
+                          }
+                          aria-label={`Pilih ${product.name}`}
+                          className="size-4 cursor-pointer accent-primary"
+                        />
+                      </TableCell>
+                    ) : null}
                     <TableCell className="font-mono text-xs font-medium text-muted-foreground">
                       {sku}
                     </TableCell>
@@ -540,6 +690,62 @@ export function InventarisView() {
           >
             <Button type="button" onClick={() => void handleRestock()}>
               Simpan restok
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkRestockOpen} onOpenChange={setBulkRestockOpen}>
+        <DialogContent className="w-full max-w-md rounded-[28px]">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-2xl">Restok produk terpilih</DialogTitle>
+            <DialogDescription>
+              Tambahkan jumlah stok yang sama ke {selectedProducts.length} produk yang dipilih.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor="bulk-restock-amount">Jumlah tambahan stok per produk</Label>
+            <Input
+              id="bulk-restock-amount"
+              type="number"
+              min={1}
+              value={bulkRestockAmount}
+              onChange={(event) => setBulkRestockAmount(Number(event.target.value))}
+              className="h-11 rounded-2xl"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              disabled={isBulkActionPending}
+              onClick={() => void handleBulkRestockProducts()}
+            >
+              {isBulkActionPending ? "Menyimpan..." : "Simpan restok"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent className="w-full max-w-md rounded-[28px]">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-2xl">Hapus produk terpilih?</DialogTitle>
+            <DialogDescription>
+              {selectedProducts.length} produk akan dihapus permanen dari inventaris. Aksi ini tidak dapat dibatalkan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={isBulkActionPending} onClick={() => setBulkDeleteOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isBulkActionPending}
+              onClick={() => void handleBulkDeleteProducts()}
+            >
+              <Trash2 className="size-4" />
+              {isBulkActionPending ? "Menghapus..." : "Hapus produk"}
             </Button>
           </DialogFooter>
         </DialogContent>

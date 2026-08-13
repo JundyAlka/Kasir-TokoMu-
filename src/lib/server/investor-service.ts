@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { formatInTimeZone } from "date-fns-tz";
 import { db, pool } from "@/db/client";
+import { notFoundError } from "@/lib/server/route-error";
 import {
   investorPayouts,
   investments,
@@ -435,7 +436,7 @@ export async function listInvestors(
 export async function getInvestor(workspaceOwnerId: string, id: string) {
   const investor = await findInvestor(workspaceOwnerId, id);
   if (!investor) {
-    throw new Error("Investor tidak ditemukan.");
+    throw notFoundError();
   }
 
   const [investmentRows, payoutRows] = await Promise.all([
@@ -465,7 +466,7 @@ export async function updateInvestor(
 ) {
   const existing = await findInvestor(workspaceOwnerId, id);
   if (!existing) {
-    throw new Error("Investor tidak ditemukan.");
+    throw notFoundError();
   }
 
   const next = {
@@ -492,7 +493,7 @@ export async function updateInvestor(
 export async function deleteInvestor(workspaceOwnerId: string, id: string) {
   const existing = await findInvestor(workspaceOwnerId, id);
   if (!existing) {
-    throw new Error("Investor tidak ditemukan.");
+    throw notFoundError();
   }
 
   const timestamp = nowIso();
@@ -513,7 +514,7 @@ export async function deleteInvestor(workspaceOwnerId: string, id: string) {
 export async function purgeInactiveInvestor(workspaceOwnerId: string, id: string) {
   const existing = await findInvestor(workspaceOwnerId, id);
   if (!existing) {
-    throw new Error("Investor tidak ditemukan.");
+    throw notFoundError();
   }
 
   if (existing.isActive === 1) {
@@ -652,7 +653,7 @@ export async function updateInvestment(
 ) {
   const existing = await findInvestment(workspaceOwnerId, id);
   if (!existing) {
-    throw new Error("Investasi tidak ditemukan.");
+    throw notFoundError();
   }
 
   const next = normalizeUpdateInvestmentDraft(existing, draft);
@@ -676,7 +677,7 @@ export async function updateInvestment(
 export async function deactivateInvestment(workspaceOwnerId: string, id: string) {
   const existing = await findInvestment(workspaceOwnerId, id);
   if (!existing) {
-    throw new Error("Investasi tidak ditemukan.");
+    throw notFoundError();
   }
 
   const timestamp = nowIso();

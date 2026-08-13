@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createExpense, getRequestUser } from "@/lib/server/app-service";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { logEvent } from "@/lib/server/audit";
 import { handleRouteError } from "@/lib/server/route-error";
 import { ExpenseCreateSchema } from "@/lib/server/validation";
@@ -11,6 +12,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
+    await requireRoutePolicy("/api/expenses", "POST");
     const draft = ExpenseCreateSchema.parse(await request.json());
     const { userId, workspaceOwnerId } = await getRequestUser();
     const expense = await createExpense(workspaceOwnerId, draft);
@@ -38,6 +40,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    await requireRoutePolicy("/api/expenses", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     
     // Fetch last 50 expenses

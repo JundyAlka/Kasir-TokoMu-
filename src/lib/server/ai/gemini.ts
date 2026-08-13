@@ -79,9 +79,34 @@ function geminiErrorMessage(text: string) {
   return text;
 }
 
+function parseOpenAiResponse(text: string): GeminiResponse {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed) as GeminiResponse;
+  } catch {
+    const events = trimmed
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice("data:".length).trim())
+      .filter((line) => line && line !== "[DONE]");
+    if (events.length === 0) throw new Error("Provider mengembalikan format respons yang tidak dikenali.");
+    const parsed = JSON.parse(events[0]) as GeminiResponse;
+    return parsed;
+  }
+}
+
 const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
 const GOOGLE_DIRECT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
 const GOOGLE_INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions";
+const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
+const MIN_REQUEST_TIMEOUT_MS = 5_000;
+const MAX_REQUEST_TIMEOUT_MS = 90_000;
+
+function requestTimeoutMs() {
+  const configured = Number(process.env.GEMINI_REQUEST_TIMEOUT_MS);
+  if (!Number.isFinite(configured)) return DEFAULT_REQUEST_TIMEOUT_MS;
+  return Math.min(MAX_REQUEST_TIMEOUT_MS, Math.max(MIN_REQUEST_TIMEOUT_MS, configured));
+}
 
 function isGoogleAuthKey(apiKey: string) {
   return apiKey.startsWith("AQ.");
@@ -197,7 +222,7 @@ async function tryCallGeminiAuthKey(
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(requestTimeoutMs()),
   }).catch(() => null);
 
   if (!response) return null;
@@ -219,6 +244,7 @@ async function tryCallGemini(
     temperature?: number;
   },
 ): Promise<GeminiResponse | null> {
+  const timeoutMs = requestTimeoutMs();
   let fetchError: any = null;
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
@@ -232,24 +258,28 @@ async function tryCallGemini(
       tools: input.tools,
       tool_choice: input.tools ? input.toolChoice ?? "auto" : undefined,
       temperature: input.temperature ?? 0.2,
+      stream: false,
     }),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(timeoutMs),
   }).catch((err) => {
     fetchError = err;
     return null;
   });
 
   if (!response) {
-    console.error(`[tryCallGemini] Fetch failed for model ${model} at ${baseUrl}`, fetchError);
+    const isTimeout = fetchError?.name === "TimeoutError" || fetchError?.code === "UND_ERR_CONNECT_TIMEOUT";
+    console.error(
+      `[tryCallGemini] ${isTimeout ? "TIMEOUT" : "Fetch failed"} for model ${model} at ${baseUrl} (limit=${timeoutMs}ms)`,
+      fetchError?.message ?? fetchError,
+    );
     return null;
   }
   if (response.ok) {
-    return (await response.json()) as GeminiResponse;
+    return parseOpenAiResponse(await response.text());
   }
 
   const errorText = await response.text().catch(() => "Could not read error text");
-  console.error(`[tryCallGemini] API returned error: ${response.status} ${response.statusText} for model ${model} at ${baseUrl}`);
-  console.error(`[tryCallGemini] Error body: ${errorText}`);
+  console.error(`[tryCallGemini] API error ${response.status} ${response.statusText} for model ${model} at ${baseUrl}: ${errorText}`);
   return null;
 }
 
@@ -266,7 +296,7 @@ export async function callGemini(input: {
   const FALLBACK_TEXT_MODEL_PINNED = process.env.GEMINI_FALLBACK_TEXT_MODEL_PINNED ?? "gemini-3.6-flash";
   const BASE_URL = process.env.GEMINI_BASE_URL ?? DEFAULT_BASE_URL;
 
-  const proxyKey = process.env.GEMINI_API_KEY;
+  const proxyKey = (process.env.JUAN_ROUTER_API_KEY ?? process.env.GEMINI_API_KEY ?? "").trim();
   const GOOGLE_API_KEYS = (process.env.GEMINI_GOOGLE_API_KEYS ?? "")
     .split(",")
     .map((k) => k.trim())
@@ -274,7 +304,7 @@ export async function callGemini(input: {
 
   if (!proxyKey && GOOGLE_API_KEYS.length === 0) {
     throw new Error(
-      "GEMINI_API_KEY belum diatur di environment. Tambahkan API key server-side untuk mengaktifkan TokoMu AI."
+      "JUAN_ROUTER_API_KEY belum diatur di environment. Tambahkan API key server-side untuk mengaktifkan TokoMu AI."
     );
   }
 
@@ -282,13 +312,17 @@ export async function callGemini(input: {
     ? [input.model]
     : Array.from(new Set([DEFAULT_MODEL, FALLBACK_TEXT_MODEL, FALLBACK_TEXT_MODEL_PINNED]));
 
+  let lastError = "";
+
   // --- Step 1: Try proxy (if configured) ---
   if (proxyKey) {
     for (const model of models) {
+      console.log(`[callGemini] Trying proxy model=${model} baseUrl=${BASE_URL}`);
       const result = isGoogleAuthKey(proxyKey)
         ? await tryCallGeminiAuthKey(proxyKey, model, input)
         : await tryCallGemini(BASE_URL, proxyKey, model, input);
       if (result) return result;
+      lastError = `proxy ${model} failed`;
     }
   }
 
@@ -306,9 +340,11 @@ export async function callGemini(input: {
           ? await tryCallGeminiAuthKey(googleKey, model, input)
           : await tryCallGemini(GOOGLE_DIRECT_BASE_URL, googleKey, model, input);
         if (result) return result;
+        lastError = `google-direct ${model} failed`;
       }
     }
   }
 
+  console.error(`[callGemini] All providers exhausted. Last: ${lastError}. Models tried: ${models.join(", ")}`);
   throw new Error("Semua penyedia AI gagal merespons. Coba lagi nanti.");
 }

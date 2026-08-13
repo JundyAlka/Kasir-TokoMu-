@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { getRequestUser, resetWorkspace } from "@/lib/server/app-service";
 import { logEvent } from "@/lib/server/audit";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
 export async function POST() {
   try {
-    await requireRole(["pimpinan"]);
+    await requireRoutePolicy("/api/bootstrap/reset", "POST");
     const { userId, workspaceOwnerId } = await getRequestUser();
     const appState = await resetWorkspace(workspaceOwnerId);
     await logEvent(

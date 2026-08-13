@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { restockPlans } from "@/db/schema";
 import { getRequestUser } from "@/lib/server/app-service";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
@@ -21,6 +22,7 @@ function createId(prefix: string) {
 
 export async function GET(request: NextRequest) {
   try {
+    await requireRoutePolicy("/api/restock-plans", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     const plans = await db
       .select()
@@ -37,6 +39,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await requireRoutePolicy("/api/restock-plans", "POST");
     const body = await request.json();
     const parsed = RestockPlanCreateSchema.parse(body);
     const { workspaceOwnerId } = await getRequestUser();
@@ -64,6 +67,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    await requireRoutePolicy("/api/restock-plans", "PATCH");
     const body = await request.json();
     const { id, isDone } = z.object({ id: z.string(), isDone: z.number() }).parse(body);
     const { workspaceOwnerId } = await getRequestUser();

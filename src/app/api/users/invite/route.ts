@@ -10,8 +10,8 @@ import { handleRouteError } from "@/lib/server/route-error";
 import {
   assignRole,
   getUserRoleAssignment,
-  requireRole,
 } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -43,7 +43,7 @@ function nameFromEmail(email: string) {
 export async function POST(request: NextRequest) {
   try {
     const actor = await getRequestUser();
-    const { workspaceOwnerId } = await requireRole(["pimpinan"]);
+    const { workspaceOwnerId } = await requireRoutePolicy("/api/users/invite", "POST");
     const body = InviteUserSchema.parse(await request.json());
 
     const existingUser = await pool.query<{ id: string; email: string; name: string }>(

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deleteProduct, getRequestUser, updateProduct } from "@/lib/server/app-service";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { logEvent } from "@/lib/server/audit";
 import { ProductUpdateSchema } from "@/lib/server/validation";
 
@@ -13,7 +13,7 @@ export async function PATCH(
 ) {
   try {
     const draft = ProductUpdateSchema.parse(await request.json());
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/products/[id]", "PATCH");
     const { workspaceOwnerId, userId } = await getRequestUser();
     const { id } = await context.params;
     const product = await updateProduct(workspaceOwnerId, id, draft);
@@ -38,7 +38,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/products/[id]", "DELETE");
     const { workspaceOwnerId, userId } = await getRequestUser();
     const { id } = await context.params;
     const product = await deleteProduct(workspaceOwnerId, id);

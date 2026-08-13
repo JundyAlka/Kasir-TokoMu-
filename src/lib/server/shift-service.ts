@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { formatInTimeZone } from "date-fns-tz";
 import { db, pool } from "@/db/client";
+import { notFoundError } from "@/lib/server/route-error";
 import { shiftSessions, shifts } from "@/db/schema";
 import { JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
 
@@ -176,7 +177,7 @@ export async function updateShift(workspaceOwnerId: string, shiftId: string, dra
     .limit(1);
 
   if (!existing) {
-    throw new Error("Shift tidak ditemukan.");
+    throw notFoundError();
   }
 
   const [updated] = await db
@@ -202,7 +203,7 @@ export async function deleteShift(workspaceOwnerId: string, shiftId: string) {
     .returning();
 
   if (!updated) {
-    throw new Error("Shift tidak ditemukan.");
+    throw notFoundError();
   }
 
   return mapShift(updated);
@@ -299,7 +300,7 @@ export async function closeShift(workspaceOwnerId: string, sessionId: string, cl
     .limit(1);
 
   if (!session) {
-    throw new Error("Sesi shift tidak ditemukan.");
+    throw notFoundError();
   }
 
   if (session.endedAt) {

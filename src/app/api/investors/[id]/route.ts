@@ -8,7 +8,7 @@ import {
   updateInvestor,
 } from "@/lib/server/investor-service";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/investors/[id]", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const investor = await getInvestor(workspaceOwnerId, id);
@@ -41,7 +41,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/investors/[id]", "PATCH");
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const draft = InvestorUpdateSchema.parse(await request.json());
@@ -57,7 +57,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/investors/[id]", "DELETE");
     const { workspaceOwnerId } = await getRequestUser();
     const { id } = await context.params;
     const mode = request.nextUrl.searchParams.get("mode");

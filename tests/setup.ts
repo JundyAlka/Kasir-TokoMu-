@@ -18,20 +18,48 @@ function sqlFromMigration(fileName: string) {
     .filter(Boolean);
 }
 
+function sqlFromInsforgeMigration(fileName: string) {
+  return readFileSync(join(process.cwd(), "migrations", fileName), "utf8")
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 function applySchema(mem: TestDb) {
   for (const fileName of [
     "0005_explicit_schema.sql",
     "0007_audit_log_enhancements.sql",
     "0006_invitations.sql",
     "0007_akad_fields.sql",
+    "0008_chairman_title.sql",
     "0008_debt_items_payments.sql",
     "0009_product_sku.sql",
     "0009_shifts.sql",
     "0010_transaction_cash_change.sql",
+    "0015_lonely_scarecrow.sql",
     "0016_investment_unit_amount.sql",
     "0017_debt_optional_contact_deadline.sql",
   ]) {
     for (const statement of sqlFromMigration(fileName)) {
+      mem.public.none(statement);
+    }
+  }
+
+  // Columns from 0014 that aren't covered by individual migrations above.
+  // Can't apply 0014 in full because it re-adds columns already present.
+  for (const stmt of [
+    `ALTER TABLE "store_profiles" ADD COLUMN "qris_payload" text DEFAULT '' NOT NULL`,
+    `ALTER TABLE "store_profiles" ADD COLUMN "qris_image_url" text DEFAULT '' NOT NULL`,
+    `ALTER TABLE "store_profiles" ADD COLUMN "bank_transfer_info" text DEFAULT '' NOT NULL`,
+  ]) {
+    mem.public.none(stmt);
+  }
+
+  for (const fileName of [
+    "20260810160920_transaction-occurred-at.sql",
+    "20260810163000_transaction-import-batches.sql",
+  ]) {
+    for (const statement of sqlFromInsforgeMigration(fileName)) {
       mem.public.none(statement);
     }
   }

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/server/app-service";
 import { extractReceiptItems } from "@/lib/server/ai/vision";
 import { matchToProducts } from "@/lib/server/ai/receipt-matcher";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
+import { handleRouteError } from "@/lib/server/route-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -28,11 +29,11 @@ function validateImageDataUrl(value: unknown) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/ai/scan-receipt", "POST");
     const { workspaceOwnerId } = await getRequestUser();
     const body = (await request.json()) as { imageDataUrl?: unknown };
     const imageDataUrl = validateImageDataUrl(body.imageDataUrl);
-    const extractedItems = await extractReceiptItems(imageDataUrl);
+    const extractedItems = await extractReceiptItems(imageDataUrl, workspaceOwnerId);
     if (extractedItems.length === 0) {
       return NextResponse.json(
         { error: "AI belum menemukan item dari struk. Coba foto ulang dengan pencahayaan lebih jelas." },
@@ -44,29 +45,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ items });
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
-    }
-
-    if (error instanceof Error && error.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
-    }
-
-    if (
-      error instanceof Error &&
-      (error.message.includes("Gemini") ||
-        error.message.includes("GEMINI_API_KEY") ||
-        error.message.includes("AI response"))
-    ) {
-      return NextResponse.json(
-        { error: "AI tidak bisa membaca struk saat ini, silakan restok manual." },
-        { status: 502 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Gagal membaca struk." },
-      { status: 400 }
-    );
+    return handleRouteError(error, "Gagal membaca struk.");
   }
 }

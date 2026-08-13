@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/server/app-service";
 import { getAuditFacets, listAuditLogs } from "@/lib/server/audit";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 
 export const runtime = "nodejs";
@@ -17,7 +17,7 @@ export const runtime = "nodejs";
  */
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(["pimpinan"]);
+    await requireRoutePolicy("/api/audit-log", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     const params = request.nextUrl.searchParams;
 

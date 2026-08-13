@@ -486,7 +486,7 @@ async function execGetSalesSummary(
        count(distinct t.id)::text as tx_count
      from transactions t
      left join transaction_items ti on ti.transaction_id = t.id
-     where t.user_id = $1 and t.created_at >= $2 and t.created_at <= $3`,
+     where t.user_id = $1 and t.occurred_at >= $2 and t.occurred_at <= $3`,
     [userId, start, end]
   );
 
@@ -627,7 +627,7 @@ async function execGetProfitRecommendations(userId: string): Promise<ToolResult>
      from transaction_items ti
      join transactions t on t.id = ti.transaction_id
      left join products p on p.id = ti.product_id and p.user_id = t.user_id
-     where t.user_id = $1 and t.created_at >= $2 and t.created_at <= $3
+     where t.user_id = $1 and t.occurred_at >= $2 and t.occurred_at <= $3
      group by ti.product_id, p.name, p.stock, p.minimum_stock, p.sell_price, p.buy_price
      order by profit desc
      limit 50`,
@@ -735,11 +735,12 @@ export async function executeTool(
         return { ok: false, kind: "info", title: "Tool tidak dikenali", error: `Unknown tool: ${name}` };
     }
   } catch (error) {
+    console.error("[ai] tool execution failed", error);
     return {
       ok: false,
       kind: "info",
       title: "Tool gagal",
-      error: error instanceof Error ? error.message : "Tool execution failed.",
+      error: "Tool gagal dijalankan. Coba lagi nanti.",
     };
   }
 }

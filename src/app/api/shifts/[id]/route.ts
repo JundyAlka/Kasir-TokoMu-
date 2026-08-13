@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { deleteShift, updateShift } from "@/lib/server/shift-service";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 
 export const runtime = "nodejs";
@@ -22,7 +22,7 @@ export async function PATCH(
 ) {
   try {
     const body = ShiftUpdateSchema.parse(await request.json());
-    const { workspaceOwnerId } = await requireRole(["pimpinan"]);
+    const { workspaceOwnerId } = await requireRoutePolicy("/api/shifts/[id]", "PATCH");
     const { id } = await context.params;
     const shift = await updateShift(workspaceOwnerId, id, body);
     return NextResponse.json({ shift });
@@ -36,7 +36,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { workspaceOwnerId } = await requireRole(["pimpinan"]);
+    const { workspaceOwnerId } = await requireRoutePolicy("/api/shifts/[id]", "DELETE");
     const { id } = await context.params;
     const shift = await deleteShift(workspaceOwnerId, id);
     return NextResponse.json({ shift });

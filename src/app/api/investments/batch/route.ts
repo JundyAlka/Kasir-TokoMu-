@@ -4,7 +4,7 @@ import { getRequestUser } from "@/lib/server/app-service";
 import { logEvent } from "@/lib/server/audit";
 import { createInvestmentBatch } from "@/lib/server/investor-service";
 import { handleRouteError } from "@/lib/server/route-error";
-import { requireRole } from "@/lib/server/rbac";
+import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
@@ -35,7 +35,7 @@ const BatchInvestmentSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    await requireRoutePolicy("/api/investments/batch", "POST");
     const { userId, workspaceOwnerId } = await getRequestUser();
     const body = BatchInvestmentSchema.parse(await request.json());
     const investments = await createInvestmentBatch(workspaceOwnerId, body.investorId, body.investments);

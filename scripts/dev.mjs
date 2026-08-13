@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import net from "node:net";
 import { resolve } from "node:path";
+import { getLocalMigrationStatus } from "./local-migrations.mjs";
 
 const databasePort = 5439;
 const children = new Set();
@@ -50,6 +51,19 @@ function startChild(command, args) {
   return child;
 }
 
+async function getMigrationStatusWhenDatabaseReady() {
+  let lastError;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      return await getLocalMigrationStatus();
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+    }
+  }
+  throw lastError;
+}
+
 function shutdown(exitCode = 0) {
   if (shuttingDown) {
     return;
@@ -80,10 +94,38 @@ if (!(await isPortOpen(databasePort))) {
   console.log(`PostgreSQL sudah aktif di port ${databasePort}.`);
 }
 
+try {
+  const migrationStatus = await getMigrationStatusWhenDatabaseReady();
+  if (migrationStatus.pending.length > 0) {
+    console.warn(
+      `\nPERINGATAN SKEMA: ${migrationStatus.pending.length} migrasi lokal belum diterapkan: ${migrationStatus.pending.join(", ")}\nJalankan: npm run db:local:migrate\n`
+    );
+  } else {
+    console.log("Migrasi lokal sudah sinkron.");
+  }
+} catch (error) {
+  console.warn(
+    `\nPERINGATAN SKEMA: status migrasi lokal tidak dapat diperiksa. ${error instanceof Error ? error.message : "Unknown error"}\n`
+  );
+}
+
+// Parse extra argv: convert a bare number into --port <n> so
+// `npm run dev -- 3030` works the same as `npm run dev -- --port 3030`.
+const extraArgs = process.argv.slice(2);
+const parsedArgs = [];
+for (let i = 0; i < extraArgs.length; i++) {
+  const arg = extraArgs[i];
+  if (/^\d+$/.test(arg) && !parsedArgs.includes("--port") && !parsedArgs.includes("-p")) {
+    parsedArgs.push("--port", arg);
+  } else {
+    parsedArgs.push(arg);
+  }
+}
+
 const nextProcess = startChild(process.execPath, [
   resolve("node_modules/next/dist/bin/next"),
   "dev",
-  ...process.argv.slice(2),
+  ...parsedArgs,
 ]);
 
 nextProcess.once("exit", (code) => {
