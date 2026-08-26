@@ -726,7 +726,10 @@ export function KaryawanClient({
                   <Button type="button" variant="outline" onClick={() => setPasswordTarget(null)}>
                     Tutup
                   </Button>
-                  <Button type="button" onClick={() => void copyResetCredentials()} className="gap-1.5">
+                  <Button type="button" onClick={() => {
+                    const text = `Email: ${passwordResetSuccess.email}\nPassword: ${passwordResetSuccess.password}`;
+                    navigator.clipboard.writeText(text).then(() => toast.success("Data login disalin ke clipboard!")).catch(() => toast.error("Gagal menyalin"));
+                  }} className="gap-1.5">
                     <Copy className="size-4" />
                     Salin Data Login
                   </Button>

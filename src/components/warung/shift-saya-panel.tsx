@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 type CashBalances = { cash: number; coins: number; savings: number };
 type ShiftSession = {
   id: string; shiftName: string; startedAt: string; openingTotal: number;
-  expectedClosing: number | null; cashierUserId: string;
+  expectedClosing: number | null; cashierUserId: string; cashierName: string;
 };
 type CashMovement = {
   cashSales: number; creditSales: number; debtRepayments: number;

@@ -335,8 +335,8 @@ function FinancialRow({
 }>) {
   return (
     <View style={isHighlight ? styles.tableRowHighlight : styles.tableRow}>
-      <Text style={[styles.cell, isBold ? styles.boldCell : null, col("60%")]}>{label}</Text>
-      <Text style={[styles.cell, styles.lastCell, styles.right, isBold ? styles.boldCell : null, col("40%")]}>
+      <Text style={[styles.cell, isBold ? styles.boldCell : {}, col("60%")]}>{label}</Text>
+      <Text style={[styles.cell, styles.lastCell, styles.right, isBold ? styles.boldCell : {}, col("40%")]}>
         {typeof value === "number" ? formatCurrency(value) : value}
       </Text>
     </View>
