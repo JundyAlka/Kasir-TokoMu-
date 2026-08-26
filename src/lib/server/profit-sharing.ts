@@ -1,8 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { db, pool } from "@/db/client";
 import { notFoundError } from "@/lib/server/route-error";
-import { investorPayouts } from "@/db/schema";
+import { expenses, investorPayouts } from "@/db/schema";
 import { getJakartaMonthRange } from "@/lib/server/timezone";
+import { getOpenSession } from "@/lib/server/shift-service";
 
 export type AkadType =
   | "murabahah_bil_wakalah"
@@ -22,6 +23,7 @@ export type PeriodProfit = {
   netProfit: number;
   transactionCount: number;
   averageTicket: number;
+  profitDistribution: number;
 };
 
 export type PayoutPreview = {
@@ -135,6 +137,7 @@ export async function calculatePeriodProfit(
     cogs: number;
     expenses: number;
     transactionCount: number;
+    profitDistribution: number;
   }>(
     `
       with tx as (
@@ -155,7 +158,9 @@ export async function calculatePeriodProfit(
           and t.occurred_at < $3::timestamptz
       ),
       exp as (
-        select coalesce(sum(amount), 0)::int as expenses
+        select
+          coalesce(sum(case when is_cash_movement = false and expense_type <> 'bagi_hasil_investor' then amount else 0 end), 0)::int as expenses,
+          coalesce(sum(case when expense_type = 'bagi_hasil_investor' then amount else 0 end), 0)::int as "profitDistribution"
         from expenses
         where user_id = $1
           and created_at >= $2::timestamptz
@@ -171,6 +176,7 @@ export async function calculatePeriodProfit(
         tx.revenue,
         item_cost.cogs,
         exp.expenses,
+        exp."profitDistribution",
         salaries.total_salary as "totalSalary",
         tx.transaction_count as "transactionCount"
       from tx, item_cost, exp, salaries
@@ -178,7 +184,7 @@ export async function calculatePeriodProfit(
     [workspaceOwnerId, start, end]
   );
 
-  const row = result.rows[0] ?? { revenue: 0, cogs: 0, expenses: 0, totalSalary: 0, transactionCount: 0 };
+  const row = result.rows[0] ?? { revenue: 0, cogs: 0, expenses: 0, profitDistribution: 0, totalSalary: 0, transactionCount: 0 };
   const grossProfit = row.revenue - row.cogs;
   // Beban total adalah beban expense biasa ditambah beban gaji karyawan (snapshot saat ini)
   const expenseTotal = row.expenses + (row as any).totalSalary;
@@ -194,6 +200,7 @@ export async function calculatePeriodProfit(
     netProfit: baseProfit,
     transactionCount: row.transactionCount,
     averageTicket: row.transactionCount > 0 ? row.revenue / row.transactionCount : 0,
+    profitDistribution: row.profitDistribution,
   };
 }
 
@@ -503,6 +510,40 @@ export async function updatePayoutStatus(
 ) {
   const nextPaidAt =
     status === "dibayar" ? new Date(paidAt ?? Date.now()).toISOString() : null;
+
+  const [existing] = await db
+    .select()
+    .from(investorPayouts)
+    .where(and(eq(investorPayouts.workspaceOwnerId, workspaceOwnerId), eq(investorPayouts.id, payoutId)))
+    .limit(1);
+  if (!existing) throw notFoundError();
+
+  if (status === "dibayar" && existing.status !== "dibayar") {
+    const openShift = await getOpenSession(workspaceOwnerId);
+    if (!openShift) throw new Error("Buka shift terlebih dahulu sebelum mencatat pembayaran bagi hasil.");
+
+    return db.transaction(async (tx) => {
+      const [payout] = await tx
+        .update(investorPayouts)
+        .set({ status, paidAt: nextPaidAt, updatedAt: nowIso() })
+        .where(and(eq(investorPayouts.workspaceOwnerId, workspaceOwnerId), eq(investorPayouts.id, payoutId)))
+        .returning();
+      if (!payout) throw notFoundError();
+      await tx.insert(expenses).values({
+        id: `exp_${crypto.randomUUID().slice(0, 8)}`,
+        userId: workspaceOwnerId,
+        title: "Distribusi bagi hasil investor",
+        amount: payout.amount,
+        category: "bagi_hasil_investor",
+        expenseType: "bagi_hasil_investor",
+        investorId: payout.investorId,
+        isCashMovement: true,
+        shiftSessionId: openShift.id,
+        createdAt: nextPaidAt ?? nowIso(),
+      });
+      return payout;
+    });
+  }
 
   const [payout] = await db
     .update(investorPayouts)

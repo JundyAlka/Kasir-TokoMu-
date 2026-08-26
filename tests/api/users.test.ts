@@ -169,4 +169,47 @@ describe("users API", () => {
     expect(role.status).toBe(403);
     expect(deleted.status).toBe(403);
   });
+
+  it("resets cashier password and writes audit log, and rejects non-pimpinan", async () => {
+    const { pool } = await setupTestDb();
+    const passwordRoute = await import("@/app/api/users/[id]/password/route");
+
+    const response = await passwordRoute.POST(
+      jsonRequest("http://localhost/api/users/usr_kasir/password", {
+        password: "kasirBaru123",
+      }),
+      { params: Promise.resolve({ id: CASHIER_ID }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      password: "kasirBaru123",
+    });
+
+    const account = await pool.query(
+      `select password from "account" where "userId" = $1 and "providerId" = 'credential'`,
+      [CASHIER_ID]
+    );
+    expect(account.rows).toHaveLength(1);
+    expect(account.rows[0].password).toBeDefined();
+
+    const audit = await pool.query(
+      "select event_type from audit_logs where workspace_owner_id = $1 and event_type = 'USER_PASSWORD_RESET'",
+      [WORKSPACE_ID]
+    );
+    expect(audit.rows).toHaveLength(1);
+
+    // Non-pimpinan must be rejected
+    await setupTestDb({ role: "kasir" });
+    const kasirPasswordRoute = await import("@/app/api/users/[id]/password/route");
+    const rejected = await kasirPasswordRoute.POST(
+      jsonRequest("http://localhost/api/users/usr_kasir/password", {
+        password: "kasirBaru123",
+      }),
+      { params: Promise.resolve({ id: CASHIER_ID }) }
+    );
+    expect(rejected.status).toBe(403);
+  });
 });

@@ -16,6 +16,7 @@ type AssetCapitalSummary = {
   activeReceivables: number;
   investorMoneyCapital: number;
   consignmentCapital: number;
+  dailyConsignmentLiability: number;
 };
 
 const emptySummary: AssetCapitalSummary = {
@@ -23,6 +24,7 @@ const emptySummary: AssetCapitalSummary = {
   activeReceivables: 0,
   investorMoneyCapital: 0,
   consignmentCapital: 0,
+  dailyConsignmentLiability: 0,
 };
 
 // ExpenseRecordDialog moved to pengeluaran-restok-view.tsx
@@ -30,6 +32,7 @@ const emptySummary: AssetCapitalSummary = {
 export function LaporanAsetView() {
   const [summary, setSummary] = useState<AssetCapitalSummary>(emptySummary);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -49,7 +52,7 @@ export function LaporanAsetView() {
       } catch (error) {
         if (!active) return;
         toast.error(error instanceof Error ? error.message : "Gagal memuat laporan aset.");
-        setSummary(emptySummary);
+        setLoadFailed(true);
       } finally {
         if (active) setIsLoading(false);
       }
@@ -67,32 +70,34 @@ export function LaporanAsetView() {
 
   return (
     <div className="w-full space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <section className="grid gap-4 grid-cols-2 md:grid-cols-4">
+      <section className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         <StatCard
           title="Total Modal Barang"
-          value={formatCompactCurrency(summary.inventoryCapital)}
+          value={formatCurrency(summary.inventoryCapital)}
           description="Nilai beli total semua stok aktif."
-
+        />
+        <StatCard
+          title="Hutang Titipan Harian"
+          value={loadFailed ? "Gagal dimuat" : formatCurrency(summary.dailyConsignmentLiability)}
+          description="Kewajiban mitra sales harian, bukan modal."
+          tone="warn"
         />
         <StatCard
           title="Piutang Aktif"
-          value={formatCompactCurrency(summary.activeReceivables)}
+          value={formatCurrency(summary.activeReceivables)}
           description="Uang di luar dari tagihan pelanggan."
           tone="accent"
-
         />
         <StatCard
           title="Modal Uang Investor"
-          value={formatCompactCurrency(summary.investorMoneyCapital)}
+          value={formatCurrency(summary.investorMoneyCapital)}
           description="Total uang disuntikkan ke toko."
-
         />
         <StatCard
           title="Modal Barang Titipan"
-          value={formatCompactCurrency(summary.consignmentCapital)}
+          value={formatCurrency(summary.consignmentCapital)}
           description="Nilai beli dari produk konsinyasi."
           tone="warn"
-
         />
       </section>
 
@@ -118,7 +123,7 @@ export function LaporanAsetView() {
               <p className="mt-1 font-heading text-4xl font-bold tracking-tight text-primary">
                 {isLoading ? (
                   <Loader2 className="size-6 animate-spin text-primary mt-2" />
-                ) : (
+                ) : loadFailed ? "Gagal memuat data" : (
                   formatCurrency(totalAssets)
                 )}
               </p>
@@ -164,7 +169,7 @@ export function LaporanAsetView() {
               <p className="mt-1 font-heading text-4xl font-bold tracking-tight">
                 {isLoading ? (
                   <Loader2 className="size-6 animate-spin text-muted-foreground mt-2" />
-                ) : (
+                ) : loadFailed ? "Gagal memuat data" : (
                   formatCurrency(totalCapital)
                 )}
               </p>
@@ -184,6 +189,13 @@ export function LaporanAsetView() {
                   <span className="text-sm font-medium text-foreground/80">Modal Barang Titipan</span>
                 </div>
                 <span className="font-semibold">{formatCurrency(summary.consignmentCapital)}</span>
+              </div>
+              <div className="flex items-center justify-between pt-3">
+                <div className="flex items-center gap-2">
+                  <HandCoins className="size-4 text-red-500/70" />
+                  <span className="text-sm font-medium text-foreground/80">Hutang Titipan Harian (Kewajiban)</span>
+                </div>
+                <span className="font-semibold text-red-600">{formatCurrency(summary.dailyConsignmentLiability)}</span>
               </div>
             </div>
           </CardContent>

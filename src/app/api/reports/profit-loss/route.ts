@@ -1,31 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUser } from "@/lib/server/app-service";
-import { calculatePeriodProfit } from "@/lib/server/profit-sharing";
-import { getPeriodRange } from "@/lib/server/reporting";
+import { getReportRollupByMode } from "@/lib/server/monthly-report-service";
 import { handleRouteError } from "@/lib/server/route-error";
 import { requireRoutePolicy } from "@/lib/server/route-policy";
 
 export const runtime = "nodejs";
 
-function parsePeriod(value: string | null) {
-  const match = /^(\d{4})-(\d{2})$/.exec(value ?? "");
-  if (!match) {
-    throw new Error("Format periode harus YYYY-MM.");
-  }
-
-  return getPeriodRange(Number(match[1]), Number(match[2]));
-}
-
 export async function GET(request: NextRequest) {
   try {
     await requireRoutePolicy("/api/reports/profit-loss", "GET");
     const { workspaceOwnerId } = await getRequestUser();
-    const range = parsePeriod(request.nextUrl.searchParams.get("period"));
-    const summary = await calculatePeriodProfit(workspaceOwnerId, range.start, range.end);
+    const modeParam = request.nextUrl.searchParams.get("range");
+    const mode = modeParam === "harian" || modeParam === "mingguan" ? modeParam : "bulanan";
+    const value = mode === "bulanan" ? request.nextUrl.searchParams.get("period") : request.nextUrl.searchParams.get("date");
+    if (!value) throw new Error("Periode laporan wajib diisi.");
+    const summary = await getReportRollupByMode(workspaceOwnerId, mode, value);
 
     return NextResponse.json({
-      periodStart: range.start,
-      periodEnd: range.end,
+      mode,
       ...summary,
     });
   } catch (error) {

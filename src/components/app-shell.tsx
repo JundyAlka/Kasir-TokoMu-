@@ -38,7 +38,7 @@ const navigation = [
   { href: "/buku-hutang", label: "Buku Hutang", icon: Wallet, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/investor", label: "Investor", icon: Landmark, roles: ["pimpinan", "pengelola_keuangan"] },
   { href: "/bagi-hasil", label: "Bagi Hasil", icon: HandCoins, roles: ["pimpinan", "pengelola_keuangan"] },
-  { href: "/laporan", label: "Laporan", icon: FileChartColumn, roles: ["pimpinan", "pengelola_keuangan"] },
+  { href: "/laporan", label: "Laporan", icon: FileChartColumn, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/laporan-pcm", label: "Laporan PCM", icon: ScrollText, roles: ["pimpinan"] },
   { href: "/pengaturan", label: "Pengaturan", icon: Settings2, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/pengaturan/karyawan", label: "Kelola Karyawan", icon: UserCog, roles: ["pimpinan"] },
@@ -77,6 +77,7 @@ export function AppShell({
   const [isResizing, setIsResizing] = useState(false);
   const [hasPendingMonthlyReport, setHasPendingMonthlyReport] = useState(false);
   const [hasPendingPcmReport, setHasPendingPcmReport] = useState(false);
+  const [pendingPcmPeriod, setPendingPcmPeriod] = useState<string | null>(null);
   const unsavedTransactionsRef = useRef(false);
   const mainRef = useRef<HTMLElement>(null);
 
@@ -103,71 +104,58 @@ export function AppShell({
     let refetchTimer: ReturnType<typeof setTimeout> | null = null;
 
     function fetchReportsStatus() {
+      if (role === "kasir") {
+        setHasPendingMonthlyReport(false);
+        setHasPendingPcmReport(false);
+        return;
+      }
+
       const ts = Date.now();
-      Promise.all([
-        fetch(`/api/reports/monthly?t=${ts}`, { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)).catch(() => null),
-        fetch(`/api/reports/monthly-pcm?t=${ts}`, { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)).catch(() => null),
-      ]).then(([monthlyData, pcmData]) => {
+      fetch(`/api/reports/monthly?t=${ts}`, { cache: "no-store" }).then((res) => (res.ok ? res.json() : null)).catch(() => null).then((monthlyData) => {
         if (!mounted) return;
 
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
+        const currentPeriodStr = `${currentYear}-${String(currentMonth).padStart(2, "0")}`;
 
         const currentSnapshot = monthlyData?.reports?.find((r: any) =>
           r.periodYear === currentYear && r.periodMonth === currentMonth
         );
-        const currentPcm = pcmData?.reports?.find((r: any) =>
-          r.periodYear === currentYear && r.periodMonth === currentMonth
-        );
-
         // The sidebar reminder is intentionally quiet until H-2 at month end.
         const inReportReminderWindow = isReportReminderWindow(now);
+        const staleSnapshotPeriod = monthlyData?.notifications?.snapshotOutdatedPeriods?.find((p: string) => p === currentPeriodStr) ?? null;
+        const stalePcmPeriod = monthlyData?.notifications?.pcmOutdatedPeriods?.find((p: string) => p === currentPeriodStr) ?? monthlyData?.notifications?.pcmOutdatedPeriods?.[0] ?? null;
 
-        // 1. Pending Monthly Report (/laporan):
-        const monthlyPending = inReportReminderWindow && (!currentSnapshot || unsavedTransactionsRef.current);
+        // A finalized report that changed after closing is always actionable,
+        // even outside the routine H-2 reminder window.
+        const monthlyPending = Boolean(staleSnapshotPeriod) || (inReportReminderWindow && (!currentSnapshot || unsavedTransactionsRef.current));
         setHasPendingMonthlyReport(monthlyPending);
 
-        // 2. Pending PCM Report (/laporan-pcm):
-        // Only pending if PCM report does NOT exist, OR snapshot is newer than PCM data (outdated)
-        let pcmPending = false;
-        if (!currentPcm) {
-          pcmPending = !!currentSnapshot; // if snapshot exists but no PCM, then pending
-        } else if (currentSnapshot) {
-          const snapshotData = currentSnapshot.data as any;
-          const pcmData = currentPcm.data as any;
-          const fin = pcmData?.financial;
-          
-          if (!fin) {
-            pcmPending = true;
-          } else {
-            const snapRev = Number(snapshotData?.revenue ?? 0);
-            const snapNet = Number(snapshotData?.netProfit ?? 0);
-            const pcmRev = Number(fin?.revenue ?? 0);
-            const pcmNet = Number(fin?.netProfit ?? 0);
-            if (snapRev !== pcmRev || snapNet !== pcmNet) {
-              pcmPending = true;
-            }
-          }
-        }
-        setHasPendingPcmReport(inReportReminderWindow && pcmPending);
+        // PCM becomes actionable only once its source snapshot is current.
+        setHasPendingPcmReport(Boolean(stalePcmPeriod));
+        setPendingPcmPeriod(stalePcmPeriod);
       });
     }
 
     fetchReportsStatus();
 
     function handlePcmUpdate(e: any) {
+      if (role === "kasir") {
+        setHasPendingMonthlyReport(false);
+        setHasPendingPcmReport(false);
+        return;
+      }
       if (e.detail?.action === "unsaved_changes") {
         const unsaved = !!e.detail?.hasUnsaved;
         unsavedTransactionsRef.current = unsaved;
         setHasPendingMonthlyReport(isReportReminderWindow(new Date()) && unsaved);
       } else if (e.detail?.action === "transaction_added") {
         unsavedTransactionsRef.current = true;
-        setHasPendingMonthlyReport(isReportReminderWindow(new Date()));
+        setHasPendingMonthlyReport(true);
       } else if (e.detail?.action === "snapshot_updated") {
         unsavedTransactionsRef.current = false;
         setHasPendingMonthlyReport(false);
-        setHasPendingPcmReport(isReportReminderWindow(new Date()));
       } else if (e.detail?.action === "updated" || e.detail?.action === "finalized") {
         setHasPendingPcmReport(false);
       } else if (e.detail?.action === "reopened") {
@@ -183,7 +171,7 @@ export function AppShell({
       if (refetchTimer) clearTimeout(refetchTimer);
       window.removeEventListener("pcm-reports-updated", handlePcmUpdate);
     };
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -357,10 +345,14 @@ export function AppShell({
                 ? pathname === item.href
                 : pathname.startsWith(`${item.href}/`);
 
+              const href = item.href === "/laporan-pcm" && pendingPcmPeriod
+                ? `${item.href}?period=${encodeURIComponent(pendingPcmPeriod)}`
+                : item.href;
+
               return (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={href}
                   title={item.label}
                   className={cn(
                     "relative flex items-center gap-2.5 rounded-xl text-xs font-medium transition-colors sm:text-sm 2xl:rounded-2xl",
@@ -381,7 +373,7 @@ export function AppShell({
                     </span>
                   )}
                   {/* Badge Notifikasi 1: Laporan Bulanan (/laporan) */}
-                  {hasPendingMonthlyReport && item.href === "/laporan" && (
+                  {hasPendingMonthlyReport && role !== "kasir" && item.href === "/laporan" && (
                     <>
                       {/* Expanded Pill Badge */}
                       <span className={cn(
@@ -411,7 +403,7 @@ export function AppShell({
                   )}
 
                   {/* Badge Notifikasi 2: Laporan PCM (/laporan-pcm) */}
-                  {hasPendingPcmReport && item.href === "/laporan-pcm" && (
+                  {hasPendingPcmReport && role !== "kasir" && item.href === "/laporan-pcm" && (
                     <>
                       {/* Expanded Pill Badge */}
                       <span className={cn(
@@ -512,10 +504,10 @@ export function AppShell({
                 </span>
                 <span className="truncate">{item.label}</span>
                 {/* Red dot for laporan */}
-                {hasPendingMonthlyReport && item.href === "/laporan" && (
+                {hasPendingMonthlyReport && role !== "kasir" && item.href === "/laporan" && (
                   <span className="absolute top-1 right-3 size-2 rounded-full bg-rose-500" />
                 )}
-                {hasPendingPcmReport && item.href === "/laporan-pcm" && (
+                {hasPendingPcmReport && role !== "kasir" && item.href === "/laporan-pcm" && (
                   <span className="absolute top-1 right-3 size-2 rounded-full bg-rose-500" />
                 )}
               </Link>

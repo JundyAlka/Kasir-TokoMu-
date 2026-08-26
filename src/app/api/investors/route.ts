@@ -14,6 +14,7 @@ const InvestorCreateSchema = z
     whatsapp: z.string().trim().default(""),
     address: z.string().trim().default(""),
     notes: z.string().trim().default(""),
+    partnerType: z.enum(["investor_uang", "titipan_bagihasil", "sales_harian"]).default("investor_uang"),
   })
   .strict();
 
@@ -24,7 +25,9 @@ export async function GET(request: NextRequest) {
     const statusParam = request.nextUrl.searchParams.get("status");
     const status =
       statusParam === "inactive" || statusParam === "all" ? statusParam : "active";
-    const investors = await listInvestors(workspaceOwnerId, { status });
+    const partnerTypeParam = request.nextUrl.searchParams.get("partnerType");
+    const partnerType = partnerTypeParam === "titipan_bagihasil" || partnerTypeParam === "sales_harian" || partnerTypeParam === "investor_uang" ? partnerTypeParam : undefined;
+    const investors = await listInvestors(workspaceOwnerId, { status, partnerType });
     return NextResponse.json({ investors });
   } catch (error) {
     return handleRouteError(error, "Gagal memuat daftar investor.");

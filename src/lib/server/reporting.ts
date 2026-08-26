@@ -516,7 +516,7 @@ export async function getKasbonDetail(
     select
       coalesce(sum(amount), 0)::text as "totalOutstanding",
       count(distinct borrower_name)::text as "debtorCount",
-      min(due_date)::text as "nearestDue"
+      min(due_date) as "nearestDue"
     from debts
     where user_id = $1
       and is_paid = 0
@@ -540,6 +540,7 @@ export async function getKasbonDetail(
     from debts
     where user_id = $1
       and is_paid = 0
+      and due_date is not null
       and due_date < now()
     `,
     [workspaceOwnerId]
@@ -584,6 +585,7 @@ export type AssetCapitalSummary = {
   activeReceivables: number;
   investorMoneyCapital: number;
   consignmentCapital: number;
+  dailyConsignmentLiability: number;
 };
 
 export async function getAssetCapitalSummary(workspaceOwnerId: string): Promise<AssetCapitalSummary> {
@@ -605,25 +607,52 @@ export async function getAssetCapitalSummary(workspaceOwnerId: string): Promise<
     [workspaceOwnerId]
   );
 
-  const investmentsResult = await pool.query<{ 
-    investorMoneyCapital: string;
-    consignmentCapital: string;
-  }>(
+  const investmentsResult = await pool.query<{ investorMoneyCapital: string }>(
     `
     select 
-      coalesce(sum(case when type = 'uang' then amount else 0 end), 0)::text as "investorMoneyCapital",
-      coalesce(sum(case when type = 'barang_titip_jual' then unit_count * unit_cost else 0 end), 0)::text as "consignmentCapital"
-    from investments
-    where workspace_owner_id = $1 and is_active = 1
+      coalesce(sum(i.amount), 0)::text as "investorMoneyCapital"
+    from investments i join investors inv on inv.id = i.investor_id
+    where i.workspace_owner_id = $1 and i.is_active = 1 and i.type = 'uang'
+      and inv.workspace_owner_id = $1 and inv.partner_type = 'investor_uang'
     `,
     [workspaceOwnerId]
   );
 
+  const [legacyCapitalResult, intakeCapitalResult, dailyLiabilityResult] = await Promise.all([
+    pool.query<{ investorId: string; amount: string }>(
+      `select i.investor_id as "investorId", coalesce(sum(coalesce(i.amount, i.unit_count * i.unit_cost)), 0)::text as amount
+       from investments i join investors inv on inv.id = i.investor_id and inv.workspace_owner_id = i.workspace_owner_id
+       where i.workspace_owner_id = $1 and i.is_active = 1 and inv.partner_type = 'titipan_bagihasil'
+         and i.type = 'barang_titip_jual'
+       group by i.investor_id`,
+      [workspaceOwnerId]
+    ),
+    pool.query<{ investorId: string; amount: string }>(
+      `select ti.investor_id as "investorId", coalesce(sum((ti.qty_in - ti.qty_sold) * ti.unit_cost), 0)::text as amount
+       from titipan_intakes ti join investors inv on inv.id = ti.investor_id and inv.workspace_owner_id = ti.user_id
+       where ti.user_id = $1 and inv.partner_type = 'titipan_bagihasil'
+       group by ti.investor_id`,
+      [workspaceOwnerId]
+    ),
+    pool.query<{ amount: string }>(
+      `select coalesce(sum(greatest(0, ti.qty_sold * ti.unit_cost - ti.settled_amount)), 0)::text as amount
+       from titipan_intakes ti join investors inv on inv.id = ti.investor_id and inv.workspace_owner_id = ti.user_id
+       where ti.user_id = $1 and inv.partner_type = 'sales_harian'`,
+      [workspaceOwnerId]
+    ),
+  ]);
+  const legacyInvestorIds = new Set(legacyCapitalResult.rows.map((row) => row.investorId));
+  const consignmentCapital =
+    legacyCapitalResult.rows.reduce((total, row) => total + Number(row.amount), 0) +
+    intakeCapitalResult.rows
+      .filter((row) => !legacyInvestorIds.has(row.investorId))
+      .reduce((total, row) => total + Number(row.amount), 0);
   return {
     inventoryCapital: Number(inventoryResult.rows[0]?.inventoryCapital ?? 0),
     activeReceivables: Number(debtsResult.rows[0]?.activeReceivables ?? 0),
     investorMoneyCapital: Number(investmentsResult.rows[0]?.investorMoneyCapital ?? 0),
-    consignmentCapital: Number(investmentsResult.rows[0]?.consignmentCapital ?? 0),
+    consignmentCapital,
+    dailyConsignmentLiability: Number(dailyLiabilityResult.rows[0]?.amount ?? 0),
   };
 }
 
@@ -659,7 +688,7 @@ export async function getBottomProductsForPeriod(
         group by ti.product_id
       ) sales on sales.product_id = p.id
       where p.user_id = $1
-      group by p.id, p.name
+      group by p.id, p.name, sales.sold, sales.revenue
       order by sold asc, revenue asc
       limit $4
     `,

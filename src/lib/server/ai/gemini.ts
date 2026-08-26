@@ -16,14 +16,14 @@ export type GeminiMessage =
   | { role: "system"; content: string }
   | { role: "user"; content: GeminiUserContent }
   | {
-      role: "assistant";
-      content: string | null;
-      tool_calls?: Array<{
-        id: string;
-        type: "function";
-        function: { name: string; arguments: string };
-      }>;
-    }
+    role: "assistant";
+    content: string | null;
+    tool_calls?: Array<{
+      id: string;
+      type: "function";
+      function: { name: string; arguments: string };
+    }>;
+  }
   | { role: "tool"; tool_call_id: string; content: string; name?: string };
 
 export type GeminiToolDef = {
@@ -200,23 +200,23 @@ async function tryCallGeminiAuthKey(
 
   const body = input.previousInteractionId
     ? {
-        model,
-        previous_interaction_id: input.previousInteractionId,
-        input: toolResults.map((message) => ({
-          type: "function_result",
-          name: message.name ?? "tool_result",
-          call_id: message.tool_call_id,
-          result: [{ type: "text", text: message.content }],
-        })),
-        tools: input.tools?.map((tool) => ({ type: tool.type, ...tool.function })),
-      }
+      model,
+      previous_interaction_id: input.previousInteractionId,
+      input: toolResults.map((message) => ({
+        type: "function_result",
+        name: message.name ?? "tool_result",
+        call_id: message.tool_call_id,
+        result: [{ type: "text", text: message.content }],
+      })),
+      tools: input.tools?.map((tool) => ({ type: tool.type, ...tool.function })),
+    }
     : {
-        model,
-        ...(systemInstruction ? { system_instruction: systemInstruction } : {}),
-        input: latestUser ? interactionInput(latestUser.content) : "",
-        tools: input.tools?.map((tool) => ({ type: tool.type, ...tool.function })),
-        generation_config: { temperature: input.temperature ?? 0.2 },
-      };
+      model,
+      ...(systemInstruction ? { system_instruction: systemInstruction } : {}),
+      input: latestUser ? interactionInput(latestUser.content) : "",
+      tools: input.tools?.map((tool) => ({ type: tool.type, ...tool.function })),
+      generation_config: { temperature: input.temperature ?? 0.2 },
+    };
 
   const response = await fetch(GOOGLE_INTERACTIONS_URL, {
     method: "POST",

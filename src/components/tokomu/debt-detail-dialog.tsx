@@ -159,8 +159,7 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
         method: "PATCH",
         body: JSON.stringify(payload),
       });
-      setDetail(response.debt);
-      onDebtUpdated(response.debt);
+      await refreshDetail(response.debt);
       setEditingDueDate(false);
       toast.success("Jatuh tempo berhasil diubah.");
     } catch (error) {
@@ -307,7 +306,7 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
 
             <section className="grid gap-3">
               <h4 className="font-heading text-lg font-semibold">Daftar barang</h4>
-              {detail.items.length > 0 ? (
+              {(detail.items?.length ?? 0) > 0 ? (
                 <div className="overflow-x-auto rounded-[18px] border border-border/60">
                   <Table className="min-w-[520px]">
                   <TableHeader>
@@ -319,7 +318,7 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {detail.items.map((item) => (
+                    {(detail.items ?? []).map((item) => (
                       <TableRow key={item.id}>
                         <TableCell>{item.name}</TableCell>
                         <TableCell className="text-right">{item.quantity}</TableCell>
@@ -337,9 +336,9 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
 
             <section className="grid gap-3">
               <h4 className="font-heading text-lg font-semibold">Riwayat pembayaran</h4>
-              {detail.payments.length > 0 ? (
+              {(detail.payments?.length ?? 0) > 0 ? (
                 <div className="grid gap-2">
-                  {detail.payments.map((payment) => (
+                  {(detail.payments ?? []).map((payment) => (
                     <div key={payment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-border/70 p-3">
                       <div>
                         <p className="font-medium">{formatCurrency(payment.amount)}</p>

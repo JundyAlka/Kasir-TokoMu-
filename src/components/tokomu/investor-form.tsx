@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function InvestorForm() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export function InvestorForm() {
     whatsapp: "",
     address: "",
     notes: "",
+    partnerType: "investor_uang",
   });
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -59,6 +61,12 @@ export function InvestorForm() {
       </CardHeader>
       <CardContent>
         <form className="grid gap-4" onSubmit={(event) => void handleSubmit(event)}>
+          <div className="grid gap-2">
+            <Label>Jenis mitra</Label>
+            <Select value={draft.partnerType} onValueChange={(partnerType) => setDraft((current) => ({ ...current, partnerType: partnerType ?? "investor_uang" }))}>
+              <SelectTrigger className="h-11 rounded-2xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="investor_uang">Investor uang</SelectItem><SelectItem value="titipan_bagihasil">Titipan bagi hasil</SelectItem><SelectItem value="sales_harian">Sales harian</SelectItem></SelectContent>
+            </Select>
+          </div>
           <div className="grid gap-2">
             <Label htmlFor="investor-name">Nama investor</Label>
             <Input

@@ -65,9 +65,17 @@ function applySchema(mem: TestDb) {
     mem.public.none(stmt);
   }
 
+  // pg-mem does not apply ADD COLUMN IF NOT EXISTS for this legacy table.
+  mem.public.none(`ALTER TABLE "investors" ADD COLUMN "partner_type" text NOT NULL DEFAULT 'investor_uang'`);
+
   for (const fileName of [
     "20260810160920_transaction-occurred-at.sql",
     "20260810163000_transaction-import-batches.sql",
+    "20260813133000_shift-daily-reporting.sql",
+    "20260813150000_import-adjustments-and-historical-shifts.sql",
+    "20260813153000_shift-bound-debts-and-kas-movements.sql",
+    "20260813153001_partner-type-backfill.sql",
+    "20260813153002_product-aliases-consignment.sql",
   ]) {
     for (const statement of sqlFromInsforgeMigration(fileName)) {
       mem.public.none(statement);
@@ -290,10 +298,17 @@ describe("Workspace isolation", () => {
   });
 
   it("debts created in workspace A are invisible to workspace B", async () => {
-    await setupIsolationDb();
+    const { pool } = await setupIsolationDb();
     const { createDebt, getBootstrapState } = await import(
       "@/lib/server/app-service"
     );
+    const { openShift } = await import("@/lib/server/shift-service");
+    await pool.query(
+      `insert into shifts (id, workspace_owner_id, name, start_time, end_time, is_active, created_at)
+       values ('shift_debt_a', $1, 'Shift A', '00:00', '23:59', 1, '2026-06-10T00:00:00.000Z')`,
+      [OWNER_A]
+    );
+    await openShift(OWNER_A, OWNER_A, "shift_debt_a", { cash: 0, coins: 0, savings: 0, openedAt: "2026-06-10T00:00:00.000Z" });
 
     // Create a debt in workspace A
     await createDebt(OWNER_A, {

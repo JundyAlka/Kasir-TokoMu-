@@ -18,8 +18,9 @@ describe("transaction import UI rules", () => {
     expect(canContinueTransactionImport(0, 1, true)).toBe(true);
   });
 
-  it("marks every finance URL as restricted for cashier while keeping POS paths available", () => {
-    expect(isCashierRestrictedPath("kasir", "/laporan")).toBe(true);
+  it("marks finance URLs as restricted for cashier while keeping POS and laporan paths available", () => {
+    expect(isCashierRestrictedPath("kasir", "/laporan")).toBe(false);
+    expect(isCashierRestrictedPath("kasir", "/laporan-pcm")).toBe(true);
     expect(isCashierRestrictedPath("kasir", "/investor/inv_1")).toBe(true);
     expect(isCashierRestrictedPath("kasir", "/kasir")).toBe(false);
     expect(isCashierRestrictedPath("pimpinan", "/laporan")).toBe(false);

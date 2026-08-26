@@ -9,6 +9,7 @@ import {
 } from "@/lib/server/pdf-profit-loss";
 import { calculatePayouts } from "@/lib/server/profit-sharing";
 import { getPeriodRange, getTopProductsForPeriod, getBottomProductsForPeriod } from "@/lib/server/reporting";
+import { getReportRollupByMode } from "@/lib/server/monthly-report-service";
 import { handleRouteError } from "@/lib/server/route-error";
 import { listWorkspaceUsers } from "@/lib/server/rbac";
 import { requireRoutePolicy } from "@/lib/server/route-policy";
@@ -111,23 +112,66 @@ export async function GET(request: Request) {
       .where(eq(storeProfiles.userId, workspaceOwnerId))
       .limit(1);
 
-    const [summary, expenseCategories, lowStockProducts, topProducts, bottomProducts, pendingRestocks, usersList] = await Promise.all([
+    const [
+      payoutSummary,
+      dailySummary,
+      expenseCategories,
+      lowStockProducts,
+      topProducts,
+      bottomProducts,
+      pendingRestocks,
+      usersList,
+      assetSummary,
+      productStatsResult,
+      paymentBreakdownResult,
+    ] = await Promise.all([
       calculatePayouts(workspaceOwnerId, period.range.start, period.range.end),
+      getReportRollupByMode(workspaceOwnerId, "bulanan", `${period.year}-${String(period.month).padStart(2, "0")}`),
       getExpenseCategories(workspaceOwnerId, period.range.start, period.range.end),
       getLowStockProducts(workspaceOwnerId),
       getTopProductsForPeriod(workspaceOwnerId, period.range.start, period.range.end, 5),
       getBottomProductsForPeriod(workspaceOwnerId, period.range.start, period.range.end, 5),
       db.select().from(restockPlans).where(and(eq(restockPlans.workspaceOwnerId, workspaceOwnerId), eq(restockPlans.isDone, 0))).orderBy(desc(restockPlans.createdAt)).limit(20),
       listWorkspaceUsers(workspaceOwnerId),
+      import("@/lib/server/reporting").then(m => m.getAssetCapitalSummary(workspaceOwnerId)),
+      pool.query<{ totalProducts: string; totalUnits: string }>(
+        `select count(*)::text as "totalProducts", coalesce(sum(stock), 0)::text as "totalUnits" from products where user_id = $1`,
+        [workspaceOwnerId]
+      ),
+      pool.query<{ paymentMethod: string; total: string; count: string }>(
+        `select coalesce(payment_method, 'cash') as "paymentMethod", coalesce(sum(total), 0)::text as total, count(*)::text as count
+         from transactions
+         where user_id = $1 and created_at >= $2::timestamptz and created_at < $3::timestamptz
+         group by payment_method`,
+        [workspaceOwnerId, period.range.start, period.range.end]
+      ),
     ]);
+
     const activeEmployees = usersList.filter(u => u.isActive && u.monthlySalary > 0);
+    const totalActiveProducts = Number(productStatsResult.rows[0]?.totalProducts ?? 0);
+    const totalStockUnits = Number(productStatsResult.rows[0]?.totalUnits ?? 0);
+    const totalAssets = assetSummary.inventoryCapital + assetSummary.activeReceivables;
+
+    const salesChannels = paymentBreakdownResult.rows.map((r) => ({
+      method: r.paymentMethod === "cash" ? "Tunai (Cash)" : r.paymentMethod === "kasbon" ? "Kasbon (Piutang)" : r.paymentMethod === "transfer" ? "Transfer Bank" : r.paymentMethod === "qris" ? "QRIS" : r.paymentMethod,
+      count: Number(r.count || 0),
+      total: Number(r.total || 0),
+    }));
+
+    const totalExpense = dailySummary.expenseTotal || expenseCategories.reduce((sum, item) => sum + item.amount, 0);
+    const enrichedExpenseCategories = expenseCategories.map((item) => ({
+      ...item,
+      percentage: totalExpense > 0 ? `${Math.round((item.amount / totalExpense) * 1000) / 10}%` : "0%",
+    }));
+
     const ownerNotes =
       requestedNotes.length > 0
         ? requestedNotes
         : [
-            `Laba bersih ${period.label} tercatat ${formatCurrency(summary.netProfit)}.`,
-            `Laba kotor ${formatCurrency(summary.grossProfit)} setelah HPP ${formatCurrency(summary.cogs)}.`,
-            "Laporan divalidasi dan dicetak secara otomatis dari sistem.",
+            `Laba bersih ${period.label} tercatat ${formatCurrency(dailySummary.netProfit)} dengan omzet penjualan ${formatCurrency(dailySummary.revenue)}.`,
+            `Total modal stok aktif toko senilai ${formatCurrency(assetSummary.inventoryCapital)} dari ${totalActiveProducts} SKU barang (${totalStockUnits} unit).`,
+            `Piutang kasbon pelanggan aktif tercatat ${formatCurrency(assetSummary.activeReceivables)}.`,
+            "Laporan kinerja dan keuangan dicetak dan divalidasi secara otomatis dari sistem TokoMu.",
           ];
 
     const data: ProfitLossPdfData = {
@@ -139,30 +183,43 @@ export async function GET(request: Request) {
       },
       identity: {
         storeName: profile?.storeName ?? "TokoMu",
-        storeTagline: profile?.storeTagline ?? "",
-        storeAddress: profile?.storeAddress ?? "",
+        storeTagline: profile?.storeTagline ?? "Toko Amal Usaha PCM Muhammadiyah Grabag - Purworejo",
+        storeAddress: profile?.storeAddress ?? "Kratonrejo",
         city: profile?.city ?? "",
       },
       financial: {
-        revenue: summary.revenue,
-        cogs: summary.cogs,
-        grossProfit: summary.grossProfit,
-        expenseTotal: summary.expenseTotal,
-        netProfit: summary.netProfit,
-        transactionCount: summary.transactionCount,
-        averageTicket: Math.round(summary.averageTicket),
+        revenue: dailySummary.revenue,
+        cogs: dailySummary.cogs,
+        grossProfit: dailySummary.grossProfit,
+        expenseTotal: dailySummary.expenseTotal,
+        netProfit: dailySummary.netProfit,
+        profitDistribution: dailySummary.profitDistribution,
+        transactionCount: dailySummary.transactionCount,
+        averageTicket: dailySummary.averageTicket,
       },
-      expenseCategories,
+      assetsAndCapital: {
+        inventoryCapital: assetSummary.inventoryCapital,
+        activeReceivables: assetSummary.activeReceivables,
+        investorMoneyCapital: assetSummary.investorMoneyCapital,
+        consignmentCapital: assetSummary.consignmentCapital,
+        dailyConsignmentLiability: assetSummary.dailyConsignmentLiability,
+        totalAssets,
+        totalActiveProducts,
+        totalStockUnits,
+      },
+      salesChannels,
+      expenseCategories: enrichedExpenseCategories,
       topProducts,
       bottomProducts,
       ownerNotes,
-      payouts: summary.payouts,
+      payouts: payoutSummary.payouts,
       restockPlans: pendingRestocks,
       lowStockProducts,
       employeeSalaries: activeEmployees,
+      dailyReports: dailySummary.dailyReports,
     };
     const stream = await renderToStream(ProfitLossReportDocument({ data }));
-    const filename = `laporan-untung-rugi-${cleanFilename(period.label)}.pdf`;
+    const filename = `laporan-keuangan-bulanan-${cleanFilename(period.label)}.pdf`;
 
     return new Response(Readable.toWeb(stream as Readable) as ReadableStream, {
       headers: {

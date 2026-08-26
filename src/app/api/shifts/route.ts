@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createShift, listShiftSettings } from "@/lib/server/shift-service";
+import { createShift, listShiftSettings, listShifts } from "@/lib/server/shift-service";
 import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { handleRouteError } from "@/lib/server/route-error";
 
@@ -15,9 +15,32 @@ const ShiftSchema = z
   })
   .strict();
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { workspaceOwnerId } = await requireRoutePolicy("/api/shifts", "GET");
+    const { role, userId, workspaceOwnerId } = await requireRoutePolicy("/api/shifts", "GET");
+    const start = request.nextUrl.searchParams.get("start");
+    const end = request.nextUrl.searchParams.get("end");
+
+    if (start && end) {
+      const shifts = await listShifts(
+        workspaceOwnerId,
+        { start, end },
+        role === "kasir" ? userId : undefined
+      );
+      return NextResponse.json({ shifts });
+    }
+
+    if (role === "kasir") {
+      const endDate = new Date();
+      const startDate = new Date(endDate.getTime() - 31 * 24 * 60 * 60 * 1000);
+      const shifts = await listShifts(
+        workspaceOwnerId,
+        { start: startDate.toISOString(), end: endDate.toISOString() },
+        userId
+      );
+      return NextResponse.json({ shifts });
+    }
+
     const data = await listShiftSettings(workspaceOwnerId);
     return NextResponse.json(data);
   } catch (error) {

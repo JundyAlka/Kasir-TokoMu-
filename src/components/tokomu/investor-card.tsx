@@ -15,6 +15,7 @@ export type InvestorSummary = {
   whatsapp: string;
   address: string;
   notes: string;
+  partnerType: string;
   isActive: number;
   investmentCount: number;
   totalModal: number;

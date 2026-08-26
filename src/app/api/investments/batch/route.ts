@@ -23,10 +23,12 @@ const SingleInvestmentSchema = z
     unitCount: z.unknown().optional(),
     unitCost: z.unknown().optional(),
     profitSharePerUnitPct: z.unknown().optional(),
+    profitSharePerUnitAmount: z.unknown().optional(),
     startDate: z.unknown().optional(),
     endDate: z.unknown().optional(),
   })
   .strict();
+
 
 const BatchInvestmentSchema = z.object({
   investorId: z.string().trim().min(1, "Investor wajib diisi."),

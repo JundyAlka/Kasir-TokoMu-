@@ -1,6 +1,3 @@
-import { redirectCashierFromFinancePage } from "@/lib/server/page-access";
-
-export default async function ReportsLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  await redirectCashierFromFinancePage();
+export default function ReportsLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return children;
 }

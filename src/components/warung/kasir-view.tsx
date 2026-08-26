@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import QRCode from "qrcode";
 import {
   BanknoteArrowDown,
@@ -19,6 +20,7 @@ import {
   Smartphone,
   Sparkles,
   UserRoundCheck,
+  WalletCards,
   Wheat,
   X,
 } from "lucide-react";
@@ -558,6 +560,7 @@ export function KasirView() {
   const [paidAmountInput, setPaidAmountInput] = useState("");
   const [paymentInfoOpen, setPaymentInfoOpen] = useState(false);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const productColumnRef = useRef<HTMLDivElement>(null);
   const [workspaceWidth, setWorkspaceWidth] = useState(0);
@@ -581,6 +584,26 @@ export function KasirView() {
     observer.observe(element);
 
     return () => observer.disconnect();
+  }, []);
+
+  async function refreshShiftGate() {
+    try {
+      const response = await fetch("/api/shifts/current", { cache: "no-store" });
+      const data = await response.json().catch(() => null) as { session?: { id: string } | null } | null;
+      const isOpen = Boolean(response.ok && data?.session);
+      setHasOpenShift(isOpen);
+      return isOpen;
+    } catch {
+      setHasOpenShift(false);
+      return false;
+    }
+  }
+
+  useEffect(() => {
+    void refreshShiftGate();
+    const refresh = () => { void refreshShiftGate(); };
+    window.addEventListener("cashier-shift-updated", refresh);
+    return () => window.removeEventListener("cashier-shift-updated", refresh);
   }, []);
 
   useEffect(() => {
@@ -633,7 +656,7 @@ export function KasirView() {
     return queryMatch && categoryMatch;
   });
   const totalItems = cartLines.reduce((sum, line) => sum + line.quantity, 0);
-  const paidAmount = Math.max(0, Math.round(Number(paidAmountInput) || 0));
+  const paidAmount = Math.max(0, Math.round(Number(paidAmountInput.replace(/\D/g, "")) || 0));
   const isCashPayment = paymentMethod === "Tunai";
   const showQrisPreview = paymentMethod === "QRIS" && cartLines.length > 0;
   const needsPaymentInfo = paymentMethod === "Transfer";
@@ -653,10 +676,14 @@ export function KasirView() {
             ? "grid-cols-3"
             : "grid-cols-4";
   const canCheckout =
-    cartLines.length > 0 && (!isCashPayment || (paidAmountInput.trim() !== "" && cashShortfall === 0));
+    cartLines.length > 0 && hasOpenShift === true && (!isCashPayment || (paidAmountInput.trim() !== "" && cashShortfall === 0));
 
   async function handleCheckout() {
     try {
+      if (!(await refreshShiftGate())) {
+        toast.error("Buka shift dulu sebelum mulai jualan.");
+        return;
+      }
       const invalidStockLine = cartLines.find((line) => line.quantity > line.product.stock);
       if (invalidStockLine) {
         toast.error(`Stok ${invalidStockLine.product.name} tidak cukup.`, {
@@ -695,6 +722,7 @@ export function KasirView() {
         description: `${transaction.items.length} produk masuk ke penjualan ${paymentLabels[transaction.paymentMethod]}.`,
       });
       window.dispatchEvent(new CustomEvent("pcm-reports-updated", { detail: { action: "transaction_added" } }));
+      window.dispatchEvent(new CustomEvent("cashier-shift-updated"));
       const transactionRecordedBy = {
         userId: transaction.recordedByUserId ?? "",
         name: transaction.recordedByName || "Kasir",
@@ -780,9 +808,9 @@ export function KasirView() {
             <div>
               <CardTitle className="font-heading text-2xl">Produk siap jual</CardTitle>
               <CardDescription>
-                Semua fokus kasir ada di sini: cari produk, tap item, lalu lanjut ke keranjang.
+                Cari produk, tap item belanja, lalu proses pembayaran di keranjang.
               </CardDescription>
-              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/85 px-3 py-1.5 text-sm text-muted-foreground">
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/85 px-3 py-1.5 text-sm text-muted-foreground shadow-sm">
                 <UserRoundCheck className="size-4 text-primary" />
                 Dicatat oleh: <span className="font-medium text-foreground">{recordedBy?.name ?? "Mengikuti shift aktif"}</span>
               </div>
@@ -1022,18 +1050,29 @@ export function KasirView() {
                     size="sm"
                     className="h-7 sm:h-8 rounded-xl px-2.5 sm:px-3 text-xs sm:text-sm font-semibold"
                     disabled={cartTotal <= 0}
-                    onClick={() => setPaidAmountInput(String(cartTotal))}
+                    onClick={() =>
+                      setPaidAmountInput(
+                        cartTotal > 0 ? new Intl.NumberFormat("id-ID").format(cartTotal) : ""
+                      )
+                    }
                   >
                     Uang pas
                   </Button>
                 </div>
                 <Input
                   id="paid-amount"
-                  type="number"
-                  min={0}
+                  type="text"
                   inputMode="numeric"
                   value={paidAmountInput}
-                  onChange={(event) => setPaidAmountInput(event.target.value)}
+                  onChange={(event) => {
+                    const digits = event.target.value.replace(/\D/g, "");
+                    if (!digits) {
+                      setPaidAmountInput("");
+                      return;
+                    }
+                    const num = parseInt(digits, 10);
+                    setPaidAmountInput(new Intl.NumberFormat("id-ID").format(num));
+                  }}
                   placeholder="Masukkan nominal diterima"
                   className="h-10 sm:h-11 lg:h-12 rounded-xl lg:rounded-2xl border-border/80 bg-card text-base lg:text-lg font-semibold tabular-nums"
                 />
@@ -1076,6 +1115,22 @@ export function KasirView() {
               <p className="mt-1 font-heading text-xl sm:text-2xl font-bold tracking-tight text-primary tabular-nums">
                 {formatCurrency(cartTotal)}
               </p>
+              {hasOpenShift === false ? (
+                <div className="mt-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">
+                  <p className="font-semibold">Shift belum dibuka</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground dark:text-amber-300">
+                    Buka shift di menu Laporan (Harian & Shift) sebelum mulai transaksi kasir.
+                  </p>
+                  <Link
+                    href="/laporan?tab=harian_shift"
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    <WalletCards className="size-3.5" />
+                    Buka Shift di Laporan
+                  </Link>
+                </div>
+              ) : null}
+              {hasOpenShift === null ? <p className="mt-2 text-xs text-muted-foreground">Memeriksa status shift...</p> : null}
               {showQrisPreview ? <QrisPaymentPreview items={cartLines} total={cartTotal} settings={settings} /> : null}
               <Button
                 type="button"

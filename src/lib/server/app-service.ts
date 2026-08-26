@@ -35,6 +35,7 @@ import {
 import { AppState, Debt, DebtDetail, DebtDraft, ExpenseDraft, PaymentMethod, ProductDraft, Settings, Transaction } from "@/lib/types";
 import { getJakartaDayRange } from "@/lib/server/timezone";
 import { notFoundError } from "@/lib/server/route-error";
+import { getOpenSession } from "@/lib/server/shift-service";
 
 let initializationPromise: Promise<void> | null = null;
 const supportedPaymentMethods: PaymentMethod[] = ["Tunai", "QRIS", "Transfer"];
@@ -318,7 +319,7 @@ export async function getBootstrapState(userId: string): Promise<AppState> {
   for (const item of itemRows) {
     const existing = itemsByTransaction.get(item.transactionId) ?? [];
     existing.push({
-      productId: item.productId,
+      productId: item.productId ?? "",
       productName: item.productName,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
@@ -603,7 +604,11 @@ export async function createTransaction(
 }
 
 export async function createExpense(userId: string, draft: ExpenseDraft) {
-  const nextDraft = ExpenseCreateSchema.parse(draft);
+  // Legacy internal helper retained for AI tools and historical tests. HTTP
+  // expense writes use createShiftExpense and therefore require an open shift.
+  if (!draft.title.trim() || !Number.isInteger(draft.amount) || draft.amount <= 0) {
+    throw new Error("Data pengeluaran tidak valid.");
+  }
   const timestamp = nowIso();
   const expenseId = createId("exp");
   
@@ -612,9 +617,11 @@ export async function createExpense(userId: string, draft: ExpenseDraft) {
     .values({
       id: expenseId,
       userId,
-      title: nextDraft.title,
-      amount: nextDraft.amount,
-      category: nextDraft.category,
+      title: draft.title.trim(),
+      amount: draft.amount,
+      category: draft.category,
+      expenseType: "operasional",
+      isCashMovement: false,
       createdAt: timestamp,
     })
     .returning();
@@ -634,6 +641,8 @@ export async function createExpense(userId: string, draft: ExpenseDraft) {
 
 export async function createDebt(userId: string, draft: DebtDraft) {
   const nextDraft = DebtCreateSchema.parse(draft);
+  const openShift = await getOpenSession(userId);
+  if (!openShift) throw new Error("Buka shift terlebih dahulu sebelum mencatat kasbon.");
   const timestamp = nowIso();
   const itemDrafts = nextDraft.items.map((item) => ({
     ...item,
@@ -660,6 +669,7 @@ export async function createDebt(userId: string, draft: DebtDraft) {
         status: "aktif",
         createdAt: timestamp,
         dueDate: nextDraft.dueDate ? parseDueDate(nextDraft.dueDate) : null,
+        shiftSessionId: openShift.id,
         isPaid: 0,
         lastReminderAt: null,
       })
@@ -776,6 +786,8 @@ export async function recordDebtPayment(
     ...draft,
     note: draft.note ?? "",
   });
+  const openShift = await getOpenSession(userId);
+  if (!openShift) throw new Error("Buka shift terlebih dahulu sebelum mencatat pelunasan kasbon.");
   let updatedDebt: typeof debts.$inferSelect | null = null;
   let paymentResult: {
     id: string;
@@ -815,6 +827,7 @@ export async function recordDebtPayment(
         paidAt: nextDraft.paidAt ? parseDueDate(nextDraft.paidAt) : nowIso(),
         note: nextDraft.note,
         recordedByUserId,
+        shiftSessionId: openShift.id,
       })
       .returning();
 

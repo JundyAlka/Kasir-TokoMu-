@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createExpense, getRequestUser } from "@/lib/server/app-service";
+import { createShiftExpense } from "@/lib/server/expense-service";
 import { requireRoutePolicy } from "@/lib/server/route-policy";
 import { logEvent } from "@/lib/server/audit";
 import { handleRouteError } from "@/lib/server/route-error";
@@ -12,10 +12,9 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRoutePolicy("/api/expenses", "POST");
     const draft = ExpenseCreateSchema.parse(await request.json());
-    const { userId, workspaceOwnerId } = await getRequestUser();
-    const expense = await createExpense(workspaceOwnerId, draft);
+    const { userId, workspaceOwnerId, role } = await requireRoutePolicy("/api/expenses", "POST");
+    const expense = await createShiftExpense(workspaceOwnerId, draft, userId, role !== "kasir");
     
     await logEvent(
       { workspaceOwnerId, actorUserId: userId },
@@ -27,7 +26,7 @@ export async function POST(request: NextRequest) {
         payload: {
           title: expense.title,
           amount: expense.amount,
-          expenseCategory: expense.category,
+          expenseCategory: expense.expenseType,
         },
       }
     );
@@ -40,8 +39,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireRoutePolicy("/api/expenses", "GET");
-    const { workspaceOwnerId } = await getRequestUser();
+    const { workspaceOwnerId } = await requireRoutePolicy("/api/expenses", "GET");
     
     // Fetch last 50 expenses
     const list = await db

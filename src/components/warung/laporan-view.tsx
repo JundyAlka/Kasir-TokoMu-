@@ -4,8 +4,11 @@ import { type PointerEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
+  AlertTriangle,
+  BanknoteArrowDown,
   CalendarDays,
   Check,
+  CircleDollarSign,
   Download,
   ExternalLink,
   FileText,
@@ -17,17 +20,20 @@ import {
   Settings2,
   TableProperties,
   TrendingUp,
+  WalletCards,
 } from "lucide-react";
 import { toast } from "sonner";
-import { RoleGate } from "@/components/role-gate";
+import { RoleGate, useCurrentRole } from "@/components/role-gate";
 import { useAppState } from "@/components/providers/app-state-provider";
 import { StatCard } from "@/components/stat-card";
+import { ExpenseRecordDialog } from "@/components/warung/pengeluaran-restok-view";
 import {
   ProfitLossSummary,
   ReportSummaryDetailDialog,
   ReportSummaryMetric,
 } from "@/components/tokomu/report-summary-detail-dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -44,6 +50,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCompactCurrency, formatCurrency, formatDate } from "@/lib/format";
 import { estimateProductVelocity } from "@/lib/reporting";
@@ -62,12 +70,47 @@ const emptySummary: ProfitLossSummary = {
   grossProfit: 0,
   expenseTotal: 0,
   netProfit: 0,
+  profitDistribution: 0,
+  source: "live_transactions",
   transactionCount: 0,
   averageTicket: 0,
 };
 
 type ReportPreviewLayout = "cards" | "table";
 type TrendRange = "mingguan" | "bulanan";
+type RequestState = "loading" | "ready" | "error";
+type ShiftCashMovement = {
+  cashSales: number;
+  creditSales: number;
+  debtRepayments: number;
+  cashExpenses: number;
+  cashIn: number;
+};
+type ShiftSession = {
+  id: string;
+  shiftName: string;
+  cashierName: string;
+  cashierUserId: string;
+  startedAt: string;
+  openingCash: number;
+  openingCoins: number;
+  openingSavings: number;
+  openingTotal: number;
+  closingTotal: number | null;
+  expectedClosing: number | null;
+  variance: number | null;
+  varianceNote: string | null;
+  status: "open" | "closed";
+};
+type DailyReport = {
+  id: string;
+  reportDate: string;
+  revenue: number;
+  cogs: number;
+  expenseTotal: number;
+  netProfit: number;
+  status: "draft" | "locked";
+};
 type TrendPoint = {
   key: string;
   label: string;
@@ -566,11 +609,758 @@ function TrendRevenueChart({
   );
 }
 
+function jakartaToday() {
+  return getJakartaDateKey(new Date());
+}
+
+function ShiftMetricCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone?: "positive" | "negative";
+}) {
+  return (
+    <Card className="border-border/60 bg-card/60 backdrop-blur-sm">
+      <CardContent className="p-4">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p
+          className={cn(
+            "mt-1 text-lg font-bold tabular-nums",
+            tone === "positive" && "text-emerald-600 dark:text-emerald-400",
+            tone === "negative" && "text-destructive"
+          )}
+        >
+          {formatCurrency(value)}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function DailyShiftPanel() {
+  const role = useCurrentRole();
+  const [state, setState] = useState<RequestState>("loading");
+  const [session, setSession] = useState<ShiftSession | null>(null);
+  const [activeShift, setActiveShift] = useState<{ id: string; name: string } | null>(null);
+  const [suggestion, setSuggestion] = useState({ cash: 0, coins: 0, savings: 0 });
+  const [cashMovement, setCashMovement] = useState<ShiftCashMovement | null>(null);
+  const [hasOtherOpenShift, setHasOtherOpenShift] = useState(false);
+  const [openSessionInfo, setOpenSessionInfo] = useState<{
+    id: string;
+    shiftName: string;
+    cashierUserId: string;
+    cashierName: string;
+    startedAt: string;
+  } | null>(null);
+  const [shiftHistory, setShiftHistory] = useState<ShiftSession[]>([]);
+  const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [closeDialog, setCloseDialog] = useState(false);
+  const [kasMovementDialog, setKasMovementDialog] = useState(false);
+  const [expenseDialog, setExpenseDialog] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [openingEdited, setOpeningEdited] = useState(false);
+  const [openingReason, setOpeningReason] = useState("");
+  const [opening, setOpening] = useState({ cash: 0, coins: 0, savings: 0 });
+  const [closing, setClosing] = useState({ cash: 0, coins: 0, savings: 0 });
+  const [varianceNote, setVarianceNote] = useState("");
+  const [kasMovement, setKasMovement] = useState<{
+    fromBucket: "cash" | "coins" | "savings";
+    toBucket: "cash" | "coins" | "savings";
+    amount: number;
+    note: string;
+  }>({ fromBucket: "cash", toBucket: "savings", amount: 0, note: "" });
+
+  const range = useMemo(() => {
+    const today = jakartaToday();
+    const monthStart = `${today.slice(0, 8)}01`;
+    const month = Number(today.slice(5, 7));
+    const year = Number(today.slice(0, 4));
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    return { start: monthStart, end: `${nextYear}-${pad2(nextMonth)}-01` };
+  }, []);
+
+  async function load() {
+    setState("loading");
+    try {
+      const isFinanceOrLeadership = role === "pimpinan" || role === "pengelola_keuangan";
+      const [currentResponse, shiftsResponse, dailyResponse] = await Promise.all([
+        fetch("/api/shifts/current", { cache: "no-store" }),
+        fetch(
+          `/api/shifts?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}`,
+          { cache: "no-store" }
+        ),
+        isFinanceOrLeadership
+          ? fetch(
+              `/api/daily-reports?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}`,
+              { cache: "no-store" }
+            )
+          : Promise.resolve(null),
+      ]);
+      const current = await currentResponse.json().catch(() => null);
+      const shifts = await shiftsResponse.json().catch(() => null);
+      const daily = dailyResponse ? await dailyResponse.json().catch(() => null) : { reports: [] };
+
+      if (!currentResponse.ok || !shiftsResponse.ok || !current || !shifts) {
+        throw new Error("REQUEST_FAILED");
+      }
+      setSession(current.session ?? null);
+      setActiveShift(current.activeShift ?? null);
+      setSuggestion(current.openingSuggestion ?? { cash: 0, coins: 0, savings: 0 });
+      setCashMovement(current.cashMovement ?? null);
+      setHasOtherOpenShift(Boolean(current.hasOtherOpenShift));
+      setOpenSessionInfo(current.openSessionInfo ?? null);
+      setShiftHistory(Array.isArray(shifts.shifts) ? shifts.shifts : []);
+      setDailyReports(Array.isArray(daily?.reports) ? daily.reports : []);
+      setState("ready");
+    } catch (error) {
+      console.error("[daily-shift] load failed", error);
+      setState("error");
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    const handleShiftUpdate = () => void load();
+    window.addEventListener("cashier-shift-updated", handleShiftUpdate);
+    return () => window.removeEventListener("cashier-shift-updated", handleShiftUpdate);
+  }, [range.start, range.end, role]);
+
+  function dispatchUpdates() {
+    window.dispatchEvent(new CustomEvent("cashier-shift-updated"));
+    window.dispatchEvent(new CustomEvent("pcm-reports-updated"));
+  }
+
+  function showOpenDialog() {
+    setOpening(suggestion);
+    setOpeningEdited(false);
+    setOpeningReason("");
+    setOpenDialog(true);
+  }
+
+  function showCloseDialog() {
+    const expected =
+      (session?.openingTotal ?? 0) +
+      (cashMovement?.cashIn ?? 0) -
+      (cashMovement?.cashExpenses ?? 0);
+    setClosing({
+      cash: session?.expectedClosing ?? expected,
+      coins: 0,
+      savings: 0,
+    });
+    setVarianceNote("");
+    setCloseDialog(true);
+  }
+
+  const closingActual = closing.cash + closing.coins + closing.savings;
+  const closingExpected =
+    (session?.openingTotal ?? 0) +
+    (cashMovement?.cashIn ?? 0) -
+    (cashMovement?.cashExpenses ?? 0);
+  const closingVariance = closingActual - closingExpected;
+
+  async function handleOpen() {
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/shifts/open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shiftId: activeShift?.id,
+          openingCash: opening.cash,
+          openingCoins: opening.coins,
+          openingSavings: opening.savings,
+          openingOverrideReason: openingReason.trim() || undefined,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error ?? "Gagal membuka shift.");
+      toast.success("Shift berhasil dibuka.");
+      setOpenDialog(false);
+      dispatchUpdates();
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal membuka shift.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleClose() {
+    if (!session) return;
+    if (closingVariance !== 0 && !varianceNote.trim()) {
+      toast.error("Alasan selisih kas wajib diisi.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/shifts/close", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: session.id,
+          closingCash: closing.cash,
+          closingCoins: closing.coins,
+          closingSavings: closing.savings,
+          varianceNote: closingVariance === 0 ? undefined : varianceNote,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error ?? "Gagal menutup shift.");
+      toast.success("Shift berhasil ditutup.");
+      setCloseDialog(false);
+      dispatchUpdates();
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal menutup shift.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleKasMovement() {
+    if (kasMovement.amount <= 0 || kasMovement.fromBucket === kasMovement.toBucket) {
+      toast.error("Pilih dua pos berbeda dan isi nominal mutasi.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/kas-movements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(kasMovement),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error ?? "Gagal mencatat mutasi kas.");
+      toast.success("Mutasi kas berhasil dicatat. Total kas dan laba tidak berubah.");
+      setKasMovementDialog(false);
+      setKasMovement((current) => ({ ...current, amount: 0, note: "" }));
+      dispatchUpdates();
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal mencatat mutasi kas.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function lockToday() {
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/daily-reports/lock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportDate: jakartaToday() }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error ?? "Gagal mengunci laporan harian.");
+      toast.success("Laporan harian berhasil dikunci.");
+      dispatchUpdates();
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal mengunci laporan harian.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  if (state === "error") {
+    return (
+      <Card>
+        <CardContent className="flex min-h-64 flex-col items-center justify-center gap-3 text-center">
+          <p role="alert" className="font-medium">
+            Gagal memuat data shift, coba lagi
+          </p>
+          <Button type="button" variant="outline" onClick={() => void load()}>
+            Muat ulang
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (state === "loading") {
+    return (
+      <Card>
+        <CardContent className="flex min-h-64 items-center justify-center gap-2 text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Memuat data shift dan laporan harian...
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <ExpenseRecordDialog
+        open={expenseDialog}
+        onOpenChange={setExpenseDialog}
+        onRecorded={() => {
+          dispatchUpdates();
+          void load();
+        }}
+      />
+
+      <Card className="border-primary/25 bg-primary/5">
+        <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="rounded-2xl bg-primary/20 text-primary p-2.5 shadow-sm border border-primary/30">
+              <WalletCards className="size-5" />
+            </span>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                {session ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white dark:text-emerald-950 font-bold px-3 py-1 text-xs shadow-sm shadow-emerald-600/25">
+                    <span className="size-2 rounded-full bg-white dark:bg-emerald-950 animate-pulse" />
+                    Sedang Aktif di {session.shiftName}
+                  </span>
+                ) : (
+                  <p className="font-semibold text-foreground">
+                    {activeShift
+                      ? `Belum ada shift terbuka. Jadwal saat ini: ${activeShift.name}.`
+                      : "Tidak ada jadwal shift aktif saat ini."}
+                  </p>
+                )}
+                {session && (
+                  <span className="text-xs font-medium text-muted-foreground">
+                    (Dibuka {new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit" }).format(new Date(session.startedAt))} oleh {session.cashierName})
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {session
+                  ? `Sesi shift ${session.shiftName} sedang berjalan. Kas masuk, pengeluaran kas, dan transaksi penjualan langsung tercatat ke shift ini.`
+                  : "Buka shift untuk mengaktifkan sesi kasir dan mencatat transaksi penjualan."}
+              </p>
+            </div>
+          </div>
+          {session ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setExpenseDialog(true)}
+              >
+                <BanknoteArrowDown className="size-4" />
+                Catat Pengeluaran
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setKasMovementDialog(true)}
+              >
+                Mutasi Kas
+              </Button>
+              <Button type="button" onClick={showCloseDialog}>
+                <CircleDollarSign className="size-4" />
+                Tutup Shift
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              size="lg"
+              disabled={isSaving}
+              onClick={showOpenDialog}
+            >
+              <WalletCards className="size-4" />
+              Buka Shift
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {session ? (
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+          <ShiftMetricCard label="Kas awal" value={session.openingTotal} />
+          <ShiftMetricCard
+            label="Penjualan tunai"
+            value={cashMovement?.cashSales ?? 0}
+            tone="positive"
+          />
+          <ShiftMetricCard
+            label="Penjualan kasbon"
+            value={cashMovement?.creditSales ?? 0}
+          />
+          <ShiftMetricCard
+            label="Pengeluaran kas"
+            value={cashMovement?.cashExpenses ?? 0}
+            tone="negative"
+          />
+          <ShiftMetricCard
+            label="Kas seharusnya sekarang"
+            value={closingExpected}
+          />
+        </div>
+      ) : null}
+
+      <div className={cn("grid gap-6", role === "kasir" ? "grid-cols-1" : "xl:grid-cols-2")}>
+        <Card className="border-border/60 bg-card/60 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle>Riwayat Shift</CardTitle>
+            <CardDescription>Kas dan selisih setiap shift di bulan ini.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tanggal</TableHead>
+                  <TableHead>Shift</TableHead>
+                  <TableHead>Kasir</TableHead>
+                  <TableHead>Pemasukan</TableHead>
+                  <TableHead>Pengeluaran</TableHead>
+                  <TableHead>Kas akhir</TableHead>
+                  <TableHead>Selisih</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {shiftHistory.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="h-28 text-center text-muted-foreground">
+                      Belum ada riwayat shift.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  shiftHistory.map((item) => (
+                    <TableRow key={item.id} className={item.variance ? "bg-destructive/10" : ""}>
+                      <TableCell>{formatDate(item.startedAt)}</TableCell>
+                      <TableCell className="font-medium">{item.shiftName}</TableCell>
+                      <TableCell>{item.cashierName}</TableCell>
+                      <TableCell>
+                        {item.expectedClosing == null
+                          ? "-"
+                          : formatCurrency(Math.max(0, item.expectedClosing - item.openingTotal))}
+                      </TableCell>
+                      <TableCell>-</TableCell>
+                      <TableCell>
+                        {item.closingTotal == null ? "-" : formatCurrency(item.closingTotal)}
+                      </TableCell>
+                      <TableCell
+                        className={
+                          item.variance ? "font-semibold text-destructive" : "text-emerald-600"
+                        }
+                      >
+                        {item.variance == null ? "-" : formatCurrency(item.variance)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={item.status === "closed" ? "secondary" : "default"}>
+                          {item.status === "closed" ? "Ditutup" : "Terbuka"}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {role !== "kasir" ? (
+          <Card className="border-border/60 bg-card/60 backdrop-blur-sm">
+            <CardHeader className="flex-row items-start justify-between gap-3">
+              <div>
+                <CardTitle>Riwayat Harian</CardTitle>
+                <CardDescription>Omzet, HPP, beban, dan laba bersih yang telah disiapkan.</CardDescription>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                disabled={Boolean(session) || isSaving}
+                onClick={() => void lockToday()}
+              >
+                {Boolean(session) ? "Tutup shift dulu" : "Kunci Hari Ini"}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Omzet</TableHead>
+                    <TableHead>HPP</TableHead>
+                    <TableHead>Beban</TableHead>
+                    <TableHead>Laba bersih</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dailyReports.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="h-28 text-center text-muted-foreground">
+                        Belum ada laporan harian. Tutup seluruh shift lalu kunci hari.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    dailyReports.map((report) => (
+                      <TableRow key={report.id}>
+                        <TableCell>{formatDate(`${report.reportDate}T12:00:00.000Z`)}</TableCell>
+                        <TableCell>{formatCurrency(report.revenue)}</TableCell>
+                        <TableCell>{formatCurrency(report.cogs)}</TableCell>
+                        <TableCell>{formatCurrency(report.expenseTotal)}</TableCell>
+                        <TableCell className="font-semibold text-emerald-600">
+                          {formatCurrency(report.netProfit)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={report.status === "locked" ? "secondary" : "default"}>
+                            {report.status === "locked" ? "Terkunci" : "Draf"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
+
+      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+        <DialogContent className="sm:max-w-xl md:max-w-2xl w-full rounded-[28px] p-6 sm:p-7 gap-5">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-2xl">Buka Shift {activeShift?.name}</DialogTitle>
+            <DialogDescription>Masukkan nominal kas fisik awal di laci kasir saat membuka shift.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              {(["cash", "coins", "savings"] as const).map((key) => (
+                <div key={key} className="grid gap-2">
+                  <Label htmlFor={`opening-${key}`} className="text-xs sm:text-sm font-medium">
+                    {key === "cash" ? "Kas awal (Laci)" : key === "coins" ? "Receh" : "Tabungan"}
+                  </Label>
+                  <Input
+                    id={`opening-${key}`}
+                    type="text"
+                    inputMode="numeric"
+                    className="h-11 sm:h-12 rounded-xl sm:rounded-2xl border-border/80 bg-card text-base font-semibold tabular-nums"
+                    value={opening[key] ? new Intl.NumberFormat("id-ID").format(opening[key]) : ""}
+                    placeholder="0"
+                    onChange={(event) => {
+                      const raw = event.target.value.replace(/\D/g, "");
+                      const num = raw ? parseInt(raw, 10) : 0;
+                      setOpening((current) => ({ ...current, [key]: num }));
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl bg-muted/60 p-3 text-sm">
+              <span className="text-muted-foreground font-medium">Total Kas Awal:</span>
+              <span className="font-bold text-foreground text-base tabular-nums">
+                {formatCurrency((opening.cash || 0) + (opening.coins || 0) + (opening.savings || 0))}
+              </span>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="opening-reason" className="text-xs sm:text-sm font-medium text-muted-foreground">Catatan / Keterangan (Opsional)</Label>
+              <Textarea
+                id="opening-reason"
+                value={openingReason}
+                onChange={(event) => setOpeningReason(event.target.value)}
+                placeholder="Contoh: modal awal kasir shift pagi"
+                className="min-h-[60px] rounded-xl text-sm"
+              />
+            </div>
+
+            <Button type="button" size="lg" className="h-11 sm:h-12 rounded-2xl text-base font-semibold mt-2" disabled={isSaving} onClick={() => void handleOpen()}>
+              {isSaving ? "Menyimpan..." : "Buka Shift Sekarang"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={closeDialog} onOpenChange={setCloseDialog}>
+        <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl w-full rounded-[28px] p-6 sm:p-7 gap-5">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-2xl">Tutup Shift {session?.shiftName}</DialogTitle>
+            <DialogDescription>Periksa kas fisik sebelum menyimpan penutupan shift.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3.5 rounded-2xl border border-border/70 bg-muted/45 p-4 sm:p-5 sm:grid-cols-4">
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Kas awal</p>
+              <p className="text-base sm:text-lg font-bold tabular-nums tracking-tight">{formatCurrency(session?.openingTotal ?? 0)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Pemasukan</p>
+              <p className="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums tracking-tight">
+                {formatCurrency(cashMovement?.cashIn ?? 0)}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Pengeluaran</p>
+              <p className="text-base sm:text-lg font-bold text-destructive tabular-nums tracking-tight">
+                {formatCurrency(cashMovement?.cashExpenses ?? 0)}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Kas akhir seharusnya</p>
+              <p className="text-base sm:text-lg font-bold tabular-nums tracking-tight">{formatCurrency(closingExpected)}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            {(["cash", "coins", "savings"] as const).map((key) => (
+              <div key={key} className="grid gap-2">
+                <Label htmlFor={`closing-${key}`} className="text-xs sm:text-sm font-medium">
+                  {key === "cash" ? "Kas Tutup (Laci)" : key === "coins" ? "Receh" : "Tabungan"}
+                </Label>
+                <Input
+                  id={`closing-${key}`}
+                  type="text"
+                  inputMode="numeric"
+                  className="h-11 sm:h-12 rounded-xl sm:rounded-2xl border-border/80 bg-card text-base font-semibold tabular-nums"
+                  value={closing[key] ? new Intl.NumberFormat("id-ID").format(closing[key]) : ""}
+                  placeholder="0"
+                  onChange={(event) => {
+                    const raw = event.target.value.replace(/\D/g, "");
+                    const num = raw ? parseInt(raw, 10) : 0;
+                    setClosing((current) => ({ ...current, [key]: num }));
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          <div
+            className={cn(
+              "rounded-2xl border p-3.5 sm:p-4 text-sm font-medium flex items-center justify-between gap-3",
+              closingVariance === 0
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                : "border-destructive/30 bg-destructive/10 text-destructive"
+            )}
+          >
+            <div className="flex items-center gap-2 font-semibold">
+              {closingVariance === 0 ? <Check className="size-5" /> : <AlertTriangle className="size-5" />}
+              <span>{closingVariance === 0 ? "Kas Sesuai (Tidak Ada Selisih)" : "Selisih Kas"}</span>
+            </div>
+            <span className="text-base font-bold tabular-nums">{formatCurrency(closingVariance)}</span>
+          </div>
+          {closingVariance !== 0 ? (
+            <div className="grid gap-2">
+              <Label htmlFor="variance-note" className="text-xs sm:text-sm font-medium">Alasan selisih</Label>
+              <Textarea
+                id="variance-note"
+                value={varianceNote}
+                onChange={(event) => setVarianceNote(event.target.value)}
+                placeholder="Jelaskan penyebab selisih kas fisik vs sistem"
+                className="min-h-[80px] rounded-xl"
+              />
+            </div>
+          ) : null}
+          <Button type="button" size="lg" className="h-11 sm:h-12 rounded-2xl text-base font-semibold" disabled={isSaving} onClick={() => void handleClose()}>
+            {isSaving ? "Menyimpan..." : "Simpan Penutupan Shift"}
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={kasMovementDialog} onOpenChange={setKasMovementDialog}>
+        <DialogContent className="sm:max-w-md md:max-w-lg w-full rounded-[28px] p-6 sm:p-7 gap-5">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-2xl">Mutasi Kas</DialogTitle>
+            <DialogDescription>
+              Pindahkan uang antar laci, receh, dan tabungan pada shift ini. Total kas dan laba tidak berubah.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label className="text-xs sm:text-sm font-medium">Pos asal</Label>
+                <Select
+                  value={kasMovement.fromBucket}
+                  onValueChange={(value) =>
+                    setKasMovement((current) => ({
+                      ...current,
+                      fromBucket: value as "cash" | "coins" | "savings",
+                    }))
+                  }
+                >
+                  <SelectTrigger className="h-11 rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Laci kas</SelectItem>
+                    <SelectItem value="coins">Receh</SelectItem>
+                    <SelectItem value="savings">Tabungan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-xs sm:text-sm font-medium">Pos tujuan</Label>
+                <Select
+                  value={kasMovement.toBucket}
+                  onValueChange={(value) =>
+                    setKasMovement((current) => ({
+                      ...current,
+                      toBucket: value as "cash" | "coins" | "savings",
+                    }))
+                  }
+                >
+                  <SelectTrigger className="h-11 rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Laci kas</SelectItem>
+                    <SelectItem value="coins">Receh</SelectItem>
+                    <SelectItem value="savings">Tabungan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="kas-movement-amount" className="text-xs sm:text-sm font-medium">Nominal</Label>
+              <Input
+                id="kas-movement-amount"
+                type="text"
+                inputMode="numeric"
+                className="h-11 sm:h-12 rounded-xl border-border/80 bg-card text-base font-semibold tabular-nums"
+                value={kasMovement.amount ? new Intl.NumberFormat("id-ID").format(kasMovement.amount) : ""}
+                placeholder="0"
+                onChange={(event) => {
+                  const raw = event.target.value.replace(/\D/g, "");
+                  const num = raw ? parseInt(raw, 10) : 0;
+                  setKasMovement((current) => ({
+                    ...current,
+                    amount: num,
+                  }));
+                }}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="kas-movement-note" className="text-xs sm:text-sm font-medium">Catatan</Label>
+              <Textarea
+                id="kas-movement-note"
+                value={kasMovement.note}
+                onChange={(event) =>
+                  setKasMovement((current) => ({ ...current, note: event.target.value }))
+                }
+                placeholder="Contoh: tarik tabungan untuk bayar supplier"
+                className="min-h-[80px] rounded-xl"
+              />
+            </div>
+            <Button type="button" size="lg" className="h-11 sm:h-12 rounded-2xl text-base font-semibold" disabled={isSaving} onClick={() => void handleKasMovement()}>
+              {isSaving ? "Menyimpan..." : "Catat Mutasi"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export function LaporanView() {
   const { expenses, transactions, products, settings } = useAppState();
+  const currentRole = useCurrentRole();
   const [period, setPeriod] = useState(currentMonthValue());
+  const [reportRange, setReportRange] = useState<"harian" | "mingguan" | "bulanan">("bulanan");
+  const [reportDate, setReportDate] = useState(() => jakartaToday());
+  const [unlockedDates, setUnlockedDates] = useState<string[]>([]);
   const [summary, setSummary] = useState<ProfitLossSummary>(emptySummary);
   const [isLoading, setIsLoading] = useState(true);
+  const [reportDataState, setReportDataState] = useState<RequestState>("loading");
+  const [reportReloadKey, setReportReloadKey] = useState(0);
   const [activeSummaryMetric, setActiveSummaryMetric] = useState<ReportSummaryMetric | null>(null);
   const [reportPreviewLayout, setReportPreviewLayout] = useState<ReportPreviewLayout>("cards");
   const [customOwnerNotes, setCustomOwnerNotes] = useState("");
@@ -582,6 +1372,7 @@ export function LaporanView() {
   const [pcmReports, setPcmReports] = useState<any[]>([]);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isLoadingReports, setIsLoadingReports] = useState(true);
+  const [updatedSnapshotPeriod, setUpdatedSnapshotPeriod] = useState<string | null>(null);
 
   useEffect(() => {
     fetchFinalizedReports();
@@ -624,10 +1415,17 @@ export function LaporanView() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) {
+        if (data?.code === "DAILY_REPORTS_UNLOCKED") setUnlockedDates(data.unlockedDates ?? []);
+        throw new Error(data.error);
+      }
 
+      setUnlockedDates([]);
       toast.success(isCurrentPeriodFinalized ? "Snapshot laporan berhasil diperbarui." : "Laporan bulanan berhasil disetujui & ditandai selesai.");
-      fetchFinalizedReports();
+      const updatedPeriod = `${year}-${pad2(month)}`;
+      setUpdatedSnapshotPeriod(updatedPeriod);
+      window.dispatchEvent(new CustomEvent("pcm-reports-updated", { detail: { action: "snapshot_updated", period: updatedPeriod } }));
+      void fetchFinalizedReports();
     } catch (err: any) {
       toast.error(err.message || "Gagal menyimpan laporan.");
     } finally {
@@ -653,7 +1451,9 @@ export function LaporanView() {
   useEffect(() => {
     let active = true;
 
-    void fetch(`/api/reports/profit-loss?period=${period}`, { cache: "no-store" })
+    const params = new URLSearchParams({ range: reportRange });
+    if (reportRange === "bulanan") params.set("period", period); else params.set("date", reportDate);
+    void fetch(`/api/reports/profit-loss?${params.toString()}`, { cache: "no-store" })
       .then(async (response) => {
         const data = (await response.json().catch(() => null)) as
           | (ProfitLossSummary & { error?: string })
@@ -661,10 +1461,13 @@ export function LaporanView() {
         if (!response.ok || !data) {
           throw new Error(data?.error ?? "Gagal memuat laporan periode.");
         }
-        if (active) setSummary(data);
+        if (active) {
+          setSummary(data);
+          setReportDataState("ready");
+        }
       })
       .catch((error) => {
-        if (active) setSummary(emptySummary);
+        if (active) setReportDataState("error");
         console.error(error);
       })
       .finally(() => {
@@ -674,7 +1477,7 @@ export function LaporanView() {
     return () => {
       active = false;
     };
-  }, [period]);
+  }, [period, reportDate, reportRange, reportReloadKey]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -755,7 +1558,14 @@ export function LaporanView() {
 
   function updatePeriod(nextYear: string, nextMonth: string) {
     setIsLoading(true);
+    setReportDataState("loading");
     setPeriod(`${nextYear}-${nextMonth}`);
+  }
+
+  function retryReport() {
+    setIsLoading(true);
+    setReportDataState("loading");
+    setReportReloadKey((value) => value + 1);
   }
 
   function buildReportPdfUrl(download = false) {
@@ -782,29 +1592,31 @@ export function LaporanView() {
 
   return (
     <div className="w-full space-y-4">
-      <section className="grid gap-4 grid-cols-2 md:grid-cols-4">
+      {reportDataState === "error" ? <Card><CardContent className="flex min-h-64 flex-col items-center justify-center gap-3 text-center"><p role="alert" className="font-medium">Gagal memuat data, coba lagi</p><Button type="button" variant="outline" onClick={retryReport}>Muat ulang</Button></CardContent></Card> : reportDataState === "loading" ? <Card><CardContent className="flex min-h-64 items-center justify-center gap-2 text-muted-foreground"><Loader2 className="size-4 animate-spin" />Memuat laporan...</CardContent></Card> : <>
+        {summary.source === "live_transactions" ? <Badge variant="outline" className="w-fit">Belum dikunci — dihitung langsung dari transaksi</Badge> : null}
+        <section className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <StatCard
           title="Omzet"
-          value={formatCompactCurrency(summary.revenue)}
+          value={formatCurrency(summary.revenue)}
           description={`Total pemasukan untuk ${periodLabel}.`}
           onClick={() => setActiveSummaryMetric("omzet")}
         />
         <StatCard
           title="Laba kotor"
-          value={formatCompactCurrency(summary.grossProfit)}
-          description={`HPP periode ini ${formatCompactCurrency(summary.cogs)}.`}
+          value={formatCurrency(summary.grossProfit)}
+          description={`HPP periode ini ${formatCurrency(summary.cogs)}.`}
           tone="accent"
           onClick={() => setActiveSummaryMetric("laba_kotor")}
         />
         <StatCard
           title="Pengeluaran"
-          value={formatCompactCurrency(summary.expenseTotal)}
+          value={formatCurrency(summary.expenseTotal)}
           description="Biaya operasional yang tercatat di periode ini."
           onClick={() => setActiveSummaryMetric("pengeluaran")}
         />
         <StatCard
           title="Laba bersih"
-          value={formatCompactCurrency(summary.netProfit)}
+          value={formatCurrency(summary.netProfit)}
           description="Omzet dikurangi HPP dan beban periode."
           tone="warn"
           onClick={() => setActiveSummaryMetric("laba_bersih")}
@@ -822,7 +1634,12 @@ export function LaporanView() {
             </div>
 
             <div className="grid min-w-[260px] gap-2">
-              <Label htmlFor="report-month">Periode</Label>
+              <Label htmlFor="report-month">Rentang laporan</Label>
+              <div className="flex flex-wrap gap-2">
+                {([ ["harian", "Harian"], ["mingguan", "Mingguan"], ["bulanan", "Bulanan"] ] as const).map(([value, label]) => <Button key={value} type="button" size="sm" variant={reportRange === value ? "default" : "outline"} onClick={() => setReportRange(value)}>{label}</Button>)}
+              </div>
+              {reportRange !== "bulanan" ? <Input aria-label="Tanggal laporan" type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} className="h-10 rounded-2xl" /> : null}
+              {reportRange === "harian" ? <p className="text-xs text-muted-foreground">Mode harian membaca laporan harian yang telah disiapkan, tanpa menghitung ulang transaksi.</p> : null}
               <div className="relative grid grid-cols-[1fr_96px] gap-2 rounded-[22px] border border-border/70 bg-card/80 p-1.5 shadow-inner">
                 <Select
                   value={selectedMonth}
@@ -1104,6 +1921,10 @@ export function LaporanView() {
                     <p className="text-xs sm:text-sm text-muted-foreground">Laba bersih</p>
                     <p className="mt-1.5 text-base sm:text-lg font-semibold whitespace-nowrap tabular-nums">{formatCurrency(summary.netProfit)}</p>
                   </div>
+                  <div className="col-span-2 rounded-[18px] bg-card p-3 sm:p-4 ring-1 ring-border/70">
+                    <p className="text-xs sm:text-sm text-muted-foreground">Distribusi laba</p>
+                    <p className="mt-1.5 text-base sm:text-lg font-semibold whitespace-nowrap tabular-nums">{formatCurrency(summary.profitDistribution ?? 0)}</p>
+                  </div>
                 </div>
               ) : (
                 <div className="border-b border-dashed border-border/80 py-5">
@@ -1114,6 +1935,7 @@ export function LaporanView() {
                       ["Laba kotor", formatCurrency(summary.grossProfit)],
                       ["Beban", formatCurrency(summary.expenseTotal)],
                       ["Laba bersih", formatCurrency(summary.netProfit)],
+                      ["Distribusi laba", formatCurrency(summary.profitDistribution ?? 0)],
                     ].map(([label, value]) => (
                       <div
                         key={label}
@@ -1164,9 +1986,9 @@ export function LaporanView() {
       <Dialog open={isPdfPreviewOpen} onOpenChange={setIsPdfPreviewOpen}>
         <DialogContent className="flex max-h-[94vh] flex-col w-[min(1280px,calc(100vw-2rem))] !max-w-none overflow-hidden rounded-[28px] p-0 sm:!max-w-none">
           <DialogHeader className="shrink-0 border-b border-border/70 px-5 py-4 pr-14">
-            <DialogTitle>Preview PDF laporan</DialogTitle>
+            <DialogTitle className="text-xl font-heading font-bold">Pratinjau Dokumen Laporan Keuangan Bulanan</DialogTitle>
             <DialogDescription>
-              Pratinjau memakai data periode {periodLabel}. Gunakan tombol Cetak PDF jika ingin mengunduh dokumen.
+              Dokumen resmi laporan periode {periodLabel} memuat Laba Rugi, Posisi Aset & Modal Stok, Distribusi Penjualan, Rincian Pengeluaran, Evaluasi Produk, hingga Lembar Pengesahan.
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-muted/35 p-3 sm:p-5">
@@ -1191,6 +2013,30 @@ export function LaporanView() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {updatedSnapshotPeriod ? (
+        <div className="flex flex-col gap-3 rounded-3xl border border-primary/40 bg-primary/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-semibold">
+              {currentRole === "kasir"
+                ? "Laporan bulanan telah berhasil disetujui & ditutup."
+                : "Snapshot laporan sudah diperbarui."}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {currentRole === "kasir"
+                ? "Data laporan periode ini telah tercatat dan tersimpan ke riwayat pengelola toko."
+                : "Lanjutkan ke laporan PCM periode ini untuk membuka kembali, mengedit, lalu finalisasi ulang."}
+            </p>
+          </div>
+          {currentRole !== "kasir" ? (
+            <Link href={`/laporan-pcm?period=${encodeURIComponent(updatedSnapshotPeriod)}`}>
+              <Button className="rounded-2xl">
+                <ScrollText className="size-4" /> Buka Laporan PCM <ArrowRight className="size-4" />
+              </Button>
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Bagian Finalisasi Laporan */}
       <div className="mt-8 mb-4 border-t border-border/70 pt-8">
@@ -1245,6 +2091,24 @@ export function LaporanView() {
                   })()}
                 </RoleGate>
 
+                <RoleGate role={["kasir", "pengelola_keuangan"]}>
+                  {(summary.revenue === (currentFinalizedReport.data.revenue ?? 0) && summary.netProfit === (currentFinalizedReport.data.netProfit ?? 0)) && (
+                    <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                          <Check className="size-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Laporan Bulanan Sudah Ditutup &amp; Fix</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Laporan periode ini telah ditutup dan snapshot tersimpan ke pengelola toko.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </RoleGate>
+
                 <div className="rounded-2xl bg-card/60 border border-border p-4">
                   <p className="text-sm font-medium text-foreground mb-3">Tersimpan di Riwayat:</p>
                   <div className="space-y-2 text-sm text-muted-foreground">
@@ -1288,6 +2152,7 @@ export function LaporanView() {
                 Jika laporan bulan <strong>{periodLabel}</strong> sudah sesuai, Anda bisa menandainya sebagai Selesai / Fix. Ini akan menyimpan snapshot laba rugi saat ini ke dalam riwayat. Anda juga masih bisa memperbaruinya nanti jika ada perubahan transaksi.
               </p>
             )}
+            {unlockedDates.length > 0 ? <div className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm"><p className="font-semibold">Kunci laporan harian berikut sebelum tutup buku:</p><ul className="mt-2 list-disc pl-5">{unlockedDates.map((date) => <li key={date}>{formatDate(`${date}T12:00:00.000Z`)}</li>)}</ul></div> : null}
             <div className="mt-auto">
               <Button
                 size="lg"
@@ -1362,6 +2227,7 @@ export function LaporanView() {
           </div>
         </div>
       </div>
+        </>}
     </div>
   );
 }

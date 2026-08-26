@@ -79,3 +79,46 @@ export async function DELETE(
     return handleRouteError(error, "Gagal menonaktifkan user.");
   }
 }
+
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const actor = await getRequestUser();
+    const { workspaceOwnerId } = await requireRoutePolicy("/api/users/[id]", "PATCH");
+    const { id } = await context.params;
+    const body = (await request.json()) as { name?: string };
+
+    if (!body.name || !body.name.trim()) {
+      return NextResponse.json({ error: "Nama karyawan wajib diisi." }, { status: 400 });
+    }
+
+    const before = await getWorkspaceUserRole(id, workspaceOwnerId);
+    if (!before) {
+      return NextResponse.json({ error: "User tidak ditemukan di workspace ini." }, { status: 404 });
+    }
+
+    const trimmedName = body.name.trim();
+    const { pool } = await import("@/db/client");
+    await pool.query(`update "user" set name = $1 where id = $2`, [trimmedName, id]);
+
+    await logEvent({ workspaceOwnerId, actorUserId: actor.userId }, {
+      eventType: "USER_UPDATED",
+      entityType: "user",
+      entityId: id,
+      category: "auth",
+      payload: { name: trimmedName },
+    });
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        id,
+        name: trimmedName,
+      },
+    });
+  } catch (error) {
+    return handleRouteError(error, "Gagal mengubah nama karyawan.");
+  }
+}

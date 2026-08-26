@@ -58,6 +58,13 @@ export function handleRouteError(error: unknown, fallbackMessage: string, badReq
     return NextResponse.json({ error: "Data tidak ditemukan.", code: "NOT_FOUND" }, { status: 404 });
   }
 
+  if (error instanceof Error && error.message === "SHIFT_NOT_OPEN") {
+    return NextResponse.json(
+      { error: "Buka shift dulu sebelum mulai jualan.", code: "SHIFT_NOT_OPEN" },
+      { status: 409 }
+    );
+  }
+
   if (error instanceof Error) {
     const aiError = friendlyAiError(error.message);
     if (aiError) {

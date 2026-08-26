@@ -17,6 +17,7 @@ export const runtime = "nodejs";
 
 const InviteUserSchema = z
   .object({
+    name: z.string().trim().min(1).optional(),
     email: z.string().trim().email("Email tidak valid.").transform((email) => email.toLowerCase()),
     role: z.enum(["pengelola_keuangan", "kasir"], {
       error: "Role hanya boleh pengelola_keuangan atau kasir.",
@@ -77,6 +78,11 @@ export async function POST(request: NextRequest) {
           { status: 409 }
         );
       }
+
+      if (body.name) {
+        await pool.query(`update "user" set name = $1 where id = $2`, [body.name, user.id]);
+        user.name = body.name;
+      }
     }
 
     if (!user) {
@@ -84,7 +90,7 @@ export async function POST(request: NextRequest) {
       await auth.api.signUpEmail({
         body: {
           email: body.email,
-          name: nameFromEmail(body.email),
+          name: body.name || nameFromEmail(body.email),
           password: tempPassword,
         },
       });

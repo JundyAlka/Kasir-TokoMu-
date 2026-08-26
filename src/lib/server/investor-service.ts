@@ -8,6 +8,7 @@ import {
   investors,
   products,
   restockLogs,
+  titipanIntakes,
 } from "@/db/schema";
 import { getJakartaMonthRange, JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
 import type { AkadType } from "@/lib/server/profit-sharing";
@@ -19,7 +20,15 @@ type InvestorDraft = {
   whatsapp?: string;
   address?: string;
   notes?: string;
+  partnerType?: unknown;
 };
+type PartnerType = "investor_uang" | "titipan_bagihasil" | "sales_harian";
+
+function parsePartnerType(value: unknown): PartnerType {
+  if (value === undefined || value === null || value === "") return "investor_uang";
+  if (value === "investor_uang" || value === "titipan_bagihasil" || value === "sales_harian") return value;
+  throw new Error("Jenis mitra tidak valid.");
+}
 
 type InvestmentDraft = {
   investorId?: string;
@@ -341,6 +350,7 @@ export async function createInvestor(workspaceOwnerId: string, draft: InvestorDr
       address: parseText(draft.address, "Alamat"),
       notes: parseText(draft.notes, "Catatan"),
       isActive: 1,
+      partnerType: parsePartnerType(draft.partnerType),
       createdAt: timestamp,
       updatedAt: timestamp,
     })
@@ -351,7 +361,7 @@ export async function createInvestor(workspaceOwnerId: string, draft: InvestorDr
 
 export async function listInvestors(
   workspaceOwnerId: string,
-  options: { status?: "active" | "inactive" | "all" } = {}
+  options: { status?: "active" | "inactive" | "all"; partnerType?: PartnerType } = {}
 ) {
   const status = options.status ?? "active";
   const statusWhere =
@@ -366,6 +376,7 @@ export async function listInvestors(
     whatsapp: string;
     address: string;
     notes: string;
+    partnerType: string;
     isActive: number;
     createdAt: string;
     updatedAt: string;
@@ -383,6 +394,7 @@ export async function listInvestors(
         inv.whatsapp,
         inv.address,
         inv.notes,
+        inv.partner_type as "partnerType",
         inv.is_active as "isActive",
         inv.created_at as "createdAt",
         inv.updated_at as "updatedAt",
@@ -425,9 +437,12 @@ export async function listInvestors(
       ) payouts on payouts.investor_id = inv.id
       where inv.workspace_owner_id = $1
       ${statusWhere}
+      ${options.partnerType ? "and inv.partner_type = $4" : ""}
       order by inv.created_at desc
     `,
-    [workspaceOwnerId, monthRange.start, monthRange.end]
+    options.partnerType
+      ? [workspaceOwnerId, monthRange.start, monthRange.end, options.partnerType]
+      : [workspaceOwnerId, monthRange.start, monthRange.end]
   );
 
   return result.rows;
@@ -474,6 +489,7 @@ export async function updateInvestor(
     whatsapp: parseOptionalText(draft.whatsapp, "WhatsApp") ?? existing.whatsapp,
     address: parseOptionalText(draft.address, "Alamat") ?? existing.address,
     notes: parseOptionalText(draft.notes, "Catatan") ?? existing.notes,
+    partnerType: draft.partnerType === undefined ? existing.partnerType : parsePartnerType(draft.partnerType),
     updatedAt: nowIso(),
   };
 
@@ -488,6 +504,17 @@ export async function updateInvestor(
     .returning();
 
   return investor;
+}
+
+export async function createTitipanIntake(workspaceOwnerId: string, draft: {
+  investorId: string; productId?: string | null; intakeDate: string; qtyIn: number; unitCost: number; unitPrice: number; shiftSessionId?: string | null;
+}) {
+  const investor = await findInvestor(workspaceOwnerId, draft.investorId);
+  if (!investor || investor.isActive !== 1 || !["titipan_bagihasil", "sales_harian"].includes(investor.partnerType)) throw notFoundError();
+  if (!Number.isInteger(draft.qtyIn) || draft.qtyIn <= 0 || !Number.isInteger(draft.unitCost) || draft.unitCost < 0 || !Number.isInteger(draft.unitPrice) || draft.unitPrice < 0 || Number.isNaN(new Date(draft.intakeDate).getTime())) throw new Error("Data barang titipan tidak valid.");
+  if (draft.productId) await ensureProduct(workspaceOwnerId, draft.productId);
+  const [intake] = await db.insert(titipanIntakes).values({ id: createId("tin"), userId: workspaceOwnerId, investorId: draft.investorId, productId: draft.productId ?? null, intakeDate: draft.intakeDate.slice(0, 10), qtyIn: draft.qtyIn, qtySold: 0, unitCost: draft.unitCost, unitPrice: draft.unitPrice, settledAmount: 0, shiftSessionId: draft.shiftSessionId ?? null, createdAt: nowIso() }).returning();
+  return intake;
 }
 
 export async function deleteInvestor(workspaceOwnerId: string, id: string) {
@@ -596,7 +623,7 @@ export async function createInvestment(
     const inserted = await tx
       .insert(investments)
       .values({
-        id: investmentId,
+      id: investmentId,
         investorId,
         workspaceOwnerId,
         ...next,

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, date, index, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { PaymentMethod } from "@/lib/types";
 
 export const storeProfiles = pgTable("store_profiles", {
@@ -85,10 +85,25 @@ export const products = pgTable("products", {
   sellPrice: integer("sell_price").notNull(),
   stock: integer("stock").notNull(),
   minimumStock: integer("minimum_stock").notNull(),
+  isConsignment: boolean("is_consignment").notNull().default(false),
   description: text("description").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull(),
 });
+
+export const productAliases = pgTable(
+  "product_aliases",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    alias: text("alias").notNull(),
+    productId: text("product_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
+  },
+  (table) => [
+    index("product_aliases_user_product_idx").on(table.userId, table.productId),
+  ]
+);
 
 export const investors = pgTable(
   "investors",
@@ -100,11 +115,13 @@ export const investors = pgTable(
     address: text("address").notNull(),
     notes: text("notes").notNull(),
     isActive: integer("is_active").notNull(),
+    partnerType: text("partner_type").notNull().default("investor_uang"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull(),
   },
   (table) => [
     index("investors_workspace_idx").on(table.workspaceOwnerId),
+    check("investors_partner_type_check", sql`${table.partnerType} in ('investor_uang', 'titipan_bagihasil', 'sales_harian')`),
   ]
 );
 
@@ -238,10 +255,23 @@ export const shiftSessions = pgTable(
     cashierUserId: text("cashier_user_id").notNull(),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }).notNull(),
     endedAt: timestamp("ended_at", { withTimezone: true, mode: "string" }),
-    openingCash: integer("opening_cash"),
-    closingCash: integer("closing_cash"),
+    openingCash: bigint("opening_cash", { mode: "number" }),
+    openingCoins: bigint("opening_coins", { mode: "number" }),
+    openingSavings: bigint("opening_savings", { mode: "number" }),
+    closingCash: bigint("closing_cash", { mode: "number" }),
+    closingCoins: bigint("closing_coins", { mode: "number" }),
+    closingSavings: bigint("closing_savings", { mode: "number" }),
     expectedCash: integer("expected_cash"),
+    expectedClosing: bigint("expected_closing", { mode: "number" }),
     difference: integer("difference"),
+    variance: bigint("variance", { mode: "number" }),
+    varianceNote: text("variance_note"),
+    status: text("status").notNull().default("open"),
+    openedAt: timestamp("opened_at", { withTimezone: true, mode: "string" }),
+    closedAt: timestamp("closed_at", { withTimezone: true, mode: "string" }),
+    openedByUserId: text("opened_by_user_id"),
+    closedByUserId: text("closed_by_user_id"),
+    needsReview: boolean("needs_review").notNull().default(false),
   },
   (table) => [
     index("shift_sessions_workspace_idx").on(table.workspaceOwnerId),
@@ -254,11 +284,13 @@ export const shiftSessions = pgTable(
 export const transactionItems = pgTable("transaction_items", {
   id: text("id").primaryKey(),
   transactionId: text("transaction_id").notNull(),
-  productId: text("product_id").notNull(),
+  productId: text("product_id"),
   productName: text("product_name").notNull(),
   quantity: integer("quantity").notNull(),
   unitPrice: integer("unit_price").notNull(),
   costPrice: integer("cost_price").notNull(),
+  isAdjustment: boolean("is_adjustment").notNull().default(false),
+  note: text("note").notNull().default(""),
 });
 
 export const debts = pgTable(
@@ -273,6 +305,7 @@ export const debts = pgTable(
     status: text("status").notNull().default("aktif"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
     dueDate: timestamp("due_date", { withTimezone: true, mode: "string" }),
+    shiftSessionId: text("shift_session_id"),
     isPaid: integer("is_paid").notNull(),
     lastReminderAt: timestamp("last_reminder_at", { withTimezone: true, mode: "string" }),
   },
@@ -311,6 +344,7 @@ export const debtPayments = pgTable(
     paidAt: timestamp("paid_at", { withTimezone: true, mode: "string" }).notNull(),
     note: text("note").notNull(),
     recordedByUserId: text("recorded_by_user_id").notNull(),
+    shiftSessionId: text("shift_session_id"),
   },
   (table) => [
     index("debt_payments_debt_idx").on(table.debtId),
@@ -324,7 +358,75 @@ export const expenses = pgTable("expenses", {
   amount: integer("amount").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
   category: text("category").notNull(),
+  shiftSessionId: text("shift_session_id"),
+  expenseType: text("expense_type").notNull().default("operasional"),
+  investorId: text("investor_id"),
+  isCashMovement: boolean("is_cash_movement").notNull().default(false),
 });
+
+export const kasMovements = pgTable(
+  "kas_movements",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    shiftSessionId: text("shift_session_id").notNull(),
+    fromBucket: text("from_bucket").notNull(),
+    toBucket: text("to_bucket").notNull(),
+    amount: bigint("amount", { mode: "number" }).notNull(),
+    note: text("note").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
+  },
+  (table) => [index("kas_movements_user_shift_session_idx").on(table.userId, table.shiftSessionId)]
+);
+
+export const dailyReports = pgTable(
+  "daily_reports",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    reportDate: date("report_date").notNull(),
+    openingTotal: bigint("opening_total", { mode: "number" }).notNull().default(0),
+    revenue: bigint("revenue", { mode: "number" }).notNull().default(0),
+    cogs: bigint("cogs", { mode: "number" }).notNull().default(0),
+    expenseTotal: bigint("expense_total", { mode: "number" }).notNull().default(0),
+    grossProfit: bigint("gross_profit", { mode: "number" }).notNull().default(0),
+    netProfit: bigint("net_profit", { mode: "number" }).notNull().default(0),
+    closingTotal: bigint("closing_total", { mode: "number" }).notNull().default(0),
+    transactionCount: integer("transaction_count").notNull().default(0),
+    profitDistribution: bigint("profit_distribution", { mode: "number" }).notNull().default(0),
+    status: text("status").notNull().default("draft"),
+    lockedAt: timestamp("locked_at", { withTimezone: true, mode: "string" }),
+    lockedByUserId: text("locked_by_user_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("daily_reports_user_report_date_key").on(table.userId, table.reportDate),
+    index("daily_reports_user_report_date_idx").on(table.userId, table.reportDate),
+  ]
+);
+
+export const titipanIntakes = pgTable(
+  "titipan_intakes",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    investorId: text("investor_id").notNull(),
+    productId: text("product_id"),
+    intakeDate: date("intake_date").notNull(),
+    qtyIn: integer("qty_in").notNull(),
+    qtySold: integer("qty_sold").notNull().default(0),
+    unitCost: bigint("unit_cost", { mode: "number" }).notNull().default(0),
+    unitPrice: bigint("unit_price", { mode: "number" }).notNull().default(0),
+    settledAmount: bigint("settled_amount", { mode: "number" }).notNull().default(0),
+    shiftSessionId: text("shift_session_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
+  },
+  (table) => [
+    index("titipan_intakes_user_investor_idx").on(table.userId, table.investorId),
+    index("titipan_intakes_user_shift_session_idx").on(table.userId, table.shiftSessionId),
+  ]
+);
 
 export const restockPlans = pgTable(
   "restock_plans",

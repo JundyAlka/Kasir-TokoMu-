@@ -55,9 +55,19 @@ function applySchema(mem: TestDb) {
     mem.public.none(stmt);
   }
 
+  // pg-mem does not apply ADD COLUMN IF NOT EXISTS for this legacy table,
+  // while PostgreSQL does. Seed the column so the real migration can be tested.
+  mem.public.none(`ALTER TABLE "investors" ADD COLUMN "partner_type" text NOT NULL DEFAULT 'investor_uang'`);
+  mem.public.none(`ALTER TABLE "restock_plans" ADD COLUMN "estimated_price" integer NOT NULL DEFAULT 0`);
+
   for (const fileName of [
     "20260810160920_transaction-occurred-at.sql",
     "20260810163000_transaction-import-batches.sql",
+    "20260813133000_shift-daily-reporting.sql",
+    "20260813150000_import-adjustments-and-historical-shifts.sql",
+    "20260813153000_shift-bound-debts-and-kas-movements.sql",
+    "20260813153001_partner-type-backfill.sql",
+    "20260813153002_product-aliases-consignment.sql",
   ]) {
     for (const statement of sqlFromInsforgeMigration(fileName)) {
       mem.public.none(statement);
@@ -69,7 +79,10 @@ function nowIso() {
   return new Date("2026-06-11T03:00:00.000Z").toISOString();
 }
 
-async function seedBase(pool: InstanceType<ReturnType<TestDb["adapters"]["createPg"]>["Pool"]>) {
+async function seedBase(
+  pool: InstanceType<ReturnType<TestDb["adapters"]["createPg"]>["Pool"]>,
+  staffRole: Role = "kasir"
+) {
   const timestamp = nowIso();
 
   await pool.query(
@@ -84,8 +97,8 @@ async function seedBase(pool: InstanceType<ReturnType<TestDb["adapters"]["create
     `insert into user_roles (user_id, role, workspace_owner_id, is_active, created_at, updated_at)
      values
        ($1, 'pimpinan', $1, 1, $3, $3),
-       ($2, 'kasir', $1, 1, $3, $3)`,
-    [WORKSPACE_ID, CASHIER_ID, timestamp]
+       ($2, $4, $1, 1, $3, $3)`,
+    [WORKSPACE_ID, CASHIER_ID, timestamp, staffRole]
   );
 
   await pool.query(
@@ -140,7 +153,7 @@ export async function setupTestDb(options: { role?: Role } = {}) {
   const pool = new TestPool();
   const db = drizzle({ client: pool as never, schema });
 
-  await seedBase(pool);
+  await seedBase(pool, options.role === "pimpinan" ? "kasir" : options.role ?? "kasir");
 
   vi.doMock("@/db/client", () => ({ db, pool }));
   vi.doMock("@/lib/auth", () => ({
@@ -148,9 +161,9 @@ export async function setupTestDb(options: { role?: Role } = {}) {
       api: {
         getSession: vi.fn(async () => ({
           user: {
-            id: options.role === "kasir" ? CASHIER_ID : WORKSPACE_ID,
-            name: options.role === "kasir" ? "Kasir" : "Pimpinan",
-            email: options.role === "kasir" ? "kasir@tokomu.test" : "pimpinan@tokomu.test",
+            id: options.role === "pimpinan" || !options.role ? WORKSPACE_ID : CASHIER_ID,
+            name: options.role === "pimpinan" || !options.role ? "Pimpinan" : "Kasir",
+            email: options.role === "pimpinan" || !options.role ? "pimpinan@tokomu.test" : "kasir@tokomu.test",
           },
         })),
         signUpEmail: vi.fn(

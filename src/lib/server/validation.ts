@@ -3,7 +3,7 @@ import { z, ZodError } from "zod";
 
 const productCategories = ["Makanan", "Minuman", "Sembako", "Kebutuhan Harian"] as const;
 const paymentMethods = ["Tunai", "QRIS", "Transfer"] as const;
-const expenseCategories = ["Operasional", "Belanja", "Utilitas", "Listrik", "ATK", "WiFi", "Lainnya"] as const;
+export const expenseTypes = ["sales_toko", "sales_titipan", "operasional", "gaji_sosial", "setoran_tabungan", "bagi_hasil_investor"] as const;
 
 
 const requiredText = (field: string) =>
@@ -146,9 +146,30 @@ export const ExpenseCreateSchema = z
   .object({
     title: requiredText("Keterangan pengeluaran"),
     amount: positiveInteger("Jumlah pengeluaran"),
-    category: requiredText("Kategori"),
+    expenseType: z.enum(expenseTypes),
+    investorId: z.string().trim().min(1).optional(),
+    settleIntakeIds: z.array(z.string().trim().min(1)).default([]),
+    restock: z.object({
+      productId: z.string().trim().min(1, "Produk restok wajib dipilih."),
+      quantity: positiveInteger("Jumlah restok"),
+      unitCost: nonNegativeInteger("Harga beli restok").optional(),
+    }).strict().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.expenseType === "bagi_hasil_investor" && !value.investorId) {
+      ctx.addIssue({ code: "custom", path: ["investorId"], message: "Investor wajib dipilih." });
+    }
+    if (value.expenseType === "sales_titipan" && !value.investorId) {
+      ctx.addIssue({ code: "custom", path: ["investorId"], message: "Mitra titipan wajib dipilih." });
+    }
+    if (value.expenseType === "sales_titipan" && value.settleIntakeIds.length === 0) {
+      ctx.addIssue({ code: "custom", path: ["settleIntakeIds"], message: "Pilih minimal satu barang titipan yang dilunasi." });
+    }
+    if (value.expenseType !== "sales_toko" && value.restock) {
+      ctx.addIssue({ code: "custom", path: ["restock"], message: "Restok hanya tersedia untuk kategori sales toko." });
+    }
+  });
 
 
 export type ProductCreateInput = z.infer<typeof ProductCreateSchema>;

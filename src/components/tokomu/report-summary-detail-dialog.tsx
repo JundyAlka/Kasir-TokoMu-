@@ -23,6 +23,8 @@ export type ProfitLossSummary = {
   grossProfit: number;
   expenseTotal: number;
   netProfit: number;
+  profitDistribution?: number;
+  source?: "daily_reports" | "live_transactions";
   transactionCount: number;
   averageTicket: number;
 };

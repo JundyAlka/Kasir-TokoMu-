@@ -79,7 +79,7 @@ export function StatCard({
           </div>
         ) : (
           <>
-            <p className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl xl:text-4xl">
+            <p className="font-heading text-lg sm:text-xl md:text-2xl xl:text-3xl font-bold tracking-tight tabular-nums break-words" title={isLoading ? undefined : value}>
               {isLoading ? "Memuat data..." : value}
             </p>
             <p className="line-clamp-2 text-xs opacity-75 sm:text-sm">

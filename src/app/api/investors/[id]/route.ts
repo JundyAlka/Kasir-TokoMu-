@@ -18,6 +18,7 @@ const InvestorUpdateSchema = z
     whatsapp: z.string().trim().optional(),
     address: z.string().trim().optional(),
     notes: z.string().trim().optional(),
+    partnerType: z.enum(["investor_uang", "titipan_bagihasil", "sales_harian"]).optional(),
   })
   .strict();
 

@@ -1,22 +1,29 @@
 "use client";
 
-import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  CalendarDays,
   CheckCircle2,
   Download,
   FileSpreadsheet,
   Loader2,
   RotateCcw,
+  Search,
   UploadCloud,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAppState } from "@/components/providers/app-state-provider";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import {
   canContinueTransactionImport,
   importIssueLabel,
@@ -39,15 +46,22 @@ type ImportIssue = {
   code: ImportIssueCode;
   message: string;
   rowData?: Record<string, unknown>;
+  productId?: string;
+  productName?: string;
+  suggestions?: Array<{ id: string; name: string; score: number }>;
 };
 
 type ImportPreview = {
+  source: { rowCount: number; invoiceCount: number; totalAmount: number };
   invoiceCount: number;
   itemCount: number;
   totalAmount: number;
+  errorRowCount: number;
   dateRange: { start: string; end: string } | null;
   errors: ImportIssue[];
   warnings: ImportIssue[];
+  warningGroups: Array<{ code: ImportIssueCode; productName: string; productId?: string; count: number; issues: ImportIssue[] }>;
+  excludedNames: Array<{ name: string; rowCount: number; totalAmount: number }>;
   invoices: Array<{
     note: string;
     externalRef: string;
@@ -56,6 +70,7 @@ type ImportPreview = {
     total: number;
     items: Array<{ row: number; productName: string; quantity: number; unitPrice: number }>;
   }>;
+  byDate: Array<{ date: string; invoiceCount: number; rowCount: number; totalAmount: number; adjustmentCount: number }>;
 };
 
 type ImportBatch = {
@@ -93,7 +108,9 @@ function rowValues(rowData?: Record<string, unknown>) {
 }
 
 export function TransactionImportPanel() {
+  const { products: storeProducts } = useAppState();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [batches, setBatches] = useState<ImportBatch[]>([]);
@@ -101,9 +118,51 @@ export function TransactionImportPanel() {
   const [isCommitting, setIsCommitting] = useState(false);
   const [isRollingBack, setIsRollingBack] = useState(false);
   const [warningsAcknowledged, setWarningsAcknowledged] = useState(false);
+  const [createHistoricalShifts, setCreateHistoricalShifts] = useState(false);
   const [confirmCommitOpen, setConfirmCommitOpen] = useState(false);
   const [rollbackTarget, setRollbackTarget] = useState<ImportBatch | null>(null);
   const [commitResult, setCommitResult] = useState<CommitResult | null>(null);
+  const [nonProductNames, setNonProductNames] = useState<string[]>([]);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Record<string, string>>({});
+  const [searchModalIssue, setSearchModalIssue] = useState<ImportIssue | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredStoreProducts = useMemo(() => {
+    if (!searchQuery.trim()) return storeProducts.slice(0, 30);
+    const q = searchQuery.toLowerCase().trim();
+    return storeProducts
+      .filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          (p.category && p.category.toLowerCase().includes(q)) ||
+          (p.sku && p.sku.toLowerCase().includes(q))
+      )
+      .slice(0, 40);
+  }, [searchQuery, storeProducts]);
+
+  function openProductSearch(issue: ImportIssue) {
+    setSearchModalIssue(issue);
+    setSearchQuery(issue.productName || "");
+  }
+
+  const errorsByDate = useMemo(() => {
+    if (!preview || !preview.errors.length) return [];
+    const map = new Map<string, ImportIssue[]>();
+    for (const issue of preview.errors) {
+      const rawDate = String(issue.rowData?.Tanggal ?? "").trim() || "Lainnya";
+      const current = map.get(rawDate) ?? [];
+      current.push(issue);
+      map.set(rawDate, current);
+    }
+    return [...map.entries()].map(([dateKey, issues]) => ({
+      dateKey,
+      formattedDate:
+        dateKey !== "Lainnya"
+          ? formatDate(`${dateKey}T12:00:00.000Z`)
+          : "Tanggal Tidak Diketahui",
+      issues,
+    }));
+  }, [preview]);
 
   async function loadHistory() {
     try {
@@ -118,6 +177,14 @@ export function TransactionImportPanel() {
     void loadHistory();
   }, []);
 
+  useEffect(() => {
+    if (!preview) return;
+    const frame = window.requestAnimationFrame(() => {
+      previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [preview]);
+
   function selectFile(nextFile: File | null) {
     if (!nextFile) return;
     const lowerName = nextFile.name.toLocaleLowerCase();
@@ -129,6 +196,8 @@ export function TransactionImportPanel() {
     setPreview(null);
     setCommitResult(null);
     setWarningsAcknowledged(false);
+    setNonProductNames([]);
+    setSelectedSuggestions({});
   }
 
   function onFileInput(event: ChangeEvent<HTMLInputElement>) {
@@ -148,7 +217,7 @@ export function TransactionImportPanel() {
     XLSX.writeFile(workbook, "template-impor-transaksi.xlsx");
   }
 
-  async function previewFile() {
+  async function previewFile(names = nonProductNames) {
     if (!file) {
       toast.error("Pilih file transaksi terlebih dahulu.");
       return;
@@ -157,6 +226,8 @@ export function TransactionImportPanel() {
     try {
       const form = new FormData();
       form.append("file", file);
+      form.append("createHistoricalShifts", String(createHistoricalShifts));
+      form.append("nonProductNames", JSON.stringify(names));
       const result = await readJson<ImportPreview>("/api/transactions/import/preview", { method: "POST", body: form });
       setPreview(result);
       setWarningsAcknowledged(false);
@@ -183,6 +254,8 @@ export function TransactionImportPanel() {
     try {
       const form = new FormData();
       form.append("file", file);
+      form.append("createHistoricalShifts", String(createHistoricalShifts));
+      form.append("nonProductNames", JSON.stringify(nonProductNames));
       const result = await readJson<CommitResult>("/api/transactions/import/commit", { method: "POST", body: form });
       setCommitResult(result);
       setConfirmCommitOpen(false);
@@ -219,7 +292,54 @@ export function TransactionImportPanel() {
     setPreview(null);
     setCommitResult(null);
     setWarningsAcknowledged(false);
+    setCreateHistoricalShifts(false);
+    setNonProductNames([]);
+    setSelectedSuggestions({});
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function saveMapping(issue: ImportIssue) {
+    const productId = selectedSuggestions[issue.productName ?? ""];
+    if (!issue.productName || !productId) return;
+    try {
+      await readJson("/api/transactions/import/aliases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alias: issue.productName, productId }),
+      });
+      toast.success(`Pemetaan ${issue.productName} disimpan untuk semua baris dengan nama yang sama.`);
+      await previewFile();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal menyimpan pemetaan produk.");
+    }
+  }
+
+  async function markNotProduct(issue: ImportIssue) {
+    if (!issue.productName) return;
+    const next = [...new Set([...nonProductNames, issue.productName])];
+    setNonProductNames(next);
+    await previewFile(next);
+  }
+
+  function downloadUnknownNames() {
+    if (!preview) return;
+    const grouped = new Map<string, { count: number; total: number }>();
+    for (const issue of preview.errors) {
+      if (issue.code !== "PRODUK_TIDAK_DITEMUKAN" || !issue.productName) continue;
+      const current = grouped.get(issue.productName) ?? { count: 0, total: 0 };
+      const raw = String(issue.rowData?.Subtotal ?? "").replace(/[Rp\s.]/g, "").replace(",", ".");
+      current.count += 1;
+      current.total += Number(raw) || 0;
+      grouped.set(issue.productName, current);
+    }
+    const escape = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
+    const csv = ["Nama Produk,Jumlah Kemunculan,Total Nilai", ...[...grouped.entries()].sort((a, b) => b[1].total - a[1].total).map(([name, value]) => [name, value.count, value.total].map(escape).join(","))].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = "nama-produk-tidak-dikenal.csv"; link.click(); URL.revokeObjectURL(url);
+  }
+
+  function scrollToPreview() {
+    previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   return (
@@ -236,6 +356,12 @@ export function TransactionImportPanel() {
             </Button>
           </div>
         </CardHeader>
+        <CardContent className="pt-0">
+          <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-muted/25 p-3 text-sm">
+            <input type="checkbox" checked={createHistoricalShifts} onChange={(event) => setCreateHistoricalShifts(event.target.checked)} className="mt-1" />
+            <span><span className="font-medium">Buat shift otomatis dari kolom Catatan</span><br /><span className="text-muted-foreground">Membuat shift historis tertutup untuk setiap tanggal + prefiks “Shift X”. Tanpa sheet “Kas &amp; Tabungan”, shift ditandai perlu ditinjau.</span></span>
+          </label>
+        </CardContent>
         <CardContent className="space-y-5">
           <div className="space-y-2">
             <Label>Langkah 1 — Unggah file</Label>
@@ -259,18 +385,38 @@ export function TransactionImportPanel() {
               {isPreviewing ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />}
               Buat pratinjau
             </Button>
+            {preview ? <Button type="button" variant="outline" onClick={scrollToPreview}>Lihat pratinjau</Button> : null}
             {(preview || commitResult) ? <Button type="button" variant="ghost" onClick={resetImport}>Pilih file lain</Button> : null}
           </div>
         </CardContent>
       </Card>
 
       {preview ? (
+        <div ref={previewRef} id="import-preview" className="scroll-mt-4">
         <Card className="border-border/60 bg-card/74">
           <CardHeader>
             <CardTitle className="font-heading text-xl">Langkah 2 — Pratinjau</CardTitle>
             <CardDescription>Periksa ringkasan, baris bermasalah, dan isi setiap nota sebelum disimpan.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            <div className="sticky top-3 z-20 rounded-2xl border border-primary/45 bg-card/95 p-3 shadow-lg backdrop-blur">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div><p className="text-sm font-semibold">Pratinjau aktif</p><p className="text-xs text-muted-foreground">Terbaca {preview.source.rowCount.toLocaleString("id-ID")} baris · Siap impor {preview.itemCount.toLocaleString("id-ID")} baris</p></div>
+                <div className="flex items-center gap-2"><span className={preview.errorRowCount > 0 ? "text-sm font-semibold text-destructive" : "text-sm font-semibold text-emerald-600"}>{preview.errorRowCount > 0 ? `${preview.errorRowCount.toLocaleString("id-ID")} perlu diperbaiki` : "Siap disimpan"}</span><Button type="button" size="sm" variant="outline" onClick={scrollToPreview}>Ke ringkasan</Button></div>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-border/60 bg-muted/35 p-3">
+                <p className="text-xs text-muted-foreground">Terbaca dari file</p>
+                <p className="mt-1 font-semibold">{preview.source.rowCount.toLocaleString("id-ID")} baris / {formatCurrency(preview.source.totalAmount)}</p>
+                <p className="text-xs text-muted-foreground">{preview.source.invoiceCount.toLocaleString("id-ID")} nota terdeteksi</p>
+              </div>
+              <div className="rounded-xl border border-primary/40 bg-primary/5 p-3">
+                <p className="text-xs text-muted-foreground">Siap impor</p>
+                <p className="mt-1 font-semibold">{preview.itemCount.toLocaleString("id-ID")} baris / {formatCurrency(preview.totalAmount)}</p>
+                <p className="text-xs text-muted-foreground">{preview.invoiceCount.toLocaleString("id-ID")} nota valid</p>
+              </div>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 ["Jumlah nota", `${preview.invoiceCount} nota`],
@@ -284,24 +430,260 @@ export function TransactionImportPanel() {
               ))}
             </div>
 
+            {preview.byDate.length > 0 ? <div className="rounded-2xl border border-border/60 p-4"><h3 className="font-semibold">Ringkasan per tanggal</h3><Table className="mt-2"><TableHeader><TableRow><TableHead>Tanggal</TableHead><TableHead>Nota</TableHead><TableHead>Baris</TableHead><TableHead>Penyesuaian</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{preview.byDate.map((day) => <TableRow key={day.date}><TableCell>{formatDate(`${day.date}T12:00:00.000Z`)}</TableCell><TableCell>{day.invoiceCount}</TableCell><TableCell>{day.rowCount}</TableCell><TableCell>{day.adjustmentCount}</TableCell><TableCell className="text-right">{formatCurrency(day.totalAmount)}</TableCell></TableRow>)}</TableBody></Table></div> : null}
+
             {preview.errors.length > 0 ? (
-              <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4">
-                <div className="flex items-center gap-2 text-destructive"><AlertTriangle className="size-5" /><p className="font-semibold">{preview.errors.length} baris harus diperbaiki sebelum impor</p></div>
-                <div className="mt-3 overflow-x-auto">
-                  <Table className="min-w-[720px]">
-                    <TableHeader><TableRow><TableHead>Baris</TableHead><TableHead>Isi baris</TableHead><TableHead>Masalah</TableHead></TableRow></TableHeader>
-                    <TableBody>{preview.errors.map((issue, index) => <TableRow key={`${issue.row}-${issue.code}-${index}`}><TableCell>{issue.row}</TableCell><TableCell className="max-w-xl whitespace-normal text-xs">{rowValues(issue.rowData)}</TableCell><TableCell className="font-medium">{importIssueLabel[issue.code]}</TableCell></TableRow>)}</TableBody>
-                  </Table>
+              <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 sm:p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-destructive pb-2 border-b border-destructive/20">
+                  <div className="flex items-center gap-2.5">
+                    <AlertTriangle className="size-5 shrink-0" />
+                    <div>
+                      <p className="font-semibold text-base">
+                        {preview.errorRowCount} baris harus diperbaiki sebelum impor
+                      </p>
+                      <p className="text-xs opacity-85">
+                        Tentukan pemetaan produk atau tandai sebagai bukan produk (pengeluaran).
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-xl bg-card border-destructive/40 text-destructive hover:bg-destructive hover:text-white"
+                    onClick={downloadUnknownNames}
+                  >
+                    <Download className="size-3.5 mr-1" />
+                    Unduh daftar nama tidak dikenal
+                  </Button>
                 </div>
+
+                {errorsByDate.map((dateGroup, groupIdx) => (
+                  <div
+                    key={dateGroup.dateKey}
+                    className={cn(
+                      "space-y-3",
+                      groupIdx > 0 && "pt-5 mt-5 border-t border-destructive/25"
+                    )}
+                  >
+                    {/* Header Tanggal Pemisah */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-destructive/15 px-3.5 py-2 text-destructive border border-destructive/30 shadow-xs">
+                      <div className="flex items-center gap-2 font-semibold text-sm">
+                        <CalendarDays className="size-4 shrink-0 text-destructive" />
+                        <span>Tanggal Transaksi: {dateGroup.formattedDate}</span>
+                        {dateGroup.dateKey !== "Lainnya" && (
+                          <span className="text-xs font-mono font-normal opacity-75">
+                            ({dateGroup.dateKey})
+                          </span>
+                        )}
+                      </div>
+                      <Badge
+                        variant="destructive"
+                        className="rounded-full text-xs font-medium px-2.5 py-0.5"
+                      >
+                        {dateGroup.issues.length} baris
+                      </Badge>
+                    </div>
+
+                    {/* Tabel Baris untuk Tanggal ini */}
+                    <div className="overflow-x-auto rounded-2xl border border-destructive/30 bg-card/85 shadow-sm">
+                      <Table className="min-w-[860px]">
+                        <TableHeader className="bg-muted/50">
+                          <TableRow>
+                            <TableHead className="w-20 font-semibold">Baris</TableHead>
+                            <TableHead className="w-44 font-semibold">Nota & Metode</TableHead>
+                            <TableHead className="min-w-[220px] font-semibold">Data Barang di File</TableHead>
+                            <TableHead className="w-48 font-semibold">Masalah / Kendala</TableHead>
+                            <TableHead className="min-w-[320px] font-semibold">Aksi Pemetaan Produk</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {dateGroup.issues.map((issue, index) => {
+                            const raw = issue.rowData ?? {};
+                            const rawProductName = String(issue.productName || raw["Nama Produk"] || "-");
+                            const rawQty = raw["Jumlah"] !== undefined && raw["Jumlah"] !== "" ? Number(raw["Jumlah"]) : null;
+                            const rawPrice = raw["Harga Jual"] !== undefined && raw["Harga Jual"] !== "" ? Number(raw["Harga Jual"]) : null;
+                            const rawSubtotal = raw["Subtotal"] !== undefined && raw["Subtotal"] !== "" ? Number(raw["Subtotal"]) : null;
+                            const rawNote = raw["Catatan"] ? String(raw["Catatan"]).trim() : null;
+
+                            return (
+                              <TableRow
+                                key={`${issue.row}-${issue.code}-${index}`}
+                                className="hover:bg-destructive/5 transition-colors"
+                              >
+                                {/* 1. Nomor Baris */}
+                                <TableCell className="align-top pt-3 font-semibold tabular-nums">
+                                  <Badge
+                                    variant="outline"
+                                    className="font-mono text-xs bg-background/80"
+                                  >
+                                    #{issue.row}
+                                  </Badge>
+                                </TableCell>
+
+                                {/* 2. No Nota & Metode Bayar */}
+                                <TableCell className="align-top pt-3 space-y-1">
+                                  <p className="font-mono text-xs font-semibold text-foreground">
+                                    {String(raw["No Nota"] || "-")}
+                                  </p>
+                                  {raw["Metode Bayar"] ? (
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-[11px] font-medium py-0 px-2 rounded-md"
+                                    >
+                                      {String(raw["Metode Bayar"])}
+                                    </Badge>
+                                  ) : null}
+                                </TableCell>
+
+                                {/* 3. Data Barang di File */}
+                                <TableCell className="align-top pt-3 space-y-1">
+                                  <p className="font-bold text-foreground text-sm">
+                                    {rawProductName}
+                                  </p>
+                                  <div className="text-xs text-muted-foreground tabular-nums flex flex-wrap items-center gap-1.5 font-medium">
+                                    {rawQty !== null && <span>{rawQty} pcs</span>}
+                                    {rawPrice !== null && <span>× {formatCurrency(rawPrice)}</span>}
+                                    {rawSubtotal !== null && (
+                                      <span className="font-semibold text-foreground">
+                                        = {formatCurrency(rawSubtotal)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {rawNote && (
+                                    <p
+                                      className="text-xs text-muted-foreground/90 italic line-clamp-2 max-w-xs pt-0.5"
+                                      title={rawNote}
+                                    >
+                                      📝 {rawNote}
+                                    </p>
+                                  )}
+                                </TableCell>
+
+                                {/* 4. Kendala */}
+                                <TableCell className="align-top pt-3">
+                                  <span className="text-xs font-semibold text-destructive leading-tight block">
+                                    {importIssueLabel[issue.code] || issue.message}
+                                  </span>
+                                </TableCell>
+
+                                {/* 5. Aksi Pemetaan Produk */}
+                                <TableCell className="align-top pt-3">
+                                  {issue.code === "PRODUK_TIDAK_DITEMUKAN" && issue.productName ? (
+                                    <div className="flex flex-col gap-2 min-w-[280px]">
+                                      {/* Tampilkan produk yang sedang dipilih (jika ada) */}
+                                      {selectedSuggestions[issue.productName] ? (
+                                        <div className="flex items-center justify-between gap-2 rounded-xl bg-primary/10 border border-primary/30 px-2.5 py-1.5 text-xs">
+                                          <div className="flex items-center gap-1.5 overflow-hidden">
+                                            <span className="font-semibold text-primary shrink-0">Pilihan:</span>
+                                            <span
+                                              className="font-medium text-foreground truncate"
+                                              title={
+                                                storeProducts.find((p) => p.id === selectedSuggestions[issue.productName!])?.name ||
+                                                issue.suggestions?.find((s) => s.id === selectedSuggestions[issue.productName!])?.name ||
+                                                "Produk dipilih"
+                                              }
+                                            >
+                                              {storeProducts.find((p) => p.id === selectedSuggestions[issue.productName!])?.name ||
+                                                issue.suggestions?.find((s) => s.id === selectedSuggestions[issue.productName!])?.name ||
+                                                "Produk dipilih"}
+                                            </span>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setSelectedSuggestions((curr) => {
+                                                const copy = { ...curr };
+                                                delete copy[issue.productName!];
+                                                return copy;
+                                              })
+                                            }
+                                            className="text-muted-foreground hover:text-destructive p-0.5 rounded"
+                                            title="Batal pilihan"
+                                          >
+                                            <X className="size-3.5" />
+                                          </button>
+                                        </div>
+                                      ) : null}
+
+                                      {/* Dropdown Rekomendasi Terdekat + Tombol Cari Lainnya */}
+                                      <div className="flex items-center gap-1.5">
+                                        {issue.suggestions && issue.suggestions.length > 0 ? (
+                                          <select
+                                            aria-label={`Rekomendasi untuk ${issue.productName}`}
+                                            className="h-9 flex-1 rounded-xl border border-border/80 bg-background px-2.5 text-xs font-medium focus:ring-2 focus:ring-primary shadow-xs"
+                                            value={selectedSuggestions[issue.productName] ?? ""}
+                                            onChange={(event) =>
+                                              setSelectedSuggestions((current) => ({
+                                                ...current,
+                                                [issue.productName!]: event.target.value,
+                                              }))
+                                            }
+                                          >
+                                            <option value="">-- Rekomendasi ({issue.suggestions.length}) --</option>
+                                            {issue.suggestions.map((suggestion) => (
+                                              <option key={`sug-${suggestion.id}`} value={suggestion.id}>
+                                                ⭐ {suggestion.name}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        ) : null}
+
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-9 rounded-xl text-xs gap-1 shrink-0 font-medium hover:bg-primary/10 hover:text-primary border-border"
+                                          onClick={() => openProductSearch(issue)}
+                                        >
+                                          <Search className="size-3.5" />
+                                          Cari Produk
+                                        </Button>
+                                      </div>
+
+                                      {/* Tombol Simpan Pemetaan & Tandai Bukan Produk */}
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          className="h-8 rounded-lg text-xs font-semibold"
+                                          disabled={!selectedSuggestions[issue.productName]}
+                                          onClick={() => void saveMapping(issue)}
+                                        >
+                                          Terapkan ke semua &quot;{issue.productName}&quot;
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-8 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+                                          onClick={() => void markNotProduct(issue)}
+                                        >
+                                          Bukan produk
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : null}
+
+            {preview.excludedNames.length > 0 ? <div className="rounded-2xl border border-sky-500/40 bg-sky-500/10 p-4 text-sm"><p className="font-semibold">Baris bukan produk dikeluarkan dari transaksi</p><p className="mt-1 text-muted-foreground">Baris ini dapat ditinjau dan dicatat sebagai pengeluaran terpisah.</p><ul className="mt-2 space-y-1">{preview.excludedNames.map((item) => <li key={item.name}>{item.name}: {item.rowCount} baris / {formatCurrency(item.totalAmount)}</li>)}</ul></div> : null}
 
             {preview.warnings.length > 0 ? (
               <div className="rounded-2xl border border-amber-500/50 bg-amber-500/10 p-4">
                 <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200"><AlertTriangle className="size-5" /><p className="font-semibold">{preview.warnings.length} peringatan perlu diperiksa</p></div>
-                <ul className="mt-3 space-y-1.5 text-sm">
-                  {preview.warnings.map((issue, index) => <li key={`${issue.row}-${issue.code}-${index}`}>{issue.row ? `Baris ${issue.row}: ` : ""}{importIssueLabel[issue.code]} <span className="text-muted-foreground">{issue.message}</span></li>)}
-                </ul>
+                <div className="mt-3 space-y-2 text-sm">{preview.warningGroups.map((group) => <details key={`${group.code}-${group.productId ?? group.productName}`} className="rounded-lg border border-amber-500/25 px-3 py-2"><summary className="cursor-pointer font-medium">{group.productName}: {group.count} baris {importIssueLabel[group.code].toLocaleLowerCase()} {group.code === "MARGIN_MINUS" && group.productId ? <a href={`/inventaris?productId=${group.productId}`} className="ml-2 underline" onClick={(event) => event.stopPropagation()}>Buka Inventaris</a> : null}</summary><ul className="mt-2 space-y-1 text-muted-foreground">{group.issues.map((issue, index) => <li key={`${issue.row}-${index}`}>{issue.row ? `Baris ${issue.row}: ` : ""}{issue.message}</li>)}</ul></details>)}</div>
                 <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm font-medium">
                   <input type="checkbox" checked={warningsAcknowledged} onChange={(event) => setWarningsAcknowledged(event.target.checked)} className="mt-0.5 size-4 accent-primary" />
                   Saya sudah memeriksa peringatan di atas.
@@ -320,11 +702,12 @@ export function TransactionImportPanel() {
             </div>
 
             <Button type="button" onClick={() => setConfirmCommitOpen(true)} disabled={!canContinue || Boolean(commitResult)}>
-              Simpan {preview.invoiceCount} nota
+              {preview.errorRowCount > 0 ? `Perbaiki ${preview.errorRowCount.toLocaleString("id-ID")} baris dulu` : `Simpan ${preview.invoiceCount} nota`}
             </Button>
-            {!canContinue ? <p className="text-sm text-muted-foreground">Perbaiki semua error dan, bila ada peringatan, centang konfirmasi sebelum melanjutkan.</p> : null}
+            {!canContinue ? <p className="text-sm text-muted-foreground">{preview.errorRowCount > 0 ? "Impor bersifat semua-atau-tidak: tidak ada nota yang dapat disimpan sebelum seluruh error diperbaiki." : "Centang konfirmasi peringatan sebelum melanjutkan."}</p> : null}
           </CardContent>
         </Card>
+        </div>
       ) : null}
 
       {commitResult && preview ? (
@@ -355,6 +738,106 @@ export function TransactionImportPanel() {
         <DialogContent>
           <DialogHeader><DialogTitle>Batalkan impor transaksi?</DialogTitle><DialogDescription>Transaksi dari batch <span className="font-mono">{rollbackTarget?.id}</span> akan dihapus dan stok produk dikembalikan seperti sebelum impor. Transaksi POS tidak akan disentuh.</DialogDescription></DialogHeader>
           <DialogFooter><Button type="button" variant="outline" onClick={() => setRollbackTarget(null)}>Kembali</Button><Button type="button" variant="destructive" onClick={() => void rollbackImport()} disabled={isRollingBack}>{isRollingBack ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />} Batalkan impor</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Pencarian Cepat Produk Master */}
+      <Dialog open={Boolean(searchModalIssue)} onOpenChange={(open) => !open && setSearchModalIssue(null)}>
+        <DialogContent className="sm:max-w-xl md:max-w-2xl w-full rounded-[28px] p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl flex items-center gap-2">
+              <Search className="size-5 text-primary" />
+              Cari Produk Master untuk &quot;{searchModalIssue?.productName}&quot;
+            </DialogTitle>
+            <DialogDescription>
+              Ketik nama barang, SKU, atau kategori untuk memilih produk yang tepat di katalog toko.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Ketik nama produk, SKU, atau kategori (contoh: Pucuk, Aqua)..."
+                className="h-11 pl-10 pr-9 rounded-xl text-sm font-medium"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="max-h-[340px] overflow-y-auto space-y-1.5 pr-1">
+              {filteredStoreProducts.length === 0 ? (
+                <div className="text-center py-8 text-sm text-muted-foreground">
+                  Tidak ada produk master yang sesuai dengan &quot;{searchQuery}&quot;.
+                </div>
+              ) : (
+                filteredStoreProducts.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border/60 bg-muted/20 hover:bg-primary/5 hover:border-primary/40 transition-colors"
+                  >
+                    <div className="space-y-0.5 overflow-hidden">
+                      <p className="font-semibold text-sm text-foreground truncate">{p.name}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {p.category && (
+                          <span className="bg-muted px-1.5 py-0.5 rounded text-[11px] font-medium">
+                            {p.category}
+                          </span>
+                        )}
+                        {p.sku && <span>SKU: {p.sku}</span>}
+                        <span>Stok: {p.stock}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-bold text-sm text-foreground tabular-nums">
+                        {formatCurrency(p.sellPrice)}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 rounded-lg text-xs font-semibold"
+                        onClick={() => {
+                          if (searchModalIssue?.productName) {
+                            setSelectedSuggestions((curr) => ({
+                              ...curr,
+                              [searchModalIssue.productName!]: p.id,
+                            }));
+                            toast.success(
+                              `"${searchModalIssue.productName}" dipetakan ke "${p.name}". Klik tombol "Terapkan ke semua" untuk menyimpan.`
+                            );
+                          }
+                          setSearchModalIssue(null);
+                        }}
+                      >
+                        Pilih Produk
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl h-10"
+              onClick={() => setSearchModalIssue(null)}
+            >
+              Tutup
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

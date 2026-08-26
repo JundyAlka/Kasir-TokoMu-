@@ -73,6 +73,13 @@ describe("payout calculation", () => {
 
     const approved = await updatePayoutStatus(WORKSPACE_ID, savedRows[0].id, "disetujui");
     expect(approved.status).toBe("disetujui");
+    await pool.query(
+      `insert into shifts (id, workspace_owner_id, name, start_time, end_time, is_active, created_at)
+       values ('shift_payout', $1, 'Shift Payout', '00:00', '23:59', 1, $2)`,
+      [WORKSPACE_ID, timestamp]
+    );
+    const { openShift } = await import("@/lib/server/shift-service");
+    const session = await openShift(WORKSPACE_ID, WORKSPACE_ID, "shift_payout", { cash: 100_000, coins: 0, savings: 0, openedAt: timestamp });
     const paid = await updatePayoutStatus(
       WORKSPACE_ID,
       savedRows[0].id,
@@ -81,6 +88,11 @@ describe("payout calculation", () => {
     );
     expect(paid.status).toBe("dibayar");
     expect(paid.paidAt).toBeTruthy();
+    const payoutExpense = await pool.query(
+      `select expense_type, investor_id, shift_session_id, amount from expenses where investor_id = $1`,
+      ["inv_a"]
+    );
+    expect(payoutExpense.rows[0]).toMatchObject({ expense_type: "bagi_hasil_investor", investor_id: "inv_a", shift_session_id: session.id, amount: 25_000 });
 
     await expect(
       saveDraftPayouts(WORKSPACE_ID, 2026, 6)
@@ -231,6 +243,14 @@ describe("payout calculation", () => {
       { params: Promise.resolve({ id: payoutId }) }
     );
     expect(approved.status).toBe(200);
+
+    await pool.query(
+      `insert into shifts (id, workspace_owner_id, name, start_time, end_time, is_active, created_at)
+       values ('shift_payout_api', $1, 'Shift Payout', '00:00', '23:59', 1, $2)`,
+      [WORKSPACE_ID, timestamp]
+    );
+    const { openShift } = await import("@/lib/server/shift-service");
+    await openShift(WORKSPACE_ID, WORKSPACE_ID, "shift_payout_api", { cash: 100_000, coins: 0, savings: 0, openedAt: timestamp });
 
     const paid = await payoutRoute.PATCH(
       jsonRequest(`http://localhost/api/payouts/${payoutId}`, { status: "dibayar" }, "PATCH"),

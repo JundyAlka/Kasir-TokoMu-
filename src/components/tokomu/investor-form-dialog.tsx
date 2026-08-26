@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function InvestorFormDialog() {
   const router = useRouter();
@@ -27,6 +28,7 @@ export function InvestorFormDialog() {
     whatsapp: "",
     address: "",
     notes: "",
+    partnerType: "investor_uang",
   });
 
   function reset() {
@@ -35,6 +37,7 @@ export function InvestorFormDialog() {
       whatsapp: "",
       address: "",
       notes: "",
+      partnerType: "investor_uang",
     });
   }
 
@@ -92,6 +95,12 @@ export function InvestorFormDialog() {
 
         <form onSubmit={(event) => void handleSubmit(event)}>
           <div className="grid gap-4 px-5 py-4 sm:px-6">
+            <div className="grid gap-2">
+              <Label>Jenis mitra</Label>
+              <Select value={draft.partnerType} onValueChange={(partnerType) => setDraft((current) => ({ ...current, partnerType: partnerType ?? "investor_uang" }))}>
+                <SelectTrigger className="h-11 rounded-2xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="investor_uang">Investor uang</SelectItem><SelectItem value="titipan_bagihasil">Titipan bagi hasil</SelectItem><SelectItem value="sales_harian">Sales harian</SelectItem></SelectContent>
+              </Select>
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="investor-name">Nama investor</Label>
               <Input

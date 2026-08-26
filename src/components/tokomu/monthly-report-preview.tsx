@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Download,
   Eye,
@@ -64,6 +65,14 @@ function currentMonthPayload() {
   };
 }
 
+function requestedPeriod(value: string | null) {
+  const match = /^(\d{4})-(\d{2})$/.exec(value ?? "");
+  if (!match) return null;
+  const periodYear = Number(match[1]);
+  const periodMonth = Number(match[2]);
+  return periodMonth >= 1 && periodMonth <= 12 ? { periodYear, periodMonth } : null;
+}
+
 function periodLabel(year: number, month: number) {
   return new Intl.DateTimeFormat("id-ID", {
     month: "long",
@@ -110,6 +119,7 @@ function getReportMetrics(report: ReportRow) {
 }
 
 export function MonthlyReportPreview() {
+  const searchParams = useSearchParams();
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -127,7 +137,7 @@ export function MonthlyReportPreview() {
     [reports, selectedId]
   );
   const editingReport = reports.find((report) => report.id === editingId) ?? null;
-  const currentPeriod = currentMonthPayload();
+  const currentPeriod = requestedPeriod(searchParams.get("period")) ?? currentMonthPayload();
   const currentMonthReport = reports.find(
     (report) =>
       report.periodYear === currentPeriod.periodYear &&
@@ -157,7 +167,8 @@ export function MonthlyReportPreview() {
   async function loadReports(nextSelectedId?: string) {
     const data = await requestJson<{ reports: ReportRow[] }>("/api/reports/monthly-pcm");
     setReports(data.reports);
-    setSelectedId(nextSelectedId ?? selectedId ?? data.reports[0]?.id ?? null);
+    const requested = data.reports.find((report) => report.periodYear === currentPeriod.periodYear && report.periodMonth === currentPeriod.periodMonth);
+    setSelectedId(nextSelectedId ?? requested?.id ?? selectedId ?? data.reports[0]?.id ?? null);
   }
 
   useEffect(() => {
@@ -168,7 +179,8 @@ export function MonthlyReportPreview() {
       .then((data) => {
         if (!mounted) return;
         setReports(data.reports);
-        setSelectedId(data.reports[0]?.id ?? null);
+        const requested = data.reports.find((report) => report.periodYear === currentPeriod.periodYear && report.periodMonth === currentPeriod.periodMonth);
+        setSelectedId(requested?.id ?? data.reports[0]?.id ?? null);
       })
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Gagal memuat laporan PCM.");
@@ -180,7 +192,7 @@ export function MonthlyReportPreview() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [currentPeriod.periodMonth, currentPeriod.periodYear]);
 
   async function handleSaveReport() {
     setIsCreating(true);
@@ -190,7 +202,7 @@ export function MonthlyReportPreview() {
           periodYear: editingReport.periodYear,
           periodMonth: editingReport.periodMonth,
         }
-        : currentMonthPayload();
+        : currentPeriod;
       const data = await requestJson<{ report: ReportRow }>("/api/reports/monthly-pcm", {
         method: "POST",
         body: JSON.stringify({ ...payload, note }),
@@ -198,7 +210,7 @@ export function MonthlyReportPreview() {
       await loadReports(data.report.id);
       setEditingId(null);
       setPreviewVersion((version) => version + 1);
-      toast.success(editingReport ? "Perubahan draft berhasil disimpan." : "Draft laporan bulan ini berhasil dibuat.");
+      toast.success(editingReport ? "Perubahan draft berhasil disimpan." : "Draft laporan periode ini berhasil dibuat.");
       window.dispatchEvent(new CustomEvent("pcm-reports-updated", { detail: { action: "updated" } }));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal membuat laporan PCM.");
@@ -292,7 +304,7 @@ export function MonthlyReportPreview() {
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {isCurrentMonthOutdated && currentMonthReport?.status === "final"
                   ? `Silakan klik "Buka kembali" pada daftar laporan di bawah, lalu klik "Update Laporan" di atas untuk memperbarui data PCM.`
-                  : `Draft laporan PCM bulan ini sudah ada. Periksa dan finalize agar tercatat resmi.`}
+                  : `Draft laporan PCM periode ini sudah ada. Periksa dan finalize agar tercatat resmi.`}
               </p>
             </div>
           </div>
@@ -304,11 +316,11 @@ export function MonthlyReportPreview() {
           <div className="space-y-1">
             <CardTitle className="font-heading text-2xl">Laporan bulanan PCM</CardTitle>
             <CardDescription>
-              Buat snapshot laporan resmi, preview PDF, download, dan finalize laporan periode.
+              Buat snapshot laporan resmi, preview PDF, download, dan finalisasi laporan periode {periodLabel(currentPeriod.periodYear, currentPeriod.periodMonth)}.
             </CardDescription>
           </div>
           <div className="flex flex-col gap-3 sm:min-w-[360px]">
-            <Label htmlFor="report-note">Catatan laporan bulan ini</Label>
+            <Label htmlFor="report-note">Catatan laporan periode ini</Label>
             <Textarea
               id="report-note"
               value={note}
@@ -340,7 +352,7 @@ export function MonthlyReportPreview() {
                 {editingReport || isCurrentMonthOutdated
                   ? "Update Perubahan"
                   : currentMonthReport?.status === "final"
-                    ? "Laporan Bulan Ini Sudah Final"
+                    ? "Laporan Periode Ini Sudah Final"
                     : "Simpan Perubahan"}
               </Button>
               {editingReport ? (
@@ -522,7 +534,7 @@ export function MonthlyReportPreview() {
             })}
             {!isLoading && reports.length === 0 ? (
               <div className="flex min-h-28 items-center justify-center rounded-2xl border border-dashed px-4 text-center text-muted-foreground">
-                Belum ada laporan. Buat laporan bulan ini untuk mulai preview PDF.
+                Belum ada laporan. Buat laporan periode ini untuk mulai preview PDF.
               </div>
             ) : null}
             {isLoading ? (

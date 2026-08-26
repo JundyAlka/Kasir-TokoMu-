@@ -17,6 +17,16 @@ export type UserRoleAssignment = RoleContext & {
   isActive: number;
 };
 
+export type ShiftStatusInfo = {
+  isCurrentShiftActive: boolean;
+  activeSessionId?: string | null;
+  activeShiftName?: string | null;
+  activeStartedAt?: string | null;
+  lastShiftName?: string | null;
+  lastStartedAt?: string | null;
+  lastEndedAt?: string | null;
+};
+
 export type WorkspaceUser = {
   id: string;
   name: string;
@@ -24,6 +34,7 @@ export type WorkspaceUser = {
   role: Role;
   isActive: boolean;
   monthlySalary: number;
+  shiftStatus?: ShiftStatusInfo;
 };
 
 const roles: Role[] = ["pimpinan", "pengelola_keuangan", "kasir"];
@@ -145,46 +156,86 @@ export async function assignRole(userId: string, role: Role, workspaceOwnerId: s
 }
 
 export async function listWorkspaceUsers(workspaceOwnerId: string): Promise<WorkspaceUser[]> {
-  const result = await pool.query<{
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-    isActive: boolean;
-    monthlySalary: number;
-  }>(
-    `
-      select
-        u.id,
-        u.name,
-        u.email,
-        ur.role,
-        (ur.is_active = 1) as "isActive",
-        ur.monthly_salary as "monthlySalary"
-      from user_roles ur
-      join "user" u on u.id = ur.user_id
-      where ur.workspace_owner_id = $1
-      order by
-        ur.is_active desc,
-        case ur.role
-          when 'pimpinan' then 0
-          when 'pengelola_keuangan' then 1
-          else 2
-        end,
-        u.name asc
-    `,
-    [workspaceOwnerId]
-  );
+  const [usersResult, sessionsResult] = await Promise.all([
+    pool.query<{
+      id: string;
+      name: string;
+      email: string;
+      role: string;
+      isActive: boolean;
+      monthlySalary: number;
+    }>(
+      `
+        select
+          u.id,
+          u.name,
+          u.email,
+          ur.role,
+          (ur.is_active = 1) as "isActive",
+          ur.monthly_salary as "monthlySalary"
+        from user_roles ur
+        join "user" u on u.id = ur.user_id
+        where ur.workspace_owner_id = $1
+        order by
+          ur.is_active desc,
+          case ur.role
+            when 'pimpinan' then 0
+            when 'pengelola_keuangan' then 1
+            else 2
+          end,
+          u.name asc
+      `,
+      [workspaceOwnerId]
+    ),
+    pool.query<{
+      sessionId: string;
+      cashierUserId: string;
+      shiftName: string;
+      status: string;
+      startedAt: string;
+      endedAt: string | null;
+    }>(
+      `
+        select
+          ss.id as "sessionId",
+          ss.cashier_user_id as "cashierUserId",
+          s.name as "shiftName",
+          ss.status,
+          ss.started_at as "startedAt",
+          ss.ended_at as "endedAt"
+        from shift_sessions ss
+        join shifts s on s.id = ss.shift_id
+        where ss.workspace_owner_id = $1
+        order by ss.started_at desc
+      `,
+      [workspaceOwnerId]
+    ).catch(() => ({ rows: [] })),
+  ]);
 
-  return result.rows.reduce<WorkspaceUser[]>((users, user: WorkspaceUserRow) => {
+  const sessions = sessionsResult.rows;
+
+  return usersResult.rows.reduce<WorkspaceUser[]>((users, user: any) => {
     if (isRole(user.role)) {
+      const userSessions = sessions.filter((s) => s.cashierUserId === user.id);
+      const activeSession = userSessions.find((s) => s.status === "open" || !s.endedAt);
+      const lastSession = userSessions.find((s) => s.status === "closed" && Boolean(s.endedAt));
+
       users.push({
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role as Role,
         isActive: user.isActive,
-        monthlySalary: (user as any).monthlySalary ?? 0,
+        monthlySalary: user.monthlySalary ?? 0,
+        shiftStatus: {
+          isCurrentShiftActive: Boolean(activeSession),
+          activeSessionId: activeSession?.sessionId ?? null,
+          activeShiftName: activeSession?.shiftName ?? null,
+          activeStartedAt: activeSession?.startedAt ? String(activeSession.startedAt) : null,
+          lastShiftName: lastSession?.shiftName ?? null,
+          lastStartedAt: lastSession?.startedAt ? String(lastSession.startedAt) : null,
+          lastEndedAt: lastSession?.endedAt ? String(lastSession.endedAt) : null,
+        },
       });
     }
 

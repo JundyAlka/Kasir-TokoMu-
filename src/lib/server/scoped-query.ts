@@ -20,6 +20,7 @@ import {
   investors,
   monthlyReports,
   products,
+  productAliases,
   restockLogs,
   restockPlans,
   shiftSessions,
@@ -49,6 +50,13 @@ export function createScopedQuery(workspaceOwnerId: string) {
       .from(products)
       .where(eq(products.userId, workspaceOwnerId))
       .orderBy(desc(products.createdAt));
+  }
+
+  async function productAliasList() {
+    return db
+      .select()
+      .from(productAliases)
+      .where(eq(productAliases.userId, workspaceOwnerId));
   }
 
   async function transactionList() {
@@ -225,6 +233,7 @@ export function createScopedQuery(workspaceOwnerId: string) {
     // reads
     storeProfile,
     productList,
+    productAliasList,
     productById,
     transactionList,
     transactionItemsForIds,

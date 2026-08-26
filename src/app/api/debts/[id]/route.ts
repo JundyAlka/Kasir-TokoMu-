@@ -51,7 +51,8 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({ debt });
+    const detail = await getDebtDetail(workspaceOwnerId, id);
+    return NextResponse.json({ debt: detail });
   } catch (error) {
     return handleRouteError(error, "Gagal memperbarui status hutang.");
   }

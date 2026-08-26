@@ -49,23 +49,16 @@ export function PengaturanView({ role }: { role: string }) {
 
   async function handleSave() {
     try {
-      if (
-        form.storeName.trim().length === 0 ||
-        form.storeAddress.trim().length === 0 ||
-        form.ownerName.trim().length === 0 ||
-        form.ownerWhatsapp.trim().length < 10 ||
-        form.city.trim().length === 0 ||
-        form.enabledPayments.length === 0
-      ) {
+      if (!form.storeName || !form.storeAddress || !form.ownerName || !form.ownerWhatsapp || !form.city || form.enabledPayments.length === 0) {
         toast.error(
-          "Lengkapi nama warung, alamat, pemilik, WhatsApp, kota, dan pilih minimal satu metode bayar."
+          "Lengkapi nama toko, alamat, pemilik, WhatsApp, kota, dan pilih minimal satu metode bayar."
         );
         return;
       }
 
       setIsSaving(true);
       await updateSettings(form);
-      toast.success("Profil warung berhasil diperbarui.");
+      toast.success("Profil toko berhasil diperbarui.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal menyimpan pengaturan.");
     } finally {
@@ -88,11 +81,11 @@ export function PengaturanView({ role }: { role: string }) {
   return (
     <Tabs defaultValue="profil" className="space-y-4">
       <TabsList className="h-11 rounded-full p-1">
-        <TabsTrigger value="profil" className="rounded-full px-4">
-          Profil Warung
+        <TabsTrigger value="profil" className="rounded-full px-4 font-semibold">
+          Profil Toko
         </TabsTrigger>
         {role === "pimpinan" ? (
-          <TabsTrigger value="shift" className="rounded-full px-4">
+          <TabsTrigger value="shift" className="rounded-full px-4 font-semibold">
             Shift Kasir
           </TabsTrigger>
         ) : null}
@@ -104,9 +97,9 @@ export function PengaturanView({ role }: { role: string }) {
             <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <CardTitle className="font-heading text-2xl">Profil warung & notifikasi</CardTitle>
+              <CardTitle className="font-heading text-2xl">Profil Toko & Notifikasi</CardTitle>
               <CardDescription className="mt-1">
-                Atur identitas warung yang akan dipakai di dashboard, laporan, dan pengingat operasional.
+                Atur identitas toko yang akan dipakai di dashboard, laporan, dan pengingat operasional.
               </CardDescription>
             </div>
             <div
@@ -125,20 +118,20 @@ export function PengaturanView({ role }: { role: string }) {
           <div className="rounded-[26px] border border-border/70 bg-card/85 p-5">
             <div className="flex items-center gap-2">
               <Store className="size-4 text-primary" />
-              <p className="font-medium">Identitas warung</p>
+              <p className="font-medium">Identitas Toko</p>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Ubah nama warung, tagline singkat, kota, dan alamat lengkap dari satu tempat.
+              Ubah nama toko, tagline singkat, kota, dan alamat lengkap dari satu tempat.
             </p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="store-name">Nama warung</Label>
+                <Label htmlFor="store-name">Nama Toko</Label>
                 <Input
                   id="store-name"
                   value={form.storeName}
                   onChange={(event) => updateField("storeName", event.target.value)}
                   className="h-11 rounded-2xl"
-                  placeholder="Contoh: Warung Berkah Bu Rani"
+                  placeholder="Contoh: TokoMu Kratonrejo"
                   disabled={!canMutateSettings}
                 />
               </div>
@@ -149,7 +142,7 @@ export function PengaturanView({ role }: { role: string }) {
                   value={form.storeTagline}
                   onChange={(event) => updateField("storeTagline", event.target.value)}
                   className="h-11 rounded-2xl"
-                  placeholder="Contoh: Sembako, kopi, dan jajanan harian"
+                  placeholder="Contoh: Toko Amal Usaha PCM Muhammadiyah Grabag"
                   disabled={!canMutateSettings}
                 />
               </div>
@@ -160,18 +153,18 @@ export function PengaturanView({ role }: { role: string }) {
                   value={form.city}
                   onChange={(event) => updateField("city", event.target.value)}
                   className="h-11 rounded-2xl"
-                  placeholder="Contoh: Depok"
+                  placeholder="Contoh: Purworejo"
                   disabled={!canMutateSettings}
                 />
               </div>
               <div className="grid gap-2 sm:col-span-2">
-                <Label htmlFor="store-address">Alamat warung</Label>
+                <Label htmlFor="store-address">Alamat Toko</Label>
                 <Textarea
                   id="store-address"
                   value={form.storeAddress}
                   onChange={(event) => updateField("storeAddress", event.target.value)}
                   className="min-h-24 rounded-[22px]"
-                  placeholder="Contoh: Jl. Mawar No. 8, dekat mushola Al-Ikhlas"
+                  placeholder="Contoh: Kratonrejo, Grabag, Purworejo"
                   disabled={!canMutateSettings}
                 />
               </div>
