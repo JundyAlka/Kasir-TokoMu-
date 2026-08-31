@@ -18,7 +18,6 @@ const comparisonKeys = [
   "grossProfit",
   "expenseTotal",
   "netProfit",
-  "profitDistribution",
   "transactionCount",
 ] as const;
 
@@ -37,7 +36,13 @@ function differs(left: Partial<ReportComparison>, right: Partial<ReportCompariso
 function incompleteOrDiffersFromSnapshot(snapshot: Partial<ReportComparison>, financial: Partial<ReportComparison>) {
   return comparisonKeys.some((key) => {
     const source = numeric(snapshot[key]);
-    return source !== null && numeric(financial[key]) !== source;
+    const target = numeric(financial[key]);
+    if (source === null) return false;
+    if (target === null) {
+      if (key === "profitDistribution" && source === 0) return false;
+      return true;
+    }
+    return source !== target;
   });
 }
 

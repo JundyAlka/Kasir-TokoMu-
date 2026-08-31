@@ -54,7 +54,7 @@ describe("debts service", () => {
       borrowerName: "Bu Siti",
       whatsapp: "081234567892",
       amount: 1,
-      dueDate: "2026-08-30",
+      dueDate: "2099-12-31",
       items: [
         {
           productId: "prd_kopi",

@@ -125,7 +125,7 @@ export function AppShell({
         // The sidebar reminder is intentionally quiet until H-2 at month end.
         const inReportReminderWindow = isReportReminderWindow(now);
         const staleSnapshotPeriod = monthlyData?.notifications?.snapshotOutdatedPeriods?.find((p: string) => p === currentPeriodStr) ?? null;
-        const stalePcmPeriod = monthlyData?.notifications?.pcmOutdatedPeriods?.find((p: string) => p === currentPeriodStr) ?? monthlyData?.notifications?.pcmOutdatedPeriods?.[0] ?? null;
+        const stalePcmPeriod = monthlyData?.notifications?.pcmOutdatedPeriods?.find((p: string) => p === currentPeriodStr) ?? null;
 
         // A finalized report that changed after closing is always actionable,
         // even outside the routine H-2 reminder window.

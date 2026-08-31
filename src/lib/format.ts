@@ -25,6 +25,10 @@ export function formatCompactCurrency(value: number) {
   return compactCurrencyFormatter.format(value);
 }
 
+export function formatNumber(value: number) {
+  return new Intl.NumberFormat("id-ID").format(value || 0);
+}
+
 export function formatDate(date: string) {
   return new Intl.DateTimeFormat("id-ID", {
     day: "numeric",

@@ -161,8 +161,14 @@ export function MonthlyReportPreview() {
     return snapRev !== pcmRev || snapNet !== pcmNet;
   }, [currentMonthReport]);
 
-  // Banner: show ONLY if snapshot is outdated OR current month report is missing
-  const showPendingBanner = !currentMonthReport || isCurrentMonthOutdated;
+  const isCurrentMonthFinal = currentMonthReport?.status === "final";
+  const isCurrentMonthDraft = currentMonthReport?.status === "draft";
+  const isFinalAndOutdated = isCurrentMonthFinal && isCurrentMonthOutdated;
+  const isDraftAndNeedsUpdate = (isCurrentMonthDraft && isCurrentMonthOutdated) || !!editingReport;
+  const isDraftReadyToFinalize = isCurrentMonthDraft && !isCurrentMonthOutdated && !editingReport;
+
+  // Banner: show ONLY if snapshot is outdated OR draft needs updating OR draft ready to finalize OR report missing
+  const showPendingBanner = !currentMonthReport || isFinalAndOutdated || isDraftAndNeedsUpdate || isDraftReadyToFinalize;
 
   async function loadReports(nextSelectedId?: string) {
     const data = await requestJson<{ reports: ReportRow[] }>("/api/reports/monthly-pcm");
@@ -290,21 +296,41 @@ export function MonthlyReportPreview() {
   return (
     <div className="space-y-4">
       {showPendingBanner ? (
-        <div className="rounded-3xl border border-rose-500/50 bg-rose-500/10 p-5 shadow-sm backdrop-blur-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-pulse">
+        <div className={cn(
+          "rounded-3xl border p-5 shadow-sm backdrop-blur-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-pulse",
+          isDraftReadyToFinalize
+            ? "border-emerald-500/50 bg-emerald-500/10"
+            : "border-rose-500/50 bg-rose-500/10"
+        )}>
           <div className="flex items-center gap-3.5">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-rose-500 text-white">
+            <div className={cn(
+              "flex size-11 shrink-0 items-center justify-center rounded-2xl text-white",
+              isDraftReadyToFinalize ? "bg-emerald-600" : "bg-rose-500"
+            )}>
               <FileText className="size-5" />
             </div>
             <div>
               <p className="font-heading text-lg font-semibold text-foreground">
-                {isCurrentMonthOutdated && currentMonthReport?.status === "final"
-                  ? `Snapshot Laporan Bulanan Baru Saja Diperbarui!`
-                  : `Laporan PCM ${periodLabel(currentPeriod.periodYear, currentPeriod.periodMonth)} Belum Final`}
+                {isFinalAndOutdated
+                  ? "Snapshot Laporan Bulanan Baru Saja Diperbarui!"
+                  : isDraftAndNeedsUpdate
+                    ? "Draft Laporan Siap Diperbarui!"
+                    : isDraftReadyToFinalize
+                      ? "Data PCM Berhasil Diperbarui!"
+                      : !currentMonthReport
+                        ? `Laporan PCM ${periodLabel(currentPeriod.periodYear, currentPeriod.periodMonth)} Belum Dibuat`
+                        : `Laporan PCM ${periodLabel(currentPeriod.periodYear, currentPeriod.periodMonth)} Belum Final`}
               </p>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                {isCurrentMonthOutdated && currentMonthReport?.status === "final"
-                  ? `Silakan klik "Buka kembali" pada daftar laporan di bawah, lalu klik "Update Laporan" di atas untuk memperbarui data PCM.`
-                  : `Draft laporan PCM periode ini sudah ada. Periksa dan finalize agar tercatat resmi.`}
+                {isFinalAndOutdated
+                  ? `Langkah 1: Silakan klik tombol "Buka kembali" pada daftar laporan di bawah terlebih dahulu agar laporan dapat diedit.`
+                  : isDraftAndNeedsUpdate
+                    ? `Langkah 2: Silakan klik tombol "Update Perubahan" di atas untuk menyinkronkan data PCM dengan snapshot terbaru.`
+                    : isDraftReadyToFinalize
+                      ? `Langkah 3: Silakan periksa data lalu klik tombol "Finalize" pada daftar laporan di bawah untuk mengunci laporan resmi.`
+                      : !currentMonthReport
+                        ? `Belum ada draft laporan PCM untuk periode ini. Klik "Simpan Perubahan" untuk membuat draft baru.`
+                        : `Draft laporan PCM periode ini sudah ada. Periksa dan finalize agar tercatat resmi.`}
               </p>
             </div>
           </div>
@@ -337,19 +363,19 @@ export function MonthlyReportPreview() {
               <Button
                 className={cn(
                   "rounded-2xl transition-all",
-                  (editingReport || isCurrentMonthOutdated) && "animate-pulse ring-2 ring-primary ring-offset-2 bg-primary font-bold shadow-lg"
+                  isDraftAndNeedsUpdate && "animate-pulse ring-2 ring-primary ring-offset-2 bg-primary font-bold shadow-lg text-primary-foreground"
                 )}
                 onClick={() => void handleSaveReport()}
-                disabled={isCreating || (!editingReport && currentMonthReport?.status === "final" && !isCurrentMonthOutdated)}
+                disabled={isCreating || isFinalAndOutdated || (!editingReport && currentMonthReport?.status === "final" && !isCurrentMonthOutdated)}
               >
                 {isCreating ? (
                   <Loader2 className="size-4 animate-spin" />
-                ) : editingReport || isCurrentMonthOutdated ? (
+                ) : isDraftAndNeedsUpdate ? (
                   <FilePenLine className="size-4" />
                 ) : (
                   <Plus className="size-4" />
                 )}
-                {editingReport || isCurrentMonthOutdated
+                {isDraftAndNeedsUpdate
                   ? "Update Perubahan"
                   : currentMonthReport?.status === "final"
                     ? "Laporan Periode Ini Sudah Final"
@@ -402,6 +428,7 @@ export function MonthlyReportPreview() {
               const pcmNet = Number(pcmFin?.netProfit ?? snapNet);
 
               const isOutdated = !!pcmFin && (snapRev !== pcmRev || snapNet !== pcmNet);
+              const shouldPulseFinalize = report.status === "draft" && isCurrentMonth && !isOutdated && !editingReport;
 
               return (
                 <article
@@ -516,7 +543,12 @@ export function MonthlyReportPreview() {
                     {report.status === "draft" ? (
                       <Button
                         size="sm"
-                        className="rounded-full"
+                        className={cn(
+                          "rounded-full transition-all",
+                          shouldPulseFinalize
+                            ? "bg-emerald-600 text-white hover:bg-emerald-700 font-bold border-0 shadow-lg ring-2 ring-emerald-400 ring-offset-1 animate-pulse"
+                            : ""
+                        )}
                         disabled={isFinalizing === report.id}
                         onClick={() => void handleFinalize(report.id)}
                       >

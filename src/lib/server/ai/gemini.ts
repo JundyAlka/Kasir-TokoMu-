@@ -82,17 +82,86 @@ function geminiErrorMessage(text: string) {
 function parseOpenAiResponse(text: string): GeminiResponse {
   const trimmed = text.trim();
   try {
-    return JSON.parse(trimmed) as GeminiResponse;
+    const parsed = JSON.parse(trimmed) as GeminiResponse;
+    if (parsed.choices && parsed.choices[0]?.message) return parsed;
   } catch {
-    const events = trimmed
-      .split(/\r?\n/)
-      .filter((line) => line.startsWith("data:"))
-      .map((line) => line.slice("data:".length).trim())
-      .filter((line) => line && line !== "[DONE]");
-    if (events.length === 0) throw new Error("Provider mengembalikan format respons yang tidak dikenali.");
-    const parsed = JSON.parse(events[0]) as GeminiResponse;
-    return parsed;
+    // Continue to SSE stream parser
   }
+
+  const events = trimmed
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice("data:".length).trim())
+    .filter((line) => line && line !== "[DONE]");
+
+  if (events.length === 0) throw new Error("Provider mengembalikan format respons yang tidak dikenali.");
+
+  let id = "";
+  let model = "";
+  let content = "";
+  const toolCallsMap = new Map<number, { id: string; type: "function"; function: { name: string; arguments: string } }>();
+  let usage: GeminiResponse["usage"];
+
+  for (const event of events) {
+    try {
+      const chunk = JSON.parse(event);
+      if (chunk.id) id = chunk.id;
+      if (chunk.model) model = chunk.model;
+      if (chunk.usage) usage = chunk.usage;
+
+      const choice = chunk.choices?.[0];
+      if (!choice) continue;
+
+      if (choice.delta?.content) {
+        content += choice.delta.content;
+      } else if (choice.message?.content) {
+        content += choice.message.content;
+      }
+
+      const toolCalls = choice.delta?.tool_calls ?? choice.message?.tool_calls;
+      if (toolCalls) {
+        for (const tc of toolCalls) {
+          const idx = tc.index ?? 0;
+          if (!toolCallsMap.has(idx)) {
+            toolCallsMap.set(idx, {
+              id: tc.id ?? `call_${Math.random().toString(36).slice(2, 9)}`,
+              type: "function",
+              function: {
+                name: tc.function?.name ?? "",
+                arguments: tc.function?.arguments ?? "",
+              },
+            });
+          } else {
+            const existing = toolCallsMap.get(idx)!;
+            if (tc.id) existing.id = tc.id;
+            if (tc.function?.name) existing.function.name += tc.function.name;
+            if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+          }
+        }
+      }
+    } catch {
+      // ignore individual malformed chunks
+    }
+  }
+
+  const tool_calls = Array.from(toolCallsMap.values()).filter((tc) => tc.function.name);
+
+  return {
+    id: id || `chatcmpl_${Date.now()}`,
+    model: model || "deepseek-v4-flash",
+    choices: [
+      {
+        index: 0,
+        finish_reason: "stop",
+        message: {
+          role: "assistant",
+          content: content || null,
+          tool_calls: tool_calls.length > 0 ? tool_calls : undefined,
+        },
+      },
+    ],
+    usage,
+  };
 }
 
 const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
@@ -258,7 +327,7 @@ async function tryCallGemini(
       tools: input.tools,
       tool_choice: input.tools ? input.toolChoice ?? "auto" : undefined,
       temperature: input.temperature ?? 0.2,
-      stream: false,
+      stream: baseUrl.includes("router.juan.web.id") ? true : false,
     }),
     signal: AbortSignal.timeout(timeoutMs),
   }).catch((err) => {

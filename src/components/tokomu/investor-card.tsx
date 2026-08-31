@@ -65,9 +65,18 @@ export function InvestorCard({
               <p className="mt-1 text-sm text-muted-foreground">{investor.whatsapp || "WA belum diisi"}</p>
             </div>
           </div>
-          <Badge variant={investor.isActive === 1 ? "default" : "secondary"}>
-            {investor.isActive === 1 ? "Aktif" : "Nonaktif"}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-1.5 justify-end">
+            <Badge variant="outline" className="text-xs font-normal border-primary/30 text-foreground bg-primary/5">
+              {investor.partnerType === "titipan_bagihasil"
+                ? "Titipan Bagi Hasil"
+                : investor.partnerType === "sales_harian"
+                  ? "Sales Harian"
+                  : "Investor Uang"}
+            </Badge>
+            <Badge variant={investor.isActive === 1 ? "default" : "secondary"}>
+              {investor.isActive === 1 ? "Aktif" : "Nonaktif"}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

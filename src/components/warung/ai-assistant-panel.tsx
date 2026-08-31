@@ -7,25 +7,26 @@ import {
   BookOpen,
   Check,
   ChevronRight,
-  Mic,
-  PackageSearch,
-  Send,
-  Sparkles,
-  TrendingUp,
-  Wallet,
-  X,
-  Settings2,
-  Power,
-  Trash,
-  Search,
+  ChevronUp,
+  ChevronDown,
   History,
   Activity,
   Eye,
   EyeOff,
   Quote,
   Play,
-  ChevronUp,
-  ChevronDown,
+  Mic,
+  PackageSearch,
+  Plus,
+  Power,
+  Search,
+  Send,
+  Settings2,
+  Sparkles,
+  Trash,
+  TrendingUp,
+  Wallet,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -147,85 +148,249 @@ function MessageBubble({
 }
 
 export function normalizeAssistantMarkdown(text: string): string {
-  return text
-    .split("\n")
-    .filter((line) => !/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line))
-    .map((line) => line.replace(/^\s*#{1,6}\s+/, ""))
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n");
+  const rawLines = text.split(/\r?\n/);
+  const normalizedLines: string[] = [];
+
+  for (const rawLine of rawLines) {
+    let line = rawLine;
+
+    // Ignore standalone horizontal dividers
+    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      continue;
+    }
+
+    // Strip markdown heading hashes (### Header -> Header)
+    line = line.replace(/^\s*#{1,6}\s+/, "");
+
+    const firstPipe = line.indexOf("|");
+    const lastPipe = line.lastIndexOf("|");
+
+    // Has at least 2 pipes (valid table row structure)
+    if (firstPipe !== -1 && lastPipe > firstPipe) {
+      const beforePipe = line.slice(0, firstPipe).trim();
+      const tableRow = line.slice(firstPipe, lastPipe + 1).trim();
+      const afterPipe = line.slice(lastPipe + 1).trim();
+
+      if (beforePipe) {
+        normalizedLines.push(beforePipe);
+        normalizedLines.push("");
+      }
+      normalizedLines.push(tableRow);
+      if (afterPipe) {
+        normalizedLines.push("");
+        normalizedLines.push(afterPipe);
+      }
+      continue;
+    }
+
+    normalizedLines.push(line);
+  }
+
+  return normalizedLines.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+function isTableRow(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.length > 2) return true;
+  const pipes = (trimmed.match(/\|/g) || []).length;
+  return pipes >= 2;
+}
+
+function isTableDelimiter(line: string): boolean {
+  const trimmed = line.trim();
+  return /^\|?(?:\s*:?-+:?\s*\|?)+$/.test(trimmed);
+}
+
+function parseTableCells(row: string): string[] {
+  const trimmed = row.trim();
+  const inner = trimmed.startsWith("|") && trimmed.endsWith("|") ? trimmed.slice(1, -1) : trimmed;
+  return inner.split("|").map((cell) => cell.trim());
 }
 
 export function parseMarkdown(text: string): React.ReactNode {
   const lines = normalizeAssistantMarkdown(text).split("\n");
   const elements: React.ReactNode[] = [];
-  let inList = false;
+  let inList: "bullet" | "ordered" | false = false;
   let listItems: React.ReactNode[] = [];
 
   const parseInline = (str: string): React.ReactNode[] => {
-    const parts = str.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g);
+    const parts = str.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`)/g);
     return parts.map((part, index) => {
       if (part.startsWith("**") && part.endsWith("**")) {
-        return <strong key={index} className="font-bold text-primary">{part.slice(2, -2)}</strong>;
+        return (
+          <strong key={index} className="font-bold text-primary font-heading">
+            {part.slice(2, -2)}
+          </strong>
+        );
       }
       if (part.startsWith("*") && part.endsWith("*")) {
-        return <strong key={index} className="font-semibold text-primary">{part.slice(1, -1)}</strong>;
+        return (
+          <strong key={index} className="font-semibold text-primary">
+            {part.slice(1, -1)}
+          </strong>
+        );
+      }
+      if (part.startsWith("`") && part.endsWith("`")) {
+        return (
+          <code
+            key={index}
+            className="rounded-md bg-primary/10 border border-primary/20 px-1.5 py-0.5 font-mono text-xs text-primary font-semibold"
+          >
+            {part.slice(1, -1)}
+          </code>
+        );
       }
       return part;
     });
   };
 
-  lines.forEach((line, lineIndex) => {
-    const trimmed = line.trim();
-    const isBullet = trimmed.startsWith("- ") || trimmed.startsWith("* ");
+  function flushList(key: string) {
+    if (!inList) return;
+    if (inList === "ordered") {
+      elements.push(
+        <ol key={key} className="my-2 list-decimal list-inside space-y-1 text-sm pl-1">
+          {listItems}
+        </ol>
+      );
+    } else {
+      elements.push(
+        <ul key={key} className="my-2 list-disc list-inside space-y-1 text-sm pl-1">
+          {listItems}
+        </ul>
+      );
+    }
+    inList = false;
+    listItems = [];
+  }
 
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // 1. Markdown Table Detection
+    if (isTableRow(line)) {
+      flushList(`list-before-table-${i}`);
+      const tableLines: string[] = [];
+      while (i < lines.length && isTableRow(lines[i])) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+
+      const hasDelimiter = tableLines.length > 1 && isTableDelimiter(tableLines[1]);
+      const headers = hasDelimiter ? parseTableCells(tableLines[0]) : [];
+      const rowLines = hasDelimiter ? tableLines.slice(2) : tableLines;
+      const rows = rowLines.map(parseTableCells);
+
+      elements.push(
+        <div
+          key={`table-${i}`}
+          className="overflow-x-auto my-2.5 rounded-2xl border border-border/80 bg-background/90 shadow-xs"
+        >
+          <table className="min-w-full text-xs text-left border-collapse">
+            {headers.length > 0 && (
+              <thead>
+                <tr className="border-b border-border/70 bg-muted/80">
+                  {headers.map((h, hi) => (
+                    <th
+                      key={hi}
+                      className="px-3 py-2 font-semibold text-foreground whitespace-nowrap"
+                    >
+                      {parseInline(h)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+            )}
+            <tbody className="divide-y divide-border/40">
+              {rows.map((row, ri) => (
+                <tr
+                  key={ri}
+                  className="hover:bg-muted/40 transition-colors odd:bg-transparent even:bg-muted/20"
+                >
+                  {row.map((cell, ci) => (
+                    <td key={ci} className="px-3 py-2 text-foreground/90 tabular-nums">
+                      {parseInline(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    // 2. Bullet List Detection
+    const isBullet = trimmed.startsWith("- ") || trimmed.startsWith("* ");
     if (isBullet) {
-      if (!inList) {
-        inList = true;
-        listItems = [];
+      if (inList !== "bullet") {
+        flushList(`list-switch-${i}`);
+        inList = "bullet";
       }
       const itemContent = line.replace(/^\s*[-*]\s*/, "");
       listItems.push(
-        <li key={`li-${lineIndex}`} className="ml-4 list-disc pl-1 py-0.5">
+        <li key={`li-${i}`} className="py-0.5 leading-relaxed">
           {parseInline(itemContent)}
         </li>
       );
-    } else {
-      if (inList) {
-        elements.push(
-          <ul key={`ul-${lineIndex}`} className="my-1.5 list-inside list-disc">
-            {listItems}
-          </ul>
-        );
-        inList = false;
-        listItems = [];
+      i++;
+      continue;
+    }
+
+    // 3. Ordered List Detection
+    const isOrdered = /^\d+\.\s+/.test(trimmed);
+    if (isOrdered) {
+      if (inList !== "ordered") {
+        flushList(`list-switch-${i}`);
+        inList = "ordered";
       }
-      
-      if (trimmed === "") {
-        elements.push(<div key={`br-${lineIndex}`} className="h-2" />);
+      const itemContent = line.replace(/^\s*\d+\.\s*/, "");
+      listItems.push(
+        <li key={`li-${i}`} className="py-0.5 leading-relaxed">
+          {parseInline(itemContent)}
+        </li>
+      );
+      i++;
+      continue;
+    }
+
+    // Regular line
+    flushList(`list-after-${i}`);
+
+    if (trimmed === "") {
+      elements.push(<div key={`br-${i}`} className="h-1.5" />);
+    } else {
+      const isHeaderWithEmoji = /^(?:🚨|⚠️|📦|💰|📊|🛍️|💡|✅|🔥|📌|✨)\s+/.test(trimmed);
+      if (isHeaderWithEmoji) {
+        elements.push(
+          <div
+            key={`p-${i}`}
+            className="flex items-center gap-1.5 font-heading font-semibold text-foreground text-[13px] mt-2.5 mb-1"
+          >
+            {parseInline(line)}
+          </div>
+        );
       } else {
         elements.push(
-          <p key={`p-${lineIndex}`} className="leading-relaxed">
+          <p key={`p-${i}`} className="leading-relaxed text-sm">
             {parseInline(line)}
           </p>
         );
       }
     }
-  });
-
-  if (inList) {
-    elements.push(
-      <ul key="ul-final" className="my-1.5 list-inside list-disc">
-        {listItems}
-      </ul>
-    );
+    i++;
   }
+
+  flushList("list-final");
 
   return <div className="space-y-1">{elements}</div>;
 }
 
 function AssistantTextBubble({ text }: { text: string }) {
   return (
-    <div className="rounded-3xl rounded-bl-md bg-card/80 px-4 py-2.5 text-sm text-foreground ring-1 ring-foreground/10 backdrop-blur">
+    <div className="rounded-3xl rounded-tl-sm bg-card/95 p-4 text-sm text-foreground shadow-xs ring-1 ring-border/70 backdrop-blur-md">
       {parseMarkdown(text)}
     </div>
   );
@@ -774,7 +939,7 @@ res = await api<{ newMessages: ServerMessage[] }>(
           <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_18px_38px_-22px_rgba(186,92,35,0.85)] transition-transform group-hover/rail:scale-105">
             <Sparkles className="size-4" />
           </span>
-          <span
+           <span
             className="text-[10px] font-medium tracking-wide text-foreground/70"
             style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
           >
@@ -786,31 +951,34 @@ res = await api<{ newMessages: ServerMessage[] }>(
         </button>
       ) : (
         <>
-          <header className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
-            <span className="flex size-9 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+          <header className="flex items-center gap-3 border-b border-border/60 px-4 py-3 bg-card/60 backdrop-blur-md">
+            <span className="flex size-9 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary to-primary/80 text-primary-foreground shadow-xs">
               <Sparkles className="size-4" />
             </span>
             <div className="flex-1 min-w-0">
               <p className="font-heading text-sm font-semibold leading-tight truncate">
-                {chat?.title ?? "WarungOS AI"}
+                {chat?.title ?? "Asisten TokoMu"}
               </p>
-              <p className="text-[11px] text-muted-foreground">
-                Asisten kontekstual · Gemini Flash · Tool calling
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                <span className="size-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                Asisten Toko · Siap Bantu
               </p>
             </div>
             <Button
               variant="ghost"
               size="icon-sm"
+              className="rounded-xl hover:bg-muted"
               onClick={handleNewChat}
               disabled={isLoading || isThinking || view === "settings"}
-              aria-label="Reset chat"
-              title="Reset chat"
+              aria-label="Percakapan baru"
+              title="Percakapan baru"
             >
-              <ArrowRight className="size-4" />
+              <Plus className="size-4" />
             </Button>
             <Button
               variant="ghost"
               size="icon-sm"
+              className="rounded-xl hover:bg-muted"
               onClick={() => setView(view === "settings" ? "chat" : "settings")}
               aria-label="Pengaturan"
               title="Pengaturan"
@@ -820,6 +988,7 @@ res = await api<{ newMessages: ServerMessage[] }>(
             <Button
               variant="ghost"
               size="icon-sm"
+              className="rounded-xl hover:bg-muted"
               onClick={() => onOpenChange(false)}
               aria-label="Tutup asisten"
               title="Tutup asisten"

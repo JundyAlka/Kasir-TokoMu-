@@ -149,6 +149,7 @@ async function buildReportData(
       salaries: calculation.expenseTotal - calculation.expenses,
       expenseTotal: calculation.expenseTotal,
       netProfit: calculation.netProfit,
+      profitDistribution: (calculation.totalInvestorPayout ?? 0) + (calculation.pcmShare ?? 0) + (calculation.reserveShare ?? 0),
       transactionCount: calculation.transactionCount,
       averageTicket: calculation.averageTicket,
       totalInvestorPayout: calculation.totalInvestorPayout,

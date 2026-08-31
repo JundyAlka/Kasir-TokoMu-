@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { InactiveInvestorManager } from "@/components/tokomu/inactive-investor-manager";
@@ -13,17 +12,37 @@ import { cn } from "@/lib/utils";
 import { TitipanIntakeDialog } from "@/components/tokomu/titipan-intake-dialog";
 
 type InvestorStatus = "active" | "inactive" | "all";
-type PartnerType = "investor_uang" | "titipan_bagihasil" | "sales_harian";
+type PartnerTypeFilter = "all" | "investor_uang" | "titipan_bagihasil" | "sales_harian";
 
 function parseStatus(value: unknown): InvestorStatus {
   return value === "inactive" || value === "all" ? value : "active";
 }
 
-const filters: Array<{ value: InvestorStatus; label: string }> = [
+function parsePartnerType(value: unknown): PartnerTypeFilter {
+  return value === "investor_uang" || value === "titipan_bagihasil" || value === "sales_harian"
+    ? value
+    : "all";
+}
+
+const statusFilters: Array<{ value: InvestorStatus; label: string }> = [
   { value: "active", label: "Aktif" },
   { value: "inactive", label: "Nonaktif" },
-  { value: "all", label: "Semua" },
+  { value: "all", label: "Semua Status" },
 ];
+
+const partnerTypeFilters: Array<{ value: PartnerTypeFilter; label: string }> = [
+  { value: "all", label: "Semua" },
+  { value: "investor_uang", label: "Investor uang" },
+  { value: "titipan_bagihasil", label: "Titipan bagi hasil" },
+  { value: "sales_harian", label: "Sales harian" },
+];
+
+function buildHref(status: InvestorStatus, partnerType: PartnerTypeFilter) {
+  const parts: string[] = [];
+  if (status !== "active") parts.push(`status=${status}`);
+  if (partnerType !== "all") parts.push(`partnerType=${partnerType}`);
+  return parts.length > 0 ? `/investor?${parts.join("&")}` : "/investor";
+}
 
 export default async function InvestorPage({
   searchParams,
@@ -34,9 +53,13 @@ export default async function InvestorPage({
   const { workspaceOwnerId } = await getRequestUser();
   const params = searchParams ? await searchParams : {};
   const status = parseStatus(params.status);
-  const partnerType: PartnerType = params.partnerType === "titipan_bagihasil" || params.partnerType === "sales_harian" ? params.partnerType : "investor_uang";
+  const partnerType = parsePartnerType(params.partnerType);
+
   const [investors, allInvestors] = (await Promise.all([
-    listInvestors(workspaceOwnerId, { status, partnerType }),
+    listInvestors(workspaceOwnerId, {
+      status,
+      partnerType: partnerType === "all" ? undefined : partnerType,
+    }),
     listInvestors(workspaceOwnerId, { status: "all" }),
   ])) as [InvestorSummary[], InvestorSummary[]];
 
@@ -44,10 +67,10 @@ export default async function InvestorPage({
     <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="inline-flex w-fit rounded-full bg-muted p-1">
-          {filters.map((filter) => (
+          {statusFilters.map((filter) => (
             <Link
               key={filter.value}
-              href={filter.value === "active" ? "/investor" : `/investor?status=${filter.value}`}
+              href={buildHref(filter.value, partnerType)}
               className={cn(
                 "rounded-full px-4 py-2 text-sm font-medium transition-colors",
                 status === filter.value
@@ -65,7 +88,23 @@ export default async function InvestorPage({
           {status !== "inactive" ? <InvestorFormDialog /> : null}
         </div>
       </div>
-      <div className="inline-flex w-fit rounded-full bg-muted p-1">{([ ["investor_uang", "Investor uang"], ["titipan_bagihasil", "Titipan bagi hasil"], ["sales_harian", "Sales harian"] ] as const).map(([value, label]) => <Link key={value} href={`/investor?partnerType=${value}${status === "active" ? "" : `&status=${status}`}`} className={cn("rounded-full px-4 py-2 text-sm font-medium", partnerType === value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground")}>{label}</Link>)}</div>
+
+      <div className="inline-flex flex-wrap w-fit rounded-full bg-muted p-1">
+        {partnerTypeFilters.map((filter) => (
+          <Link
+            key={filter.value}
+            href={buildHref(status, filter.value)}
+            className={cn(
+              "rounded-full px-4 py-2 text-sm font-medium transition-colors",
+              partnerType === filter.value
+                ? "bg-card text-foreground shadow-sm ring-1 ring-border/70"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {filter.label}
+          </Link>
+        ))}
+      </div>
 
       {investors.length > 0 ? (
         status === "inactive" ? (
@@ -80,11 +119,11 @@ export default async function InvestorPage({
       ) : (
         <Card className="border-border/60 bg-card/80">
           <CardContent className="flex min-h-60 flex-col items-center justify-center text-center">
-            <p className="font-heading text-2xl font-semibold">Belum ada investor pada filter ini</p>
+            <p className="font-heading text-2xl font-semibold">Belum ada mitra/investor pada filter ini</p>
             <p className="mt-2 max-w-md text-sm text-muted-foreground">
               {status === "inactive"
-                ? "Investor yang dinonaktifkan dari kartu atau halaman detail akan muncul di sini."
-                : "Tambahkan investor baru untuk mulai mencatat modal uang atau barang titip jual."}
+                ? "Mitra atau investor yang dinonaktifkan akan muncul di sini."
+                : "Tambahkan mitra baru untuk mulai mencatat modal uang, barang titipan, atau sales harian."}
             </p>
             {status !== "inactive" ? (
               <InvestorFormDialog />

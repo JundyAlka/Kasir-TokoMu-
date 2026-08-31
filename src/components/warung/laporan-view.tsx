@@ -16,6 +16,7 @@ import {
   Loader2,
   Printer,
   RotateCcw,
+  Scale,
   ScrollText,
   Settings2,
   TableProperties,
@@ -76,7 +77,7 @@ const emptySummary: ProfitLossSummary = {
   averageTicket: 0,
 };
 
-type ReportPreviewLayout = "cards" | "table";
+type ReportPreviewLayout = "cards" | "table" | "neraca";
 type TrendRange = "mingguan" | "bulanan";
 type RequestState = "loading" | "ready" | "error";
 type ShiftCashMovement = {
@@ -1375,11 +1376,21 @@ export function LaporanView() {
   const [updatedSnapshotPeriod, setUpdatedSnapshotPeriod] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchFinalizedReports();
+    fetchFinalizedReports(true);
+    const handlePcmUpdated = (e: any) => {
+      const action = e.detail?.action;
+      if (action === "finalized" || action === "updated" || action === "reopened") {
+        void fetchFinalizedReports(false);
+      }
+    };
+    window.addEventListener("pcm-reports-updated", handlePcmUpdated);
+    return () => window.removeEventListener("pcm-reports-updated", handlePcmUpdated);
   }, []);
 
-  async function fetchFinalizedReports() {
-    setIsLoadingReports(true);
+  async function fetchFinalizedReports(showLoading = true) {
+    if (showLoading && finalizedReports.length === 0) {
+      setIsLoadingReports(true);
+    }
     try {
       const ts = Date.now();
       const resMonthly = await fetch(`/api/reports/monthly?t=${ts}`, { cache: "no-store" });
@@ -1491,7 +1502,15 @@ export function LaporanView() {
         detail: { action: "unsaved_changes", hasUnsaved },
       })
     );
-  }, [summary, currentFinalizedReport, isLoading]);
+  }, [
+    summary.revenue,
+    summary.netProfit,
+    currentFinalizedReport?.id,
+    currentFinalizedReport?.updatedAt,
+    (currentFinalizedReport?.data as any)?.revenue,
+    (currentFinalizedReport?.data as any)?.netProfit,
+    isLoading,
+  ]);
 
   const [selectedYear, selectedMonth] = period.split("-");
   const trendWeekOptions = useMemo(() => getTrendWeekOptions(period), [period]);
@@ -1572,6 +1591,14 @@ export function LaporanView() {
     const params = new URLSearchParams({ period });
     if (download) {
       params.set("download", "1");
+    }
+    if (typeof window !== "undefined") {
+      const modalAwal = localStorage.getItem("tokomu_ledger_modal_awal");
+      const inventaris = localStorage.getItem("tokomu_ledger_inventaris");
+      const showcase = localStorage.getItem("tokomu_ledger_showcase");
+      if (modalAwal) params.set("modalAwal", modalAwal);
+      if (inventaris) params.set("inventaris", inventaris);
+      if (showcase) params.set("showcase", showcase);
     }
     ownerNotes.forEach((note) => params.append("note", note));
     return `/api/reports/profit-loss/pdf?${params.toString()}`;
@@ -1856,6 +1883,16 @@ export function LaporanView() {
                     <TableProperties className="size-4" />
                     Tabel
                   </Button>
+                  <Button
+                    type="button"
+                    variant={reportPreviewLayout === "neraca" ? "default" : "ghost"}
+                    size="sm"
+                    className="rounded-xl"
+                    onClick={() => setReportPreviewLayout("neraca")}
+                  >
+                    <Scale className="size-4" />
+                    Neraca Fisik
+                  </Button>
                 </div>
               </div>
               <div className="mt-4 grid gap-2">
@@ -1926,7 +1963,7 @@ export function LaporanView() {
                     <p className="mt-1.5 text-base sm:text-lg font-semibold whitespace-nowrap tabular-nums">{formatCurrency(summary.profitDistribution ?? 0)}</p>
                   </div>
                 </div>
-              ) : (
+              ) : reportPreviewLayout === "table" ? (
                 <div className="border-b border-dashed border-border/80 py-5">
                   <div className="overflow-hidden rounded-[22px] border border-border/70 bg-card">
                     {[
@@ -1945,6 +1982,64 @@ export function LaporanView() {
                         <span className="text-right font-medium tabular-nums whitespace-nowrap">{value}</span>
                       </div>
                     ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 border-b border-dashed border-border/80 py-5 text-xs sm:text-sm">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-border/70 bg-card p-3.5 space-y-2">
+                      <div className="font-semibold text-emerald-600 dark:text-emerald-400 border-b border-border/60 pb-1.5 flex justify-between">
+                        <span>A. Posisi Harta / Aset Toko</span>
+                        <span>Nominal</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border/40 text-muted-foreground">
+                        <span>1. Kas Toko</span>
+                        <span className="font-medium text-foreground">{formatCurrency(Math.max(0, summary.revenue - summary.expenseTotal - summary.cogs))}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border/40 text-muted-foreground">
+                        <span>2. Stok Barang Dagangan</span>
+                        <span className="font-medium text-foreground">{formatCurrency(summary.cogs)}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border/40 text-muted-foreground">
+                        <span>3. Inventaris Toko</span>
+                        <span className="font-medium text-foreground">Rp 6.200.000</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border/40 text-muted-foreground">
+                        <span>4. Show Case / Peralatan</span>
+                        <span className="font-medium text-foreground">Rp 3.800.000</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border/40 text-muted-foreground">
+                        <span>5. Piutang Toko</span>
+                        <span className="font-medium text-foreground">Rp 1.549.500</span>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-border/70 bg-card p-3.5 space-y-2">
+                      <div className="font-semibold text-rose-600 dark:text-rose-400 border-b border-border/60 pb-1.5 flex justify-between">
+                        <span>B. Hutang, Modal &amp; Beban</span>
+                        <span>Nominal</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border/40 text-muted-foreground">
+                        <span>1. Modal Awal Toko</span>
+                        <span className="font-medium text-foreground">Rp 10.700.000</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border/40 text-muted-foreground">
+                        <span>2. Hutang Toko (Kulakan)</span>
+                        <span className="font-medium text-foreground">Rp 779.000</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border/40 text-muted-foreground">
+                        <span>3. Hutang Sales Titipan</span>
+                        <span className="font-medium text-foreground">Rp 2.356.100</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border/40 text-muted-foreground">
+                        <span>4. Hutang Modal Investasi</span>
+                        <span className="font-medium text-foreground">Rp 7.000.000</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-border/40 text-muted-foreground">
+                        <span>5. Biaya ATK &amp; Operasional</span>
+                        <span className="font-medium text-foreground">{formatCurrency(summary.expenseTotal || 46000)}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

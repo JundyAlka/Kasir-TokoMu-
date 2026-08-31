@@ -45,6 +45,7 @@ export const routePolicy: Record<string, RoutePolicy> = {
   "/api/products/[id]": { PATCH: ALL_ROLES, DELETE: ALL_ROLES },
   "/api/products/[id]/restock": { POST: ALL_ROLES },
   "/api/reports/assets": { GET: ALL_ROLES },
+  "/api/reports/cashier-ledger": { GET: ALL_ROLES },
   "/api/reports/monthly": { GET: ALL_ROLES, POST: ALL_ROLES },
   "/api/reports/monthly-pcm": { GET: LEADERSHIP_ONLY, POST: LEADERSHIP_ONLY, PATCH: LEADERSHIP_ONLY },
   "/api/reports/monthly-pcm/[id]/pdf": { GET: LEADERSHIP_ONLY },
