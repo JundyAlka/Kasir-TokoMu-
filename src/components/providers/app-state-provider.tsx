@@ -25,6 +25,7 @@ type AppStateContextValue = AppState & {
   addProduct: (draft: ProductDraft) => Promise<Product>;
   updateProduct: (productId: string, draft: ProductDraft) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
+  deleteProducts: (productIds: string[]) => Promise<void>;
   restockProduct: (productId: string, quantity: number) => Promise<void>;
   addDebt: (draft: DebtDraft) => Promise<void>;
   markDebtPaid: (debtId: string) => Promise<void>;
@@ -259,6 +260,21 @@ export function AppStateProvider({
     }));
   }
 
+  async function deleteProducts(productIds: string[]) {
+    if (productIds.length === 0) return;
+    const response = await requestJson<{ deletedIds: string[]; count: number }>("/api/products", {
+      method: "DELETE",
+      body: JSON.stringify({ ids: productIds }),
+    });
+
+    const deletedSet = new Set(response.deletedIds);
+    setState((current) => ({
+      ...current,
+      products: current.products.filter((product) => !deletedSet.has(product.id)),
+      cart: current.cart.filter((item) => !deletedSet.has(item.productId)),
+    }));
+  }
+
   async function restockProduct(productId: string, quantity: number) {
     const response = await requestJson<{ product: Product }>(
       `/api/products/${productId}/restock`,
@@ -365,6 +381,7 @@ export function AppStateProvider({
         addProduct,
         updateProduct,
         deleteProduct,
+        deleteProducts,
         restockProduct,
         addDebt,
         markDebtPaid,

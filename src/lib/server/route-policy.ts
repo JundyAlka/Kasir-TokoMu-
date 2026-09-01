@@ -40,7 +40,7 @@ export const routePolicy: Record<string, RoutePolicy> = {
   "/api/payouts": { GET: FINANCE_ROLES, POST: FINANCE_ROLES },
   "/api/payouts/calculate": { POST: FINANCE_ROLES },
   "/api/payouts/[id]": { PATCH: FINANCE_ROLES },
-  "/api/products": { POST: ALL_ROLES },
+  "/api/products": { POST: ALL_ROLES, DELETE: ALL_ROLES },
   "/api/products/import": { POST: ALL_ROLES },
   "/api/products/[id]": { PATCH: ALL_ROLES, DELETE: ALL_ROLES },
   "/api/products/[id]/restock": { POST: ALL_ROLES },

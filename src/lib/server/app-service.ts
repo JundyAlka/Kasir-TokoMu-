@@ -11,6 +11,7 @@ import {
   investments,
   investors,
   monthlyReports,
+  productAliases,
   products,
   restockLogs,
   shiftSessions,
@@ -439,6 +440,10 @@ export async function updateProduct(userId: string, productId: string, draft: Pr
 }
 
 export async function deleteProduct(userId: string, productId: string) {
+  await db
+    .delete(productAliases)
+    .where(and(eq(productAliases.userId, userId), eq(productAliases.productId, productId)));
+
   const [deleted] = await db
     .delete(products)
     .where(and(eq(products.id, productId), eq(products.userId, userId)))
@@ -459,6 +464,27 @@ export async function deleteProduct(userId: string, productId: string) {
     minimumStock: deleted.minimumStock,
     description: deleted.description,
   };
+}
+
+export async function deleteBulkProducts(userId: string, productIds: string[]) {
+  if (productIds.length === 0) {
+    return [];
+  }
+
+  await db
+    .delete(productAliases)
+    .where(and(eq(productAliases.userId, userId), inArray(productAliases.productId, productIds)));
+
+  const deleted = await db
+    .delete(products)
+    .where(and(eq(products.userId, userId), inArray(products.id, productIds)))
+    .returning();
+
+  return deleted.map((item) => ({
+    id: item.id,
+    sku: item.sku,
+    name: item.name,
+  }));
 }
 
 export async function restockProduct(userId: string, productId: string, quantity: number) {

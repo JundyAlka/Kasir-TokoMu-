@@ -66,6 +66,7 @@ export function InventarisView() {
     addProduct,
     updateProduct,
     deleteProduct,
+    deleteProducts,
     restockProduct,
     lowStockProducts,
     refreshWorkspace,
@@ -259,23 +260,16 @@ export function InventarisView() {
     }
 
     setIsBulkActionPending(true);
-    const results = await Promise.allSettled(productIds.map((id) => deleteProduct(id)));
-    const failedIds = new Set(
-      results.flatMap((result, index) => (result.status === "rejected" ? [productIds[index]] : []))
-    );
-
-    setSelectedProductIds(failedIds);
-    setIsBulkActionPending(false);
-    setBulkDeleteOpen(false);
-
-    if (failedIds.size > 0) {
-      toast.error(
-        `${productIds.length - failedIds.size} produk dihapus, ${failedIds.size} produk gagal dihapus.`
-      );
-      return;
+    try {
+      await deleteProducts(productIds);
+      setSelectedProductIds(new Set());
+      setBulkDeleteOpen(false);
+      toast.success(`${productIds.length} produk berhasil dihapus.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal menghapus produk terpilih.");
+    } finally {
+      setIsBulkActionPending(false);
     }
-
-    toast.success(`${productIds.length} produk berhasil dihapus.`);
   }
 
   async function handleBulkRestockProducts() {
