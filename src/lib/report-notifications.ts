@@ -18,6 +18,7 @@ const comparisonKeys = [
   "grossProfit",
   "expenseTotal",
   "netProfit",
+  "profitDistribution",
   "transactionCount",
 ] as const;
 

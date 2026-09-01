@@ -55,6 +55,7 @@ export type PcmMonthlyReportData = {
     salaries: number;
     expenseTotal: number;
     netProfit: number;
+    profitDistribution?: number;
     transactionCount: number;
     averageTicket: number;
     totalInvestorPayout: number;
