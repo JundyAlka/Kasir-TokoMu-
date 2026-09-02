@@ -1,11 +1,6 @@
 import { betterAuth } from "better-auth";
 import { bearer } from "better-auth/plugins";
-import { Pool } from "pg";
-import { createPoolConfig } from "@/db/pool-config";
-
-const globalForAuth = globalThis as typeof globalThis & {
-  __warungosAuthPool?: Pool;
-};
+import { pool } from "@/db/client";
 
 function toOrigin(value: string) {
   if (value.startsWith("http://") || value.startsWith("https://")) {
@@ -88,21 +83,8 @@ function resolveAuthBaseUrl() {
   return `http://localhost:${localPort ?? "3000"}`;
 }
 
-function getAuthPool() {
-  if (!globalForAuth.__warungosAuthPool) {
-    globalForAuth.__warungosAuthPool = new Pool(
-      createPoolConfig(
-        process.env.DATABASE_URL ??
-          "postgresql://postgres:postgres@127.0.0.1:5432/warungos"
-      )
-    );
-  }
-
-  return globalForAuth.__warungosAuthPool;
-}
-
 export const auth = betterAuth({
-  database: getAuthPool(),
+  database: pool,
   secret:
     process.env.BETTER_AUTH_SECRET ??
     "warungos-dev-secret-please-change-this-in-production",
@@ -114,4 +96,3 @@ export const auth = betterAuth({
   },
   plugins: [bearer()],
 });
-

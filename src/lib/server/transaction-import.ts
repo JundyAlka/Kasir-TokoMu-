@@ -23,23 +23,225 @@ export type ImportPreview = {
 };
 
 const REQUIRED_COLUMNS = ["Tanggal", "No Nota", "Metode Bayar", "Nama Produk", "Jumlah", "Harga Jual", "Subtotal"] as const;
-const paymentMethods: Record<string, PaymentMethod> = { tunai: "Tunai", qris: "QRIS", transfer: "Transfer" };
+const paymentMethods: Record<string, PaymentMethod> = {
+  tunai: "Tunai",
+  cash: "Tunai",
+  kontan: "Tunai",
+  qris: "QRIS",
+  qr: "QRIS",
+  qris_static: "QRIS",
+  qris_dynamic: "QRIS",
+  transfer: "Transfer",
+  tf: "Transfer",
+  trf: "Transfer",
+  bank: "Transfer",
+  bca: "Transfer",
+  bri: "Transfer",
+  mandiri: "Transfer",
+  bni: "Transfer",
+  bsi: "Transfer",
+  cimb: "Transfer",
+};
+
+const HEADER_ALIASES: Record<string, string> = {
+  tanggal: "Tanggal",
+  tgl: "Tanggal",
+  date: "Tanggal",
+  waktu: "Tanggal",
+  "tanggal transaksi": "Tanggal",
+  "tgl transaksi": "Tanggal",
+  "no nota": "No Nota",
+  "no. nota": "No Nota",
+  "no_nota": "No Nota",
+  nonota: "No Nota",
+  "nomor nota": "No Nota",
+  nota: "No Nota",
+  invoice: "No Nota",
+  "no invoice": "No Nota",
+  "no. invoice": "No Nota",
+  "nomor invoice": "No Nota",
+  "invoice no": "No Nota",
+  "no transaksi": "No Nota",
+  "metode bayar": "Metode Bayar",
+  "metode_bayar": "Metode Bayar",
+  metodebayar: "Metode Bayar",
+  "metode pembayaran": "Metode Bayar",
+  pembayaran: "Metode Bayar",
+  payment: "Metode Bayar",
+  "payment method": "Metode Bayar",
+  "cara bayar": "Metode Bayar",
+  "jenis bayar": "Metode Bayar",
+  "nama produk": "Nama Produk",
+  "nama_produk": "Nama Produk",
+  namaproduk: "Nama Produk",
+  "nama barang": "Nama Produk",
+  "nama_barang": "Nama Produk",
+  namabarang: "Nama Produk",
+  produk: "Nama Produk",
+  barang: "Nama Produk",
+  item: "Nama Produk",
+  "nama item": "Nama Produk",
+  product: "Nama Produk",
+  "product name": "Nama Produk",
+  jumlah: "Jumlah",
+  qty: "Jumlah",
+  quantity: "Jumlah",
+  banyak: "Jumlah",
+  banyaknya: "Jumlah",
+  jml: "Jumlah",
+  kuantitas: "Jumlah",
+  "harga jual": "Harga Jual",
+  "harga_jual": "Harga Jual",
+  hargajual: "Harga Jual",
+  harga: "Harga Jual",
+  price: "Harga Jual",
+  "sell price": "Harga Jual",
+  "unit price": "Harga Jual",
+  "harga satuan": "Harga Jual",
+  satuan: "Harga Jual",
+  subtotal: "Subtotal",
+  "sub total": "Subtotal",
+  "sub_total": "Subtotal",
+  "total harga": "Subtotal",
+  "total item": "Subtotal",
+  "jumlah harga": "Subtotal",
+  catatan: "Catatan",
+  note: "Catatan",
+  notes: "Catatan",
+  keterangan: "Catatan",
+  shift: "Catatan",
+  ket: "Catatan",
+  "total nota": "Total Nota",
+  "total_nota": "Total Nota",
+  "total transaksi": "Total Nota",
+  "grand total": "Total Nota",
+  "total tagihan": "Total Nota",
+  total: "Total Nota",
+};
+
+function normalizeRow(rawRow: Record<string, unknown>): Record<string, unknown> {
+  const normalizedRow: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rawRow)) {
+    const cleanKey = String(key ?? "").trim().toLowerCase().replace(/[_\-]+/g, " ").replace(/\s+/g, " ");
+    const canonical = HEADER_ALIASES[cleanKey] || key.trim();
+    normalizedRow[canonical] = value;
+  }
+  return normalizedRow;
+}
+
 const newId = (prefix: string) => `${prefix}_${crypto.randomUUID().slice(0, 12)}`;
 const normalized = (value: unknown) => String(value ?? "").trim().replace(/\s+/g, " ").toLocaleLowerCase("id-ID");
 const fuzzyNormalized = (value: unknown) => normalized(value).replace(/[^\p{L}\p{N}]+/gu, "");
 const adjustment = (row: Record<string, unknown>) => normalized(row["Nama Produk"]).startsWith("penyesuaian");
 function addIssue(destination: ImportIssue[], row: number, code: ImportIssue["code"], message: string, rowData?: Record<string, unknown>, detail: Partial<ImportIssue> = {}) { destination.push({ row, code, message, ...(rowData ? { rowData } : {}), ...detail }); }
 function amount(value: unknown) { const compact = String(value ?? "").trim().replace(/[Rp\s.]/g, "").replace(",", "."); const parsed = Number(compact); return Number.isFinite(parsed) ? Math.round(parsed) : Number.NaN; }
-function occurredAt(value: unknown): string | null {
-  if (typeof value === "number" && Number.isFinite(value)) { const parts = XLSX.SSF.parse_date_code(value); if (parts) return new Date(Date.UTC(parts.y, parts.m - 1, parts.d, 12)).toISOString(); }
-  const source = String(value ?? "").trim(); const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(source); const dmy = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(source);
-  const date = iso ? new Date(`${source}T12:00:00.000Z`) : dmy ? new Date(Date.UTC(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]), 12)) : null;
-  return date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
+
+function smartNormalize(value: unknown): string {
+  return normalized(value)
+    .replace(/\bmie\b/g, "mi")
+    .replace(/\bsedaap\b/g, "sedap")
+    .replace(/\btelor\b/g, "telur")
+    .replace(/\bcabe\b/g, "cabai")
+    .replace(/\bcoklat\b/g, "cokelat")
+    .replace(/\bekstra\b/g, "extra")
+    .replace(/\bair mineral\b/g, "")
+    .replace(/\bkemasan\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
+
+function occurredAt(value: unknown): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parts = XLSX.SSF.parse_date_code(value);
+    if (parts) {
+      const hours = parts.H ?? 12;
+      const minutes = parts.M ?? 0;
+      const seconds = Math.floor(parts.S ?? 0);
+      return new Date(Date.UTC(parts.y, parts.m - 1, parts.d, hours, minutes, seconds)).toISOString();
+    }
+  }
+  const source = String(value ?? "").trim();
+  if (!source) return null;
+
+  // Handle Excel float/integer serial numbers (e.g. "46266.555555555555" or "46266")
+  const num = Number(source);
+  if (!Number.isNaN(num) && num > 25569 && num < 100000) {
+    const parts = XLSX.SSF.parse_date_code(num);
+    if (parts) {
+      const hours = parts.H ?? 12;
+      const minutes = parts.M ?? 0;
+      const seconds = Math.floor(parts.S ?? 0);
+      return new Date(Date.UTC(parts.y, parts.m - 1, parts.d, hours, minutes, seconds)).toISOString();
+    }
+  }
+
+  // Handles: 2026-09-01, 2026/09/01, 2026-9-1
+  const iso = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/.exec(source);
+  if (iso) {
+    return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), 12)).toISOString();
+  }
+
+  // Handles: 01/09/2026, 1-9-2026, 01-09-2026, 01.09.2026
+  const dmy = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/.exec(source);
+  if (dmy) {
+    return new Date(Date.UTC(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]), 12)).toISOString();
+  }
+
+  // Indonesian month names: 01 September 2026, 1 Sept 2026, 01-Sep-2026
+  const indonesianMonths: Record<string, number> = {
+    januari: 0, jan: 0,
+    februari: 1, feb: 1, pebruari: 1,
+    maret: 2, mar: 2,
+    april: 3, apr: 3,
+    mei: 4, may: 4,
+    juni: 5, jun: 5,
+    juli: 6, jul: 6,
+    agustus: 7, ags: 7, agu: 7, aug: 7,
+    september: 8, sep: 8, sept: 8,
+    oktober: 9, okt: 9, oct: 9,
+    november: 10, nov: 10, nopember: 10,
+    desember: 11, des: 11, dec: 11,
+  };
+  const wordMatch = /^(\d{1,2})[\s\-]+([a-zA-Z]+)[\s\-]+(\d{4})/.exec(source);
+  if (wordMatch) {
+    const month = indonesianMonths[wordMatch[2].toLowerCase()];
+    if (month !== undefined) {
+      return new Date(Date.UTC(Number(wordMatch[3]), month, Number(wordMatch[1]), 12)).toISOString();
+    }
+  }
+
+  const parsed = new Date(source);
+  return !Number.isNaN(parsed.getTime()) ? parsed.toISOString() : null;
+}
+
 function ref(note: string, occurred: string) { const date = occurred.slice(0, 10).replaceAll("-", ""); const suffix = note.trim().replace(/^BF-\d{8}-/i, "").replace(/[^a-zA-Z0-9-]/g, ""); return `BF-${date}-${suffix}`; }
 function itemShift(note: string) { return /^\s*shift\s+([^|]+)/i.exec(note)?.[1]?.trim() || null; }
 function importBook(file: ArrayBuffer) { return XLSX.read(file, { type: "array", cellDates: false }); }
-function rowsFromBook(book: XLSX.WorkBook) { const sheet = book.Sheets[book.SheetNames[0] ?? ""]; if (!sheet) throw new Error("File tidak memiliki sheet."); return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: true }); }
+
+function rowsFromBook(book: XLSX.WorkBook) {
+  let chosenSheetName = book.SheetNames[0] ?? "";
+  for (const name of book.SheetNames) {
+    if (normalized(name) !== "kas & tabungan") {
+      const sheet = book.Sheets[name];
+      if (sheet) {
+        const testRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: true });
+        if (testRows.length > 0) {
+          chosenSheetName = name;
+          break;
+        }
+      }
+    }
+  }
+  const sheet = book.Sheets[chosenSheetName];
+  if (!sheet) throw new Error("File tidak memiliki sheet data yang valid.");
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: true });
+  if (rows.length === 0) throw new Error("Sheet data transaksi kosong.");
+  return rows;
+}
+
 function declaredTotal(row: Record<string, unknown>) { const source = row["Total Nota"] ?? row.Total ?? row["Total Transaksi"]; return source === undefined || String(source).trim() === "" ? null : amount(source); }
 function distance(a: string, b: string) { const previous = Array.from({ length: b.length + 1 }, (_, index) => index); for (let i = 1; i <= a.length; i += 1) { let diagonal = previous[0]; previous[0] = i; for (let j = 1; j <= b.length; j += 1) { const old = previous[j]; previous[j] = Math.min(previous[j] + 1, previous[j - 1] + 1, diagonal + Number(a[i - 1] !== b[j - 1])); diagonal = old; } } return previous[b.length]; }
 
@@ -47,13 +249,16 @@ function computeSimilarity(input: string, candidate: string): number {
   const normInput = normalized(input);
   const normCandidate = normalized(candidate);
   if (normInput === normCandidate) return 0;
+  const smartInput = smartNormalize(input);
+  const smartCandidate = smartNormalize(candidate);
+  if (smartInput === smartCandidate) return 0;
   const fuzzyInput = fuzzyNormalized(input);
   const fuzzyCandidate = fuzzyNormalized(candidate);
   if (fuzzyInput === fuzzyCandidate) return 1;
   if (normCandidate.includes(normInput)) return 5 + Math.min(25, normCandidate.length - normInput.length);
   if (normInput.includes(normCandidate)) return 8 + Math.min(25, normInput.length - normCandidate.length);
-  const inputWords = normInput.split(/\s+/).filter((w) => w.length > 1);
-  const candidateWords = normCandidate.split(/\s+/).filter((w) => w.length > 1);
+  const inputWords = smartInput.split(/\s+/).filter((w) => w.length > 1);
+  const candidateWords = smartCandidate.split(/\s+/).filter((w) => w.length > 1);
   if (inputWords.length > 0) {
     let matched = 0;
     for (const iw of inputWords) {
@@ -79,16 +284,84 @@ function suggestionsFor(name: string, productRows: Array<typeof products.$inferS
   }
   return scored.sort((a, b) => a.score - b.score || a.name.localeCompare(b.name)).slice(0, 5);
 }
+
+function findBestMatchProduct(
+  name: string,
+  productRows: Array<typeof products.$inferSelect>,
+  aliases: Map<string, string>,
+  byId: Map<string, typeof products.$inferSelect>,
+  exact: Map<string, typeof products.$inferSelect>
+): typeof products.$inferSelect | null {
+  // 1. Exact match
+  const exactMatch = exact.get(name);
+  if (exactMatch) return exactMatch;
+
+  // 2. Alias match
+  const aliasId = aliases.get(normalized(name)) || aliases.get(smartNormalize(name));
+  if (aliasId) {
+    const aliasProduct = byId.get(aliasId);
+    if (aliasProduct) return aliasProduct;
+  }
+
+  // 3. Normalized match
+  const normName = normalized(name);
+  const normMatch = productRows.find((p) => normalized(p.name) === normName);
+  if (normMatch) return normMatch;
+
+  // 4. Smart normalized match (e.g. "Mi Sedaap Goreng" <-> "Mie Sedaap Goreng")
+  const smartName = smartNormalize(name);
+  const smartMatch = productRows.find((p) => smartNormalize(p.name) === smartName);
+  if (smartMatch) return smartMatch;
+
+  // 5. Non-alphanumeric fuzzy match
+  const fuzzyName = fuzzyNormalized(name);
+  const fuzzyMatch = productRows.find((p) => fuzzyNormalized(p.name) === fuzzyName);
+  if (fuzzyMatch) return fuzzyMatch;
+
+  // 6. Compound / slash / separator match (e.g. "Taro / Cotopie" -> "Taro")
+  if (/[\/\\+,&|]/.test(name)) {
+    const parts = name.split(/[\/\\+,&|]/).map((p) => p.trim()).filter((p) => p.length > 1);
+    for (const part of parts) {
+      const partMatch =
+        exact.get(part) ||
+        productRows.find((p) => normalized(p.name) === normalized(part)) ||
+        productRows.find((p) => smartNormalize(p.name) === smartNormalize(part)) ||
+        productRows.find((p) => fuzzyNormalized(p.name) === fuzzyNormalized(part));
+      if (partMatch) return partMatch;
+    }
+  }
+
+  // 7. Token set match (same words in different order, or subset)
+  const nameTokens = smartName.split(/\s+/).filter((w) => w.length > 1);
+  if (nameTokens.length > 0) {
+    for (const p of productRows) {
+      const pTokens = smartNormalize(p.name).split(/\s+/).filter((w) => w.length > 1);
+      if (pTokens.length === nameTokens.length && nameTokens.every((t) => pTokens.includes(t))) {
+        return p;
+      }
+    }
+  }
+
+  // 8. High confidence Levenshtein similarity (< 15 score difference, very close typo match)
+  const suggestions = suggestionsFor(name, productRows);
+  if (suggestions.length > 0 && suggestions[0].score <= 15) {
+    // If only 1 suggestion or top suggestion is significantly better than 2nd suggestion
+    if (suggestions.length === 1 || (suggestions[1].score - suggestions[0].score) >= 10) {
+      return byId.get(suggestions[0].id) ?? null;
+    }
+  }
+
+  return null;
+}
+
 function warningGroups(warnings: ImportIssue[]) { const groups = new Map<string, { code: WarningCode; productName: string; productId?: string; count: number; issues: ImportIssue[] }>(); for (const issue of warnings) { const code = issue.code as WarningCode; const productName = issue.productName ?? issue.message; const key = `${code}:${issue.productId ?? productName}`; const group = groups.get(key) ?? { code, productName, productId: issue.productId, count: 0, issues: [] }; group.count += 1; group.issues.push(issue); groups.set(key, group); } return [...groups.values()]; }
 
 type ImportCash = { openingCash: number | null; openingCoins: number | null; openingSavings: number | null; closingCash: number | null; closingCoins: number | null; closingSavings: number | null };
-function cashRows(book: XLSX.WorkBook) { const sheetName = book.SheetNames.find((name) => normalized(name) === "kas & tabungan"); if (!sheetName) return new Map<string, ImportCash>(); const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(book.Sheets[sheetName], { defval: "", raw: true }); const values = new Map<string, ImportCash>(); for (const row of rows) { const date = occurredAt(row.Tanggal); const shift = itemShift(String(row.Shift ?? "")) ?? String(row.Shift ?? "").trim(); if (!date || !shift) continue; const read = (...keys: string[]) => { const found = keys.map((key) => row[key]).find((value) => value !== undefined && String(value).trim() !== ""); const parsed = amount(found); return Number.isFinite(parsed) ? parsed : null; }; values.set(`${date.slice(0, 10)}:${normalized(shift)}`, { openingCash: read("Kas Awal"), openingCoins: read("Receh Awal"), openingSavings: read("Tabungan Awal"), closingCash: read("Kas Akhir"), closingCoins: read("Receh Akhir"), closingSavings: read("Tabungan Akhir") }); } return values; }
+function cashRows(book: XLSX.WorkBook) { const sheetName = book.SheetNames.find((name) => normalized(name) === "kas & tabungan"); if (!sheetName) return new Map<string, ImportCash>(); const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(book.Sheets[sheetName], { defval: "", raw: true }); const values = new Map<string, ImportCash>(); for (const rawRow of rows) { const row = normalizeRow(rawRow); const date = occurredAt(row.Tanggal); const shift = itemShift(String(row.Shift ?? "")) ?? String(row.Shift ?? "").trim(); if (!date || !shift) continue; const read = (...keys: string[]) => { const found = keys.map((key) => row[key]).find((value) => value !== undefined && String(value).trim() !== ""); const parsed = amount(found); return Number.isFinite(parsed) ? parsed : null; }; values.set(`${date.slice(0, 10)}:${normalized(shift)}`, { openingCash: read("Kas Awal"), openingCoins: read("Receh Awal"), openingSavings: read("Tabungan Awal"), closingCash: read("Kas Akhir"), closingCoins: read("Receh Akhir"), closingSavings: read("Tabungan Akhir") }); } return values; }
 
 export async function saveProductAlias(workspaceOwnerId: string, input: { alias: string; productId: string }) {
   const alias = input.alias.trim(); if (!alias) throw new Error("Alias produk wajib diisi.");
   const scoped = createScopedQuery(workspaceOwnerId); const product = await scoped.productById(input.productId); if (!product) throw notFoundError();
-  // The database constraint is case-insensitive. Compare the normalized value
-  // here too, so a user can correct an existing alias instead of hitting it.
   const existing = (await scoped.productAliasList()).find((row) => normalized(row.alias) === normalized(alias));
   const timestamp = new Date().toISOString();
   if (existing) { await db.update(productAliases).set({ productId: product.id }).where(eq(productAliases.id, existing.id)); return { ...existing, productId: product.id }; }
@@ -102,8 +375,10 @@ export async function previewTransactionImport(workspaceOwnerId: string, file: A
   const exact = new Map(productRows.map((product) => [product.name, product])); const aliases = new Map(aliasRows.map((alias) => [normalized(alias.alias), alias.productId])); const byId = new Map(productRows.map((product) => [product.id, product]));
   const excluded = new Set((options.nonProductNames ?? []).map(normalized)); const errors: ImportIssue[] = []; const warnings: ImportIssue[] = []; const invoices = new Map<string, ImportInvoice>(); const adjustments: Array<{ row: number; rowData: Record<string, unknown>; occurredAt: string; paymentMethod: PaymentMethod; item: ImportItem }> = []; const excludedSummary = new Map<string, { name: string; rowCount: number; totalAmount: number }>();
   const sourceInvoices = new Set<string>(); let sourceTotal = 0; let adjustmentWarningAdded = false;
-  for (const [index, row] of rows.entries()) {
-    const rowNumber = index + 2; const name = String(row["Nama Produk"] ?? "").trim(); const isAdjustment = adjustment(row); const date = occurredAt(row.Tanggal); const invoiceNote = String(row["No Nota"] ?? "").trim(); const subtotal = amount(row.Subtotal); const note = String(row.Catatan ?? "").trim(); const shiftName = itemShift(note);
+  for (const [index, rawRow] of rows.entries()) {
+    const rowNumber = index + 2; const row = normalizeRow(rawRow); const name = String(row["Nama Produk"] ?? "").trim(); const isAdjustment = adjustment(row); const rawDate = row.Tanggal; const date = occurredAt(rawDate); if (date) { row.Tanggal = date.slice(0, 10); } const invoiceNote = String(row["No Nota"] ?? "").trim(); const subtotal = amount(row.Subtotal); const note = String(row.Catatan ?? "").trim(); const shiftName = itemShift(note);
+    // Skip empty lines
+    if (!name && !rawDate && !invoiceNote && (row.Subtotal === "" || row.Subtotal === undefined)) continue;
     if (Number.isFinite(subtotal)) sourceTotal += subtotal; if (date && invoiceNote) sourceInvoices.add(`${date}:${invoiceNote}`);
     if (!isAdjustment && excluded.has(normalized(name))) { const current = excludedSummary.get(normalized(name)) ?? { name, rowCount: 0, totalAmount: 0 }; current.rowCount += 1; current.totalAmount += Number.isFinite(subtotal) ? subtotal : 0; excludedSummary.set(normalized(name), current); continue; }
     const before = errors.length;
@@ -116,14 +391,28 @@ export async function previewTransactionImport(workspaceOwnerId: string, file: A
       if (errors.length === before && date && payment && Number.isFinite(subtotal)) { adjustments.push({ row: rowNumber, rowData: row, occurredAt: date, paymentMethod: payment, item: { row: rowNumber, productId: null, productName: name, quantity: 1, unitPrice: subtotal, costPrice: 0, subtotal, isAdjustment: true, note, shiftName } }); if (!adjustmentWarningAdded) { addIssue(warnings, rowNumber, "ADA_BARIS_PENYESUAIAN", "Ada baris penyesuaian; stok tidak diubah.", row); adjustmentWarningAdded = true; } }
       continue;
     }
-    let product = exact.get(name); if (!product) product = byId.get(aliases.get(normalized(name)) ?? ""); if (!product) { const exactFuzzy = productRows.filter((candidate) => fuzzyNormalized(candidate.name) === fuzzyNormalized(name)); if (exactFuzzy.length === 1) product = exactFuzzy[0]; }
+    const noteCandidate = /sumber\s+buku\s*:\s*([^|]+)/i.exec(note)?.[1]?.trim() || null;
+    let product = findBestMatchProduct(name, productRows, aliases, byId, exact);
+    if (!product && noteCandidate) {
+      product = findBestMatchProduct(noteCandidate, productRows, aliases, byId, exact);
+    }
     if (!Number.isInteger(quantity) || quantity <= 0) addIssue(errors, rowNumber, "JUMLAH_TIDAK_VALID", "Jumlah harus bilangan bulat lebih dari nol.", row);
     if (!Number.isFinite(price) || price < 0) addIssue(errors, rowNumber, "KOLOM_WAJIB_KOSONG", "Harga jual tidak valid.", row);
-    if (!product) addIssue(errors, rowNumber, "PRODUK_TIDAK_DITEMUKAN", `Produk '${name}' tidak ditemukan.`, row, { suggestions: suggestionsFor(name, productRows), productName: name });
+    if (!product) {
+      const suggestions = suggestionsFor(name, productRows);
+      if (noteCandidate && suggestions.length < 5) {
+        const noteSug = suggestionsFor(noteCandidate, productRows);
+        const seen = new Set(suggestions.map((s) => s.id));
+        for (const s of noteSug) {
+          if (!seen.has(s.id)) {
+            suggestions.push(s);
+            seen.add(s.id);
+          }
+        }
+      }
+      addIssue(errors, rowNumber, "PRODUK_TIDAK_DITEMUKAN", `Produk '${name}' tidak ditemukan.`, row, { suggestions, productName: name });
+    }
     if (Number.isFinite(subtotal) && Number.isInteger(quantity) && Number.isFinite(price) && subtotal !== quantity * price) addIssue(errors, rowNumber, "TOTAL_NOTA_TIDAK_SEIMBANG", "Subtotal item tidak sama dengan jumlah x harga jual.", row);
-    // A subtotal arithmetic error still forms a draft invoice so the later
-    // invoice-level guard can report a non-positive total. It remains an error
-    // and therefore can never be committed.
     const rowHasBlockingError = errors.slice(before).some((issue) => issue.code !== "TOTAL_NOTA_TIDAK_SEIMBANG");
     if (rowHasBlockingError || !date || !payment || !product || !invoiceNote) continue;
     if (price !== product.sellPrice) addIssue(warnings, rowNumber, "HARGA_BEDA_DARI_MASTER", `Harga jual ${product.name} berbeda dari master.`, row, { productId: product.id, productName: product.name });

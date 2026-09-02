@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getRequestUser } from "@/lib/server/app-service";
@@ -10,16 +11,18 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  let role: Role;
+  let role: Role = "pimpinan";
 
   try {
-    role = (await getRequestUser()).role;
-  } catch (error) {
-    if (error instanceof Error && error.message !== "UNAUTHORIZED") {
-      throw error;
-    }
+    const user = await getRequestUser();
+    role = user.role;
+  } catch {
     redirect("/auth");
   }
 
-  return <AppShell role={role}>{children}</AppShell>;
+  return (
+    <Suspense fallback={null}>
+      <AppShell role={role}>{children}</AppShell>
+    </Suspense>
+  );
 }

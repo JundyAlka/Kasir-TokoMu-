@@ -54,7 +54,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCompactCurrency, formatCurrency, formatDate } from "@/lib/format";
+import { formatCompactCurrency, formatCurrency, formatDate, formatTime } from "@/lib/format";
 import { estimateProductVelocity } from "@/lib/reporting";
 import { cn } from "@/lib/utils";
 
@@ -706,16 +706,20 @@ export function DailyShiftPanel() {
       const shifts = await shiftsResponse.json().catch(() => null);
       const daily = dailyResponse ? await dailyResponse.json().catch(() => null) : { reports: [] };
 
-      if (!currentResponse.ok || !shiftsResponse.ok || !current || !shifts) {
-        throw new Error("REQUEST_FAILED");
+      if (!currentResponse.ok || !current) {
+        console.warn("[daily-shift] current shift fetch failed:", currentResponse.status, current);
       }
-      setSession(current.session ?? null);
-      setActiveShift(current.activeShift ?? null);
-      setSuggestion(current.openingSuggestion ?? { cash: 0, coins: 0, savings: 0 });
-      setCashMovement(current.cashMovement ?? null);
-      setHasOtherOpenShift(Boolean(current.hasOtherOpenShift));
-      setOpenSessionInfo(current.openSessionInfo ?? null);
-      setShiftHistory(Array.isArray(shifts.shifts) ? shifts.shifts : []);
+      if (!shiftsResponse.ok || !shifts) {
+        console.warn("[daily-shift] shifts fetch failed:", shiftsResponse.status, shifts);
+      }
+
+      setSession(current?.session ?? null);
+      setActiveShift(current?.activeShift ?? null);
+      setSuggestion(current?.openingSuggestion ?? { cash: 0, coins: 0, savings: 0 });
+      setCashMovement(current?.cashMovement ?? null);
+      setHasOtherOpenShift(Boolean(current?.hasOtherOpenShift));
+      setOpenSessionInfo(current?.openSessionInfo ?? null);
+      setShiftHistory(Array.isArray(shifts?.shifts) ? shifts.shifts : []);
       setDailyReports(Array.isArray(daily?.reports) ? daily.reports : []);
       setState("ready");
     } catch (error) {
@@ -927,7 +931,7 @@ export function DailyShiftPanel() {
                 )}
                 {session && (
                   <span className="text-xs font-medium text-muted-foreground">
-                    (Dibuka {new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit" }).format(new Date(session.startedAt))} oleh {session.cashierName})
+                    (Dibuka {formatTime(session.startedAt)} oleh {session.cashierName})
                   </span>
                 )}
               </div>
@@ -1098,7 +1102,7 @@ export function DailyShiftPanel() {
                   ) : (
                     dailyReports.map((report) => (
                       <TableRow key={report.id}>
-                        <TableCell>{formatDate(`${report.reportDate}T12:00:00.000Z`)}</TableCell>
+                        <TableCell>{formatDate(report.reportDate)}</TableCell>
                         <TableCell>{formatCurrency(report.revenue)}</TableCell>
                         <TableCell>{formatCurrency(report.cogs)}</TableCell>
                         <TableCell>{formatCurrency(report.expenseTotal)}</TableCell>
@@ -2247,7 +2251,7 @@ export function LaporanView() {
                 Jika laporan bulan <strong>{periodLabel}</strong> sudah sesuai, Anda bisa menandainya sebagai Selesai / Fix. Ini akan menyimpan snapshot laba rugi saat ini ke dalam riwayat. Anda juga masih bisa memperbaruinya nanti jika ada perubahan transaksi.
               </p>
             )}
-            {unlockedDates.length > 0 ? <div className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm"><p className="font-semibold">Kunci laporan harian berikut sebelum tutup buku:</p><ul className="mt-2 list-disc pl-5">{unlockedDates.map((date) => <li key={date}>{formatDate(`${date}T12:00:00.000Z`)}</li>)}</ul></div> : null}
+            {unlockedDates.length > 0 ? <div className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm"><p className="font-semibold">Kunci laporan harian berikut sebelum tutup buku:</p><ul className="mt-2 list-disc pl-5">{unlockedDates.map((date) => <li key={date}>{formatDate(date)}</li>)}</ul></div> : null}
             <div className="mt-auto">
               <Button
                 size="lg"
@@ -2302,9 +2306,7 @@ export function LaporanView() {
                           Fix
                         </span>
                         <p className="text-xs text-muted-foreground">
-                          {new Intl.DateTimeFormat("id-ID", {
-                            day: "numeric", month: "short", year: "numeric"
-                          }).format(new Date(report.finalizedAt))}
+                          {formatDate(report.finalizedAt)}
                         </p>
                       </div>
                     </div>

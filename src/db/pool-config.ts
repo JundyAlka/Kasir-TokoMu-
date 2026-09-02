@@ -14,7 +14,13 @@ function needsSsl(connectionString: string) {
 }
 
 export function createPoolConfig(connectionString: string): PoolConfig {
-  const config: PoolConfig = { connectionString };
+  const config: PoolConfig = {
+    connectionString,
+    max: process.env.PG_MAX_POOL ? parseInt(process.env.PG_MAX_POOL, 10) : 2,
+    idleTimeoutMillis: 2000,
+    connectionTimeoutMillis: 5000,
+    allowExitOnIdle: true,
+  };
 
   if (needsSsl(connectionString)) {
     config.ssl = { rejectUnauthorized: false };

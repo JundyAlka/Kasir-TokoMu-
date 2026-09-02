@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft, PackageOpen, WalletCards } from "lucide-react";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
@@ -22,6 +23,8 @@ import { getRequestUser } from "@/lib/server/app-service";
 import { getInvestor, listInvestments } from "@/lib/server/investor-service";
 import { requireRole } from "@/lib/server/rbac";
 import type { AkadType } from "@/lib/server/profit-sharing";
+
+export const dynamic = "force-dynamic";
 
 const akadLabels: Record<AkadType, string> = {
   murabahah_bil_wakalah: "Murabahah",
@@ -61,8 +64,21 @@ export default async function InvestorDetailPage({
 }: Readonly<{
   params: Promise<{ id: string }>;
 }>) {
-  await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
-  const { workspaceOwnerId } = await getRequestUser();
+  let workspaceOwnerId = "";
+  try {
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    const user = await getRequestUser();
+    workspaceOwnerId = user.workspaceOwnerId;
+  } catch (error) {
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      redirect("/dashboard");
+    }
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      redirect("/auth");
+    }
+    throw error;
+  }
+
   const { id } = await params;
   const [{ investor, payouts }, investmentRows, productRows] = await Promise.all([
     getInvestor(workspaceOwnerId, id),

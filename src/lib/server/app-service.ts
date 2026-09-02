@@ -772,6 +772,14 @@ export async function updateDebt(
     dueDate?: string | null;
     status?: "aktif" | "lunas" | "lewat_tempo";
     isPaid?: true;
+    amount?: number;
+    items?: Array<{
+      productId?: string | null;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      lineTotal?: number;
+    }>;
   }
 ) {
   if (draft.isPaid || draft.status === "lunas") {
@@ -788,13 +796,47 @@ export async function updateDebt(
     throw notFoundError();
   }
 
+  let finalAmount = existing.amount;
+  if (draft.items !== undefined) {
+    const itemTotal = draft.items.reduce(
+      (sum, item) => sum + item.quantity * item.unitPrice,
+      0
+    );
+    finalAmount = draft.amount ?? (itemTotal > 0 ? itemTotal : existing.amount);
+
+    await db.transaction(async (tx) => {
+      await tx.delete(debtItems).where(eq(debtItems.debtId, debtId));
+      if (draft.items && draft.items.length > 0) {
+        await tx.insert(debtItems).values(
+          draft.items.map((item) => ({
+            id: createId("ditm"),
+            debtId,
+            productId: item.productId ?? null,
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            lineTotal: item.quantity * item.unitPrice,
+          }))
+        );
+      }
+    });
+  } else if (draft.amount !== undefined) {
+    finalAmount = draft.amount;
+  }
+
   const [updated] = await db
     .update(debts)
     .set({
       borrowerName: draft.borrowerName ?? existing.borrowerName,
       whatsapp: draft.whatsapp ?? existing.whatsapp,
-      dueDate: draft.dueDate !== undefined ? (draft.dueDate ? parseDueDate(draft.dueDate) : null) : existing.dueDate,
-      status: draft.status ?? effectiveDebtStatus(existing),
+      amount: finalAmount,
+      dueDate:
+        draft.dueDate !== undefined
+          ? draft.dueDate
+            ? parseDueDate(draft.dueDate)
+            : null
+          : existing.dueDate,
+      status: draft.status ?? effectiveDebtStatus({ ...existing, amount: finalAmount }),
     })
     .where(and(eq(debts.id, debtId), eq(debts.userId, userId)))
     .returning();

@@ -186,7 +186,7 @@ export async function listDailyReports(workspaceOwnerId: string, range: { start:
        closing_total as "closingTotal", transaction_count as "transactionCount", profit_distribution as "profitDistribution",
        status, locked_at as "lockedAt", locked_by_user_id as "lockedByUserId"
      from daily_reports
-     where user_id = $1 and report_date >= $2::date and report_date < $3::date
+     where user_id = $1 and report_date >= $2::date and report_date <= $3::date
      order by report_date desc`,
     [ownerId, range.start, range.end]
   );

@@ -3,6 +3,8 @@ import { AuditLogTable } from "@/components/tokomu/audit-log-table";
 import { getRequestUser } from "@/lib/server/app-service";
 import { requireRole } from "@/lib/server/rbac";
 
+export const dynamic = "force-dynamic";
+
 export default async function AuditLogPage() {
   try {
     await getRequestUser();

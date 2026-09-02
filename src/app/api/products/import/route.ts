@@ -43,7 +43,7 @@ const COLUMN_ALIASES: Record<string, string> = {
   modal: "buyPrice",
 
   // harga jual
-  "harga jual": "buyPrice" === "buyPrice" ? "sellPrice" : "sellPrice",
+  "harga jual": "sellPrice",
   "harga_jual": "sellPrice",
   hargajual: "sellPrice",
   "sell price": "sellPrice",

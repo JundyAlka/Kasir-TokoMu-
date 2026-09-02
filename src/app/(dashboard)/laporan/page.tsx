@@ -1,18 +1,29 @@
+import { redirect } from "next/navigation";
 import { DailyShiftPanel, LaporanView } from "@/components/warung/laporan-view";
 import { LaporanAsetView } from "@/components/warung/laporan-aset-view";
 import { PengeluaranRestokView } from "@/components/warung/pengeluaran-restok-view";
 import { TransactionImportPanel } from "@/components/tokomu/transaction-import-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getRequestUser } from "@/lib/server/app-service";
+import type { Role } from "@/lib/server/rbac";
+
+export const dynamic = "force-dynamic";
 
 export default async function LaporanPage({
   searchParams,
 }: {
   searchParams?: Promise<{ tab?: string }>;
 }) {
-  const { role } = await getRequestUser();
+  let role: Role = "pimpinan";
+  try {
+    const user = await getRequestUser();
+    role = user.role;
+  } catch {
+    redirect("/auth");
+  }
+
   const canManageImports = role === "pimpinan" || role === "pengelola_keuangan";
-  const params = await searchParams;
+  const params = searchParams ? await searchParams : {};
   const allowedTabs = [
     "laba_rugi",
     "harian_shift",

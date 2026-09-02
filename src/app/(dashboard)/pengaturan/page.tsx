@@ -4,6 +4,8 @@ import { getRequestUser } from "@/lib/server/app-service";
 import { requireRole } from "@/lib/server/rbac";
 import type { Role } from "@/lib/server/rbac";
 
+export const dynamic = "force-dynamic";
+
 export default async function PengaturanPage() {
   let role: Role;
 

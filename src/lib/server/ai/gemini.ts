@@ -360,60 +360,71 @@ export async function callGemini(input: {
   temperature?: number;
   previousInteractionId?: string;
 }): Promise<GeminiResponse> {
-  const DEFAULT_MODEL = process.env.GEMINI_TEXT_MODEL ?? "gemini-3.6-flash";
-  const FALLBACK_TEXT_MODEL = process.env.GEMINI_FALLBACK_TEXT_MODEL ?? "gemini-3.6-flash";
-  const FALLBACK_TEXT_MODEL_PINNED = process.env.GEMINI_FALLBACK_TEXT_MODEL_PINNED ?? "gemini-3.6-flash";
+  const DEFAULT_GOOGLE_MODEL = "gemini-3.6-flash";
+  const DEFAULT_ROUTER_MODEL = "deepseek-v4-flash";
   const BASE_URL = process.env.GEMINI_BASE_URL ?? DEFAULT_BASE_URL;
 
-  const proxyKey = (process.env.JUAN_ROUTER_API_KEY ?? process.env.GEMINI_API_KEY ?? "").trim();
-  const GOOGLE_API_KEYS = (process.env.GEMINI_GOOGLE_API_KEYS ?? "")
-    .split(",")
-    .map((k) => k.trim())
-    .filter(Boolean);
+  const juanRouterKey = (process.env.JUAN_ROUTER_API_KEY ?? "").trim();
+  const geminiApiKey = (process.env.GEMINI_API_KEY ?? "").trim();
 
-  if (!proxyKey && GOOGLE_API_KEYS.length === 0) {
+  // Kumpulkan semua Google API Keys
+  const rawGoogleKeys = [
+    ...(geminiApiKey ? [geminiApiKey] : []),
+    ...(process.env.GEMINI_GOOGLE_API_KEYS ?? "").split(",").map((k) => k.trim()),
+  ].filter(Boolean);
+  const GOOGLE_API_KEYS = Array.from(new Set(rawGoogleKeys));
+
+  if (!juanRouterKey && GOOGLE_API_KEYS.length === 0) {
     throw new Error(
-      "JUAN_ROUTER_API_KEY belum diatur di environment. Tambahkan API key server-side untuk mengaktifkan TokoMu AI."
+      "GEMINI_API_KEY atau JUAN_ROUTER_API_KEY belum diatur di environment."
     );
   }
 
-  const models = input.model
-    ? [input.model]
-    : Array.from(new Set([DEFAULT_MODEL, FALLBACK_TEXT_MODEL, FALLBACK_TEXT_MODEL_PINNED]));
-
   let lastError = "";
 
-  // --- Step 1: Try proxy (if configured) ---
-  if (proxyKey) {
-    for (const model of models) {
-      console.log(`[callGemini] Trying proxy model=${model} baseUrl=${BASE_URL}`);
-      const result = isGoogleAuthKey(proxyKey)
-        ? await tryCallGeminiAuthKey(proxyKey, model, input)
-        : await tryCallGemini(BASE_URL, proxyKey, model, input);
+  // --- Step 1: Prioritaskan Google Auth Key (AQ....) yang aktif langsung ke Google Interactions API ---
+  const googleAuthKeys = GOOGLE_API_KEYS.filter((k) => isGoogleAuthKey(k));
+  if (googleAuthKeys.length > 0) {
+    const googleModel = (input.model && !input.model.includes("deepseek")) ? input.model : DEFAULT_GOOGLE_MODEL;
+    for (const key of googleAuthKeys) {
+      console.log(`[callGemini] Trying Google Auth Key (${key.slice(0, 10)}...) with model ${googleModel}`);
+      const result = await tryCallGeminiAuthKey(key, googleModel, input);
       if (result) return result;
-      lastError = `proxy ${model} failed`;
+      lastError = `Google Auth Key (${key.slice(0, 8)}) failed`;
     }
   }
 
-  // --- Step 2: Fallback to Google direct with multiple keys ---
-  if (GOOGLE_API_KEYS.length > 0) {
-    // Pick a random starting index so keys get distributed evenly
-    const startIndex = Math.floor(Math.random() * GOOGLE_API_KEYS.length);
-    for (let i = 0; i < GOOGLE_API_KEYS.length; i++) {
-      const keyIndex = (startIndex + i) % GOOGLE_API_KEYS.length;
-      const googleKey = GOOGLE_API_KEYS[keyIndex];
-      // Only try primary model for Google direct (to be fast)
-      const googleModels = input.model ? [input.model] : [DEFAULT_MODEL, FALLBACK_TEXT_MODEL];
-      for (const model of googleModels) {
-        const result = isGoogleAuthKey(googleKey)
-          ? await tryCallGeminiAuthKey(googleKey, model, input)
-          : await tryCallGemini(GOOGLE_DIRECT_BASE_URL, googleKey, model, input);
-        if (result) return result;
-        lastError = `google-direct ${model} failed`;
-      }
+  // --- Step 2: Coba Juan Router / Proxy jika dikonfigurasi ---
+  if (juanRouterKey) {
+    const routerModel = input.model ?? process.env.GEMINI_TEXT_MODEL ?? DEFAULT_ROUTER_MODEL;
+    console.log(`[callGemini] Trying router model=${routerModel} baseUrl=${BASE_URL}`);
+    const result = await tryCallGemini(BASE_URL, juanRouterKey, routerModel, input);
+    if (result) return result;
+    lastError = `Juan Router (${routerModel}) failed`;
+  }
+
+  // --- Step 3: Coba Google Direct API Keys standar (AIza...) ---
+  const standardGoogleKeys = GOOGLE_API_KEYS.filter((k) => !isGoogleAuthKey(k));
+  if (standardGoogleKeys.length > 0) {
+    const googleModel = (input.model && !input.model.includes("deepseek")) ? input.model : DEFAULT_GOOGLE_MODEL;
+    for (const key of standardGoogleKeys) {
+      console.log(`[callGemini] Trying Google Direct (${key.slice(0, 10)}...) with model ${googleModel}`);
+      const result = await tryCallGemini(GOOGLE_DIRECT_BASE_URL, key, googleModel, input);
+      if (result) return result;
+      lastError = `Google Direct (${key.slice(0, 8)}) failed`;
     }
   }
 
-  console.error(`[callGemini] All providers exhausted. Last: ${lastError}. Models tried: ${models.join(", ")}`);
+  // --- Step 4: Fallback terakhir jika geminiApiKey belum dicoba ---
+  if (geminiApiKey && !googleAuthKeys.includes(geminiApiKey) && !standardGoogleKeys.includes(geminiApiKey)) {
+    const model = input.model ?? DEFAULT_GOOGLE_MODEL;
+    const result = isGoogleAuthKey(geminiApiKey)
+      ? await tryCallGeminiAuthKey(geminiApiKey, model, input)
+      : await tryCallGemini(BASE_URL, geminiApiKey, model, input);
+    if (result) return result;
+    lastError = `Fallback Gemini API Key failed`;
+  }
+
+  console.error(`[callGemini] Semua penyedia AI gagal merespons. Terakhir: ${lastError}`);
   throw new Error("Semua penyedia AI gagal merespons. Coba lagi nanti.");
 }

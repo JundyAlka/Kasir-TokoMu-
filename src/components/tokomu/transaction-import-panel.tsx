@@ -10,6 +10,7 @@ import {
   Loader2,
   RotateCcw,
   Search,
+  Sparkles,
   UploadCloud,
   X,
 } from "lucide-react";
@@ -158,11 +159,26 @@ export function TransactionImportPanel() {
       dateKey,
       formattedDate:
         dateKey !== "Lainnya"
-          ? formatDate(`${dateKey}T12:00:00.000Z`)
+          ? formatDate(dateKey)
           : "Tanggal Tidak Diketahui",
       issues,
     }));
   }, [preview]);
+
+  const distinctIssuesWithSuggestions = useMemo(() => {
+    if (!preview) return 0;
+    const set = new Set<string>();
+    for (const issue of preview.errors) {
+      if (issue.code === "PRODUK_TIDAK_DITEMUKAN" && issue.productName && issue.suggestions?.length) {
+        set.add(issue.productName);
+      }
+    }
+    return set.size;
+  }, [preview]);
+
+  const selectedCount = useMemo(() => {
+    return Object.values(selectedSuggestions).filter(Boolean).length;
+  }, [selectedSuggestions]);
 
   async function loadHistory() {
     try {
@@ -298,20 +314,91 @@ export function TransactionImportPanel() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  async function saveMapping(issue: ImportIssue) {
-    const productId = selectedSuggestions[issue.productName ?? ""];
-    if (!issue.productName || !productId) return;
+  const [isApplyingSelections, setIsApplyingSelections] = useState(false);
+
+  function selectProduct(productName: string, productId: string) {
+    if (!productName || !productId) return;
+    setSelectedSuggestions((curr) => ({
+      ...curr,
+      [productName]: productId,
+    }));
+  }
+
+  function unselectProduct(productName: string) {
+    setSelectedSuggestions((curr) => {
+      const copy = { ...curr };
+      delete copy[productName];
+      return copy;
+    });
+  }
+
+  function autoSelectAllTopSuggestions() {
+    if (!preview) return;
+    const next: Record<string, string> = { ...selectedSuggestions };
+    let count = 0;
+    for (const issue of preview.errors) {
+      if (issue.code === "PRODUK_TIDAK_DITEMUKAN" && issue.productName && !next[issue.productName]) {
+        const top = issue.suggestions?.[0];
+        if (top) {
+          next[issue.productName] = top.id;
+          count += 1;
+        }
+      }
+    }
+    setSelectedSuggestions(next);
+    if (count > 0) {
+      toast.success(`${count} produk otomatis dipilihkan rekomendasi teratas. Periksa dan klik 'Terapkan Semua Pilihan' jika sudah sesuai.`);
+    } else {
+      toast.info("Semua baris dengan rekomendasi sudah terpilih.");
+    }
+  }
+
+  async function applySingleMapping(productName: string) {
+    const productId = selectedSuggestions[productName];
+    if (!productName || !productId) return;
     try {
       await readJson("/api/transactions/import/aliases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ alias: issue.productName, productId }),
+        body: JSON.stringify({ alias: productName, productId }),
       });
-      toast.success(`Pemetaan ${issue.productName} disimpan untuk semua baris dengan nama yang sama.`);
+      unselectProduct(productName);
+      toast.success(`Pemetaan "${productName}" berhasil disimpan.`);
       await previewFile();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal menyimpan pemetaan produk.");
     }
+  }
+
+  async function applyAllSelectedMappings() {
+    const entries = Object.entries(selectedSuggestions).filter(([_, id]) => Boolean(id));
+    if (entries.length === 0) {
+      toast.info("Belum ada produk yang dipilih.");
+      return;
+    }
+
+    setIsApplyingSelections(true);
+    try {
+      for (const [alias, productId] of entries) {
+        await readJson("/api/transactions/import/aliases", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ alias, productId }),
+        });
+      }
+      setSelectedSuggestions({});
+      toast.success(`${entries.length} pemetaan produk berhasil disimpan!`);
+      await previewFile();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal menyimpan pemetaan.");
+    } finally {
+      setIsApplyingSelections(false);
+    }
+  }
+
+  async function saveMapping(issue: ImportIssue) {
+    if (!issue.productName) return;
+    await applySingleMapping(issue.productName);
   }
 
   async function markNotProduct(issue: ImportIssue) {
@@ -430,11 +517,11 @@ export function TransactionImportPanel() {
               ))}
             </div>
 
-            {preview.byDate.length > 0 ? <div className="rounded-2xl border border-border/60 p-4"><h3 className="font-semibold">Ringkasan per tanggal</h3><Table className="mt-2"><TableHeader><TableRow><TableHead>Tanggal</TableHead><TableHead>Nota</TableHead><TableHead>Baris</TableHead><TableHead>Penyesuaian</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{preview.byDate.map((day) => <TableRow key={day.date}><TableCell>{formatDate(`${day.date}T12:00:00.000Z`)}</TableCell><TableCell>{day.invoiceCount}</TableCell><TableCell>{day.rowCount}</TableCell><TableCell>{day.adjustmentCount}</TableCell><TableCell className="text-right">{formatCurrency(day.totalAmount)}</TableCell></TableRow>)}</TableBody></Table></div> : null}
+            {preview.byDate.length > 0 ? <div className="rounded-2xl border border-border/60 p-4"><h3 className="font-semibold">Ringkasan per tanggal</h3><Table className="mt-2"><TableHeader><TableRow><TableHead>Tanggal</TableHead><TableHead>Nota</TableHead><TableHead>Baris</TableHead><TableHead>Penyesuaian</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader><TableBody>{preview.byDate.map((day) => <TableRow key={day.date}><TableCell>{formatDate(day.date)}</TableCell><TableCell>{day.invoiceCount}</TableCell><TableCell>{day.rowCount}</TableCell><TableCell>{day.adjustmentCount}</TableCell><TableCell className="text-right">{formatCurrency(day.totalAmount)}</TableCell></TableRow>)}</TableBody></Table></div> : null}
 
             {preview.errors.length > 0 ? (
               <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 sm:p-5 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 text-destructive pb-2 border-b border-destructive/20">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-destructive pb-3 border-b border-destructive/20">
                   <div className="flex items-center gap-2.5">
                     <AlertTriangle className="size-5 shrink-0" />
                     <div>
@@ -442,20 +529,53 @@ export function TransactionImportPanel() {
                         {preview.errorRowCount} baris harus diperbaiki sebelum impor
                       </p>
                       <p className="text-xs opacity-85">
-                        Tentukan pemetaan produk atau tandai sebagai bukan produk (pengeluaran).
+                        Pilih produk yang sesuai pada baris di bawah, lalu terapkan semua sekaligus.
                       </p>
                     </div>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 rounded-xl bg-card border-destructive/40 text-destructive hover:bg-destructive hover:text-white"
-                    onClick={downloadUnknownNames}
-                  >
-                    <Download className="size-3.5 mr-1" />
-                    Unduh daftar nama tidak dikenal
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedCount > 0 ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm gap-1.5 animate-in fade-in"
+                        disabled={isApplyingSelections}
+                        onClick={() => void applyAllSelectedMappings()}
+                      >
+                        {isApplyingSelections ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="size-3.5" />
+                        )}
+                        Terapkan Semua Pilihan ({selectedCount} Produk)
+                      </Button>
+                    ) : null}
+
+                    {distinctIssuesWithSuggestions > 0 ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8.5 rounded-xl bg-card border-primary/40 text-primary hover:bg-primary/10 gap-1.5 font-medium"
+                        onClick={autoSelectAllTopSuggestions}
+                        title="Pilih otomatis rekomendasi teratas untuk seluruh baris yang memiliki saran"
+                      >
+                        <Sparkles className="size-3.5" />
+                        Pilihkan Semua Rekomendasi
+                      </Button>
+                    ) : null}
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8.5 rounded-xl bg-card border-destructive/40 text-destructive hover:bg-destructive hover:text-white"
+                      onClick={downloadUnknownNames}
+                    >
+                      <Download className="size-3.5 mr-1" />
+                      Unduh CSV
+                    </Button>
+                  </div>
                 </div>
 
                 {errorsByDate.map((dateGroup, groupIdx) => (
@@ -471,85 +591,84 @@ export function TransactionImportPanel() {
                       <div className="flex items-center gap-2 font-semibold text-sm">
                         <CalendarDays className="size-4 shrink-0 text-destructive" />
                         <span>Tanggal Transaksi: {dateGroup.formattedDate}</span>
-                        {dateGroup.dateKey !== "Lainnya" && (
-                          <span className="text-xs font-mono font-normal opacity-75">
-                            ({dateGroup.dateKey})
-                          </span>
-                        )}
                       </div>
-                      <Badge
-                        variant="destructive"
-                        className="rounded-full text-xs font-medium px-2.5 py-0.5"
-                      >
+                      <Badge variant="outline" className="text-xs bg-background/50 border-destructive/30">
                         {dateGroup.issues.length} baris
                       </Badge>
                     </div>
 
-                    {/* Tabel Baris untuk Tanggal ini */}
-                    <div className="overflow-x-auto rounded-2xl border border-destructive/30 bg-card/85 shadow-sm">
-                      <Table className="min-w-[860px]">
-                        <TableHeader className="bg-muted/50">
-                          <TableRow>
-                            <TableHead className="w-20 font-semibold">Baris</TableHead>
-                            <TableHead className="w-44 font-semibold">Nota & Metode</TableHead>
-                            <TableHead className="min-w-[220px] font-semibold">Data Barang di File</TableHead>
-                            <TableHead className="w-48 font-semibold">Masalah / Kendala</TableHead>
-                            <TableHead className="min-w-[320px] font-semibold">Aksi Pemetaan Produk</TableHead>
+                    <div className="overflow-x-auto rounded-2xl border border-destructive/30 bg-card shadow-xs">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-destructive/20 hover:bg-transparent">
+                            <TableHead className="w-14 text-center">Baris</TableHead>
+                            <TableHead className="w-44">Nota &amp; Metode</TableHead>
+                            <TableHead className="min-w-[200px]">Data Barang di File</TableHead>
+                            <TableHead className="min-w-[170px]">Masalah / Kendala</TableHead>
+                            <TableHead className="min-w-[320px]">Aksi Pemetaan Produk</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {dateGroup.issues.map((issue, index) => {
-                            const raw = issue.rowData ?? {};
-                            const rawProductName = String(issue.productName || raw["Nama Produk"] || "-");
-                            const rawQty = raw["Jumlah"] !== undefined && raw["Jumlah"] !== "" ? Number(raw["Jumlah"]) : null;
-                            const rawPrice = raw["Harga Jual"] !== undefined && raw["Harga Jual"] !== "" ? Number(raw["Harga Jual"]) : null;
-                            const rawSubtotal = raw["Subtotal"] !== undefined && raw["Subtotal"] !== "" ? Number(raw["Subtotal"]) : null;
-                            const rawNote = raw["Catatan"] ? String(raw["Catatan"]).trim() : null;
+                          {dateGroup.issues.map((issue) => {
+                            const rawNote = String(issue.rowData?.Catatan ?? "").trim();
+                            const rawShift = String(issue.rowData?.Shift ?? "").trim();
+                            const isSelected = Boolean(issue.productName && selectedSuggestions[issue.productName]);
+                            const selectedProductId = issue.productName ? selectedSuggestions[issue.productName] : undefined;
+                            const selectedProductName = selectedProductId
+                              ? storeProducts.find((p) => p.id === selectedProductId)?.name ||
+                                issue.suggestions?.find((s) => s.id === selectedProductId)?.name ||
+                                "Produk dipilih"
+                              : "";
 
                             return (
                               <TableRow
-                                key={`${issue.row}-${issue.code}-${index}`}
-                                className="hover:bg-destructive/5 transition-colors"
+                                key={`${issue.row}-${issue.code}-${issue.productName ?? ""}`}
+                                className={cn(
+                                  "border-destructive/15 transition-colors",
+                                  isSelected
+                                    ? "bg-emerald-500/10 hover:bg-emerald-500/15"
+                                    : "hover:bg-destructive/5"
+                                )}
                               >
                                 {/* 1. Nomor Baris */}
-                                <TableCell className="align-top pt-3 font-semibold tabular-nums">
-                                  <Badge
-                                    variant="outline"
-                                    className="font-mono text-xs bg-background/80"
-                                  >
-                                    #{issue.row}
-                                  </Badge>
+                                <TableCell className="text-center font-mono text-xs font-semibold text-muted-foreground align-top pt-3">
+                                  #{issue.row}
                                 </TableCell>
 
                                 {/* 2. No Nota & Metode Bayar */}
-                                <TableCell className="align-top pt-3 space-y-1">
-                                  <p className="font-mono text-xs font-semibold text-foreground">
-                                    {String(raw["No Nota"] || "-")}
-                                  </p>
-                                  {raw["Metode Bayar"] ? (
+                                <TableCell className="align-top pt-3">
+                                  <div className="space-y-1">
+                                    <p className="font-mono text-xs font-semibold text-foreground">
+                                      {String(issue.rowData?.["No Nota"] ?? "-")}
+                                    </p>
                                     <Badge
                                       variant="secondary"
-                                      className="text-[11px] font-medium py-0 px-2 rounded-md"
+                                      className="text-[10px] px-2 py-0 font-medium capitalize"
                                     >
-                                      {String(raw["Metode Bayar"])}
+                                      {String(issue.rowData?.["Metode Bayar"] ?? "Tunai")}
                                     </Badge>
-                                  ) : null}
+                                  </div>
                                 </TableCell>
 
-                                {/* 3. Data Barang di File */}
+                                {/* 3. Detail Data Barang di File */}
                                 <TableCell className="align-top pt-3 space-y-1">
-                                  <p className="font-bold text-foreground text-sm">
-                                    {rawProductName}
+                                  <p className="font-semibold text-sm text-foreground">
+                                    {String(issue.rowData?.["Nama Produk"] ?? issue.productName ?? "-")}
                                   </p>
-                                  <div className="text-xs text-muted-foreground tabular-nums flex flex-wrap items-center gap-1.5 font-medium">
-                                    {rawQty !== null && <span>{rawQty} pcs</span>}
-                                    {rawPrice !== null && <span>× {formatCurrency(rawPrice)}</span>}
-                                    {rawSubtotal !== null && (
-                                      <span className="font-semibold text-foreground">
-                                        = {formatCurrency(rawSubtotal)}
-                                      </span>
-                                    )}
+                                  <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                                    <span>{String(issue.rowData?.Jumlah ?? 1)} pcs</span>
+                                    <span>×</span>
+                                    <span>{formatCurrency(Number(issue.rowData?.["Harga Jual"]) || 0)}</span>
+                                    <span>=</span>
+                                    <span className="font-semibold text-foreground">
+                                      {formatCurrency(Number(issue.rowData?.Subtotal) || 0)}
+                                    </span>
                                   </div>
+                                  {rawShift && (
+                                    <p className="text-[11px] text-muted-foreground/80">
+                                      Shift: {rawShift}
+                                    </p>
+                                  )}
                                   {rawNote && (
                                     <p
                                       className="text-xs text-muted-foreground/90 italic line-clamp-2 max-w-xs pt-0.5"
@@ -570,57 +689,76 @@ export function TransactionImportPanel() {
                                 {/* 5. Aksi Pemetaan Produk */}
                                 <TableCell className="align-top pt-3">
                                   {issue.code === "PRODUK_TIDAK_DITEMUKAN" && issue.productName ? (
-                                    <div className="flex flex-col gap-2 min-w-[280px]">
-                                      {/* Tampilkan produk yang sedang dipilih (jika ada) */}
-                                      {selectedSuggestions[issue.productName] ? (
-                                        <div className="flex items-center justify-between gap-2 rounded-xl bg-primary/10 border border-primary/30 px-2.5 py-1.5 text-xs">
+                                    <div className="flex flex-col gap-2 min-w-[300px]">
+                                      {/* Tampilkan produk yang sedang dipilih */}
+                                      {isSelected ? (
+                                        <div className="flex items-center justify-between gap-2 rounded-xl bg-emerald-500/15 border border-emerald-500/40 px-3 py-1.5 text-xs shadow-2xs animate-in fade-in">
                                           <div className="flex items-center gap-1.5 overflow-hidden">
-                                            <span className="font-semibold text-primary shrink-0">Pilihan:</span>
+                                            <span className="font-bold text-emerald-700 dark:text-emerald-400 shrink-0">
+                                              Pilihan:
+                                            </span>
                                             <span
-                                              className="font-medium text-foreground truncate"
-                                              title={
-                                                storeProducts.find((p) => p.id === selectedSuggestions[issue.productName!])?.name ||
-                                                issue.suggestions?.find((s) => s.id === selectedSuggestions[issue.productName!])?.name ||
-                                                "Produk dipilih"
-                                              }
+                                              className="font-semibold text-foreground truncate"
+                                              title={selectedProductName}
                                             >
-                                              {storeProducts.find((p) => p.id === selectedSuggestions[issue.productName!])?.name ||
-                                                issue.suggestions?.find((s) => s.id === selectedSuggestions[issue.productName!])?.name ||
-                                                "Produk dipilih"}
+                                              {selectedProductName}
                                             </span>
                                           </div>
                                           <button
                                             type="button"
-                                            onClick={() =>
-                                              setSelectedSuggestions((curr) => {
-                                                const copy = { ...curr };
-                                                delete copy[issue.productName!];
-                                                return copy;
-                                              })
-                                            }
-                                            className="text-muted-foreground hover:text-destructive p-0.5 rounded"
-                                            title="Batal pilihan"
+                                            onClick={() => unselectProduct(issue.productName!)}
+                                            className="text-muted-foreground hover:text-destructive p-0.5 rounded cursor-pointer transition-colors"
+                                            title="Batal pilihan ini"
                                           >
                                             <X className="size-3.5" />
                                           </button>
                                         </div>
                                       ) : null}
 
-                                      {/* Dropdown Rekomendasi Terdekat + Tombol Cari Lainnya */}
+                                      {/* Quick Suggestion Badges */}
+                                      {issue.suggestions && issue.suggestions.length > 0 ? (
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                          <span className="text-[11px] font-medium text-muted-foreground">
+                                            Rekomendasi:
+                                          </span>
+                                          {issue.suggestions.slice(0, 3).map((sug) => {
+                                            const isThisActive = selectedProductId === sug.id;
+                                            return (
+                                              <button
+                                                key={`quick-${sug.id}`}
+                                                type="button"
+                                                onClick={() => selectProduct(issue.productName!, sug.id)}
+                                                className={cn(
+                                                  "inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer shadow-2xs",
+                                                  isThisActive
+                                                    ? "bg-emerald-600 text-white border border-emerald-600 shadow-sm"
+                                                    : "bg-amber-500/15 border border-amber-500/40 text-amber-900 dark:text-amber-200 hover:bg-amber-500/25 hover:border-amber-500/70"
+                                                )}
+                                                title={`Pilih "${sug.name}"`}
+                                              >
+                                                <span>⭐ {sug.name}</span>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : null}
+
+                                      {/* Dropdown Rekomendasi Terdekat + Tombol Cari Manual + Tombol Terapkan */}
                                       <div className="flex items-center gap-1.5">
                                         {issue.suggestions && issue.suggestions.length > 0 ? (
                                           <select
                                             aria-label={`Rekomendasi untuk ${issue.productName}`}
-                                            className="h-9 flex-1 rounded-xl border border-border/80 bg-background px-2.5 text-xs font-medium focus:ring-2 focus:ring-primary shadow-xs"
-                                            value={selectedSuggestions[issue.productName] ?? ""}
-                                            onChange={(event) =>
-                                              setSelectedSuggestions((current) => ({
-                                                ...current,
-                                                [issue.productName!]: event.target.value,
-                                              }))
-                                            }
+                                            className="h-9 flex-1 rounded-xl border border-border/80 bg-background px-2.5 text-xs font-medium focus:ring-2 focus:ring-primary shadow-xs cursor-pointer"
+                                            value={selectedProductId ?? ""}
+                                            onChange={(event) => {
+                                              if (event.target.value) {
+                                                selectProduct(issue.productName!, event.target.value);
+                                              } else {
+                                                unselectProduct(issue.productName!);
+                                              }
+                                            }}
                                           >
-                                            <option value="">-- Rekomendasi ({issue.suggestions.length}) --</option>
+                                            <option value="">-- Pilih rekomendasi ({issue.suggestions.length}) --</option>
                                             {issue.suggestions.map((suggestion) => (
                                               <option key={`sug-${suggestion.id}`} value={suggestion.id}>
                                                 ⭐ {suggestion.name}
@@ -637,27 +775,28 @@ export function TransactionImportPanel() {
                                           onClick={() => openProductSearch(issue)}
                                         >
                                           <Search className="size-3.5" />
-                                          Cari Produk
+                                          Cari Manual
                                         </Button>
-                                      </div>
 
-                                      {/* Tombol Simpan Pemetaan & Tandai Bukan Produk */}
-                                      <div className="flex flex-wrap items-center gap-1.5">
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          className="h-8 rounded-lg text-xs font-semibold"
-                                          disabled={!selectedSuggestions[issue.productName]}
-                                          onClick={() => void saveMapping(issue)}
-                                        >
-                                          Terapkan ke semua &quot;{issue.productName}&quot;
-                                        </Button>
+                                        {isSelected ? (
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            className="h-9 rounded-xl text-xs font-semibold bg-primary hover:bg-primary/90 shrink-0"
+                                            onClick={() => void applySingleMapping(issue.productName!)}
+                                            title={`Terapkan pemetaan untuk semua baris "${issue.productName}" sekarang`}
+                                          >
+                                            Terapkan
+                                          </Button>
+                                        ) : null}
+
                                         <Button
                                           type="button"
                                           size="sm"
                                           variant="ghost"
-                                          className="h-8 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+                                          className="h-9 rounded-xl text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
                                           onClick={() => void markNotProduct(issue)}
+                                          title="Abaikan baris ini jika bukan barang toko (pengeluaran kas/operasional)"
                                         >
                                           Bukan produk
                                         </Button>
@@ -808,13 +947,8 @@ export function TransactionImportPanel() {
                         className="h-8 rounded-lg text-xs font-semibold"
                         onClick={() => {
                           if (searchModalIssue?.productName) {
-                            setSelectedSuggestions((curr) => ({
-                              ...curr,
-                              [searchModalIssue.productName!]: p.id,
-                            }));
-                            toast.success(
-                              `"${searchModalIssue.productName}" dipetakan ke "${p.name}". Klik tombol "Terapkan ke semua" untuk menyimpan.`
-                            );
+                            selectProduct(searchModalIssue.productName, p.id);
+                            toast.info(`"${p.name}" dipilih untuk "${searchModalIssue.productName}".`);
                           }
                           setSearchModalIssue(null);
                         }}

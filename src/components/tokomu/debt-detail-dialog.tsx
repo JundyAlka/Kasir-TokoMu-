@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BadgeCheck, Info, MessageSquareShare, WalletCards, Pencil, Check, X, ChevronDown, Copy } from "lucide-react";
+import { BadgeCheck, Info, MessageSquareShare, WalletCards, Pencil, Check, X, ChevronDown, Copy, Plus, Trash2, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,13 +18,15 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
-import type { Debt, DebtDetail } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import type { Debt, DebtDetail, Product } from "@/lib/types";
 
 type DebtDetailDialogProps = {
   debtId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDebtUpdated: (debt: Debt) => void;
+  products?: Product[];
 };
 
 async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
@@ -84,7 +86,13 @@ function formatNumberInput(value: number) {
   return new Intl.NumberFormat("id-ID").format(value);
 }
 
-export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: DebtDetailDialogProps) {
+export function DebtDetailDialog({
+  debtId,
+  open,
+  onOpenChange,
+  onDebtUpdated,
+  products = [],
+}: DebtDetailDialogProps) {
   const [detail, setDetail] = useState<DebtDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(0);
@@ -95,8 +103,23 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
   const [newNoDueDate, setNewNoDueDate] = useState(false);
   const [showTemplate, setShowTemplate] = useState(false);
 
+  // Item editor states
+  const [editingItems, setEditingItems] = useState(false);
+  const [draftItems, setDraftItems] = useState<
+    Array<{
+      id: string;
+      productId: string | null;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+    }>
+  >([]);
+  const [syncTotalAmount, setSyncTotalAmount] = useState(true);
+  const [savingItems, setSavingItems] = useState(false);
+
   useEffect(() => {
     if (!open || !debtId) {
+      setEditingItems(false);
       return;
     }
 
@@ -213,6 +236,115 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
     }
   }
 
+  function handleStartEditItems() {
+    if (!detail) return;
+    const initial = (detail.items ?? []).map((i) => ({
+      id: i.id || crypto.randomUUID(),
+      productId: i.productId ?? null,
+      name: i.name,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+    }));
+    if (initial.length === 0) {
+      initial.push({
+        id: crypto.randomUUID(),
+        productId: null,
+        name: "",
+        quantity: 1,
+        unitPrice: 0,
+      });
+    }
+    setDraftItems(initial);
+    setSyncTotalAmount(true);
+    setEditingItems(true);
+  }
+
+  function handleAddItemRow() {
+    setDraftItems((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        productId: null,
+        name: "",
+        quantity: 1,
+        unitPrice: 0,
+      },
+    ]);
+  }
+
+  function handleUpdateItemRow(
+    id: string,
+    patch: Partial<{ productId: string | null; name: string; quantity: number; unitPrice: number }>
+  ) {
+    setDraftItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, ...patch } : i))
+    );
+  }
+
+  function handleDeleteItemRow(id: string) {
+    setDraftItems((prev) => prev.filter((i) => i.id !== id));
+  }
+
+  function handleSelectProduct(id: string, prodId: string) {
+    const p = products.find((prod) => prod.id === prodId);
+    if (!p) return;
+    setDraftItems((prev) =>
+      prev.map((i) =>
+        i.id === id
+          ? {
+              ...i,
+              productId: p.id,
+              name: p.name,
+              unitPrice: p.sellPrice,
+            }
+          : i
+      )
+    );
+  }
+
+  const draftItemsTotal = useMemo(
+    () => draftItems.reduce((sum, i) => sum + Math.max(0, i.quantity) * Math.max(0, i.unitPrice), 0),
+    [draftItems]
+  );
+
+  async function handleSaveItems() {
+    if (!detail) return;
+    const cleanItems = draftItems
+      .filter((i) => i.name.trim().length > 0)
+      .map((i) => ({
+        productId: i.productId ?? null,
+        name: i.name.trim(),
+        quantity: Math.max(1, Math.round(i.quantity)),
+        unitPrice: Math.max(0, Math.round(i.unitPrice)),
+        lineTotal: Math.max(1, Math.round(i.quantity)) * Math.max(0, Math.round(i.unitPrice)),
+      }));
+
+    const itemsTotal = cleanItems.reduce((sum, i) => sum + i.lineTotal, 0);
+    const newAmount = syncTotalAmount && itemsTotal > 0 ? itemsTotal : detail.amount;
+
+    setSavingItems(true);
+    try {
+      const response = await requestJson<{ debt: DebtDetail }>(`/api/debts/${detail.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          items: cleanItems,
+          amount: newAmount,
+        }),
+      });
+
+      setDetail(response.debt);
+      onDebtUpdated(response.debt);
+      setEditingItems(false);
+      toast.success("Rincian barang kasbon berhasil disimpan.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal menyimpan rincian barang.");
+    } finally {
+      setSavingItems(false);
+    }
+  }
+
+  const reminderText = detail ? `Assalamu'alaikum wr. wb.\n\nHalo ${detail.borrowerName}, mohon maaf mengganggu waktunya 🙏\n\nIni pesan dari TokoMu, sekadar mengingatkan mengenai catatan kasbon yang belum terselesaikan sebesar *${formatCurrency(detail.remainingAmount)}*.\n\nTerima kasih banyak ya, semoga sehat selalu dan dilancarkan rezekinya! 😊` : "";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[92vh] w-[96vw] max-w-[96vw] sm:max-w-2xl md:max-w-3xl flex-col gap-0 overflow-hidden rounded-[28px] p-0">
@@ -278,20 +410,79 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
                   )}
                 </div>
               </div>
-              <div className="grid min-w-0 sm:min-w-[220px] w-full gap-2 rounded-[20px] border border-border/70 bg-muted/40 p-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Progress</span>
-                  <span className="font-medium">{paidPct}%</span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-border">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${paidPct}%` }} />
-                </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full gap-2 text-xs"
+                  onClick={() => setShowTemplate(!showTemplate)}
+                >
+                  <MessageSquareShare className="size-3.5" />
+                  Pesan penagihan
+                  <ChevronDown className={cn("size-3.5 transition-transform", showTemplate && "rotate-180")} />
+                </Button>
+                {detail.status !== "lunas" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full gap-2 text-xs border-emerald-600 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                    onClick={() => void handleMarkPaid()}
+                    disabled={submitting}
+                  >
+                    <BadgeCheck className="size-3.5" />
+                    Tandai lunas
+                  </Button>
+                )}
               </div>
             </section>
 
-            <section className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-3">
+            {/* Template Pesan Penagihan WhatsApp */}
+            {showTemplate && (
+              <section className="rounded-[22px] border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-heading text-sm font-semibold flex items-center gap-2">
+                    <MessageSquareShare className="size-4 text-primary" />
+                    Template pesan penagihan
+                  </h4>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 gap-1 text-xs rounded-full"
+                    onClick={() => {
+                      navigator.clipboard.writeText(reminderText);
+                      toast.success("Teks penagihan disalin ke clipboard!");
+                    }}
+                  >
+                    <Copy className="size-3" />
+                    Salin teks
+                  </Button>
+                </div>
+                <Textarea
+                  readOnly
+                  value={reminderText}
+                  className="text-xs bg-background/80 resize-none min-h-[90px] rounded-xl font-mono"
+                />
+                {detail.whatsapp && (
+                  <Button
+                    size="sm"
+                    className="rounded-full gap-2 text-xs w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => {
+                      const cleanPhone = detail.whatsapp.replace(/\D/g, "");
+                      const formattedPhone = cleanPhone.startsWith("0") ? "62" + cleanPhone.slice(1) : cleanPhone;
+                      window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(reminderText)}`, "_blank");
+                    }}
+                  >
+                    <MessageSquareShare className="size-3.5" />
+                    Kirim via WhatsApp
+                  </Button>
+                )}
+              </section>
+            )}
+
+            <section className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="rounded-[20px] bg-muted/45 p-3 sm:p-4 flex flex-col justify-center">
-                <p className="text-sm text-muted-foreground">Total hutang</p>
+                <p className="text-sm text-muted-foreground">Total Kasbon</p>
                 <p className="mt-1 sm:mt-2 text-lg sm:text-xl font-semibold whitespace-nowrap tracking-tight">{formatCurrency(detail.amount)}</p>
               </div>
               <div className="rounded-[20px] bg-muted/45 p-3 sm:p-4 flex flex-col justify-center">
@@ -304,9 +495,170 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
               </div>
             </section>
 
+            {/* DAFTAR BARANG YANG DIHUTANG */}
             <section className="grid gap-3">
-              <h4 className="font-heading text-lg font-semibold">Daftar barang</h4>
-              {(detail.items?.length ?? 0) > 0 ? (
+              <div className="flex items-center justify-between">
+                <h4 className="font-heading text-lg font-semibold">Daftar barang</h4>
+                {detail.status !== "lunas" && !editingItems && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-xl text-xs gap-1.5 font-medium border-border/80 hover:bg-primary/10 hover:text-primary"
+                    onClick={handleStartEditItems}
+                  >
+                    <Pencil className="size-3.5" />
+                    {(detail.items?.length ?? 0) > 0 ? "Ubah Barang" : "+ Atur Barang Dihutang"}
+                  </Button>
+                )}
+              </div>
+
+              {editingItems ? (
+                /* Mode Edit Rincian Barang */
+                <div className="rounded-2xl border border-primary/40 bg-card p-4 space-y-3.5 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-foreground">
+                      Pilih produk dari inventaris toko atau ketik nama barang:
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs rounded-lg gap-1"
+                      onClick={handleAddItemRow}
+                    >
+                      <Plus className="size-3" />
+                      Tambah Baris
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                    {draftItems.map((item, idx) => (
+                      <div
+                        key={item.id}
+                        className="flex flex-wrap sm:flex-nowrap items-center gap-2 p-2 rounded-xl bg-muted/30 border border-border/60"
+                      >
+                        <span className="text-xs font-mono text-muted-foreground w-6 text-center">
+                          #{idx + 1}
+                        </span>
+
+                        {/* Pilih dari Produk Master jika ada */}
+                        {products.length > 0 && (
+                          <select
+                            className="h-8 text-xs rounded-lg bg-background border border-border px-2 max-w-[150px] sm:max-w-[180px] cursor-pointer"
+                            value={item.productId ?? ""}
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                handleSelectProduct(item.id, e.target.value);
+                              }
+                            }}
+                          >
+                            <option value="">-- Pilih dari Katalog --</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} ({formatCurrency(p.sellPrice)})
+                              </option>
+                            ))}
+                          </select>
+                        )}
+
+                        {/* Input Nama Barang Bebas */}
+                        <Input
+                          value={item.name}
+                          onChange={(e) => handleUpdateItemRow(item.id, { name: e.target.value })}
+                          placeholder="Nama barang..."
+                          className="h-8 text-xs flex-1 rounded-lg bg-background min-w-[120px]"
+                        />
+
+                        {/* Qty */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Label className="text-[10px] text-muted-foreground">Qty:</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) =>
+                              handleUpdateItemRow(item.id, {
+                                quantity: Math.max(1, Number(e.target.value) || 1),
+                              })
+                            }
+                            className="h-8 text-xs w-16 text-center rounded-lg bg-background"
+                          />
+                        </div>
+
+                        {/* Harga Satuan */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Label className="text-[10px] text-muted-foreground">Harga:</Label>
+                          <Input
+                            type="number"
+                            value={item.unitPrice}
+                            onChange={(e) =>
+                              handleUpdateItemRow(item.id, {
+                                unitPrice: Math.max(0, Number(e.target.value) || 0),
+                              })
+                            }
+                            className="h-8 text-xs w-24 text-right rounded-lg bg-background"
+                          />
+                        </div>
+
+                        {/* Subtotal */}
+                        <span className="text-xs font-semibold tabular-nums text-foreground shrink-0 w-24 text-right">
+                          {formatCurrency(item.quantity * item.unitPrice)}
+                        </span>
+
+                        {/* Hapus */}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0 rounded-lg"
+                          onClick={() => handleDeleteItemRow(item.id)}
+                          disabled={draftItems.length <= 1}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-border/60">
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={syncTotalAmount}
+                        onChange={(e) => setSyncTotalAmount(e.target.checked)}
+                        className="size-4 rounded accent-primary cursor-pointer"
+                      />
+                      <span>
+                        Sesuaikan total hutang dengan subtotal barang (<strong>{formatCurrency(draftItemsTotal)}</strong>)
+                      </span>
+                    </label>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs rounded-xl"
+                        onClick={() => setEditingItems(false)}
+                        disabled={savingItems}
+                      >
+                        Batal
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 text-xs rounded-xl bg-primary text-primary-foreground font-semibold gap-1.5"
+                        onClick={() => void handleSaveItems()}
+                        disabled={savingItems}
+                      >
+                        {savingItems ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                        Simpan Barang
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (detail.items?.length ?? 0) > 0 ? (
+                /* Tabel Display Barang Normal */
                 <div className="overflow-x-auto rounded-[18px] border border-border/60">
                   <Table className="min-w-[520px]">
                   <TableHeader>
@@ -320,17 +672,29 @@ export function DebtDetailDialog({ debtId, open, onOpenChange, onDebtUpdated }: 
                   <TableBody>
                     {(detail.items ?? []).map((item) => (
                       <TableRow key={item.id}>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell className="text-right">{item.quantity}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
-                        <TableCell className="text-right font-medium">{formatCurrency(item.lineTotal)}</TableCell>
+                        <TableCell className="font-semibold">{item.name}</TableCell>
+                        <TableCell className="text-right tabular-nums">{item.quantity}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(item.unitPrice)}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">{formatCurrency(item.lineTotal)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                   </Table>
                 </div>
               ) : (
-                <p className="rounded-[18px] bg-muted/45 p-4 text-sm text-muted-foreground">Kasbon ini dicatat tanpa rincian barang.</p>
+                <div className="flex items-center justify-between rounded-[18px] bg-muted/45 p-4 text-sm text-muted-foreground">
+                  <span>Kasbon ini dicatat dengan nominal langsung (tanpa rincian barang).</span>
+                  {detail.status !== "lunas" && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="text-xs text-primary p-0 h-auto font-semibold"
+                      onClick={handleStartEditItems}
+                    >
+                      + Tambah rincian barang
+                    </Button>
+                  )}
+                </div>
               )}
             </section>
 

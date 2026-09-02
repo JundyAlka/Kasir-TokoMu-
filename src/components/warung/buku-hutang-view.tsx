@@ -7,6 +7,7 @@ import { useAppState } from "@/components/providers/app-state-provider";
 import { StatCard } from "@/components/stat-card";
 import { DebtDetailDialog } from "@/components/tokomu/debt-detail-dialog";
 import { DebtFormDialog } from "@/components/tokomu/debt-form-dialog";
+import { DebtImportDialog } from "@/components/tokomu/debt-import-dialog";
 import {
   DebtSummaryDetailDialog,
   DebtSummaryMetric,
@@ -119,7 +120,7 @@ export function BukuHutangView() {
             </CardDescription>
           </div>
 
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2.5 md:items-center">
             <div className="relative min-w-[220px]">
               <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -129,6 +130,8 @@ export function BukuHutangView() {
                 className="h-11 rounded-2xl bg-card/85 pl-9"
               />
             </div>
+
+            <DebtImportDialog />
 
             <DebtFormDialog
               products={products}
@@ -256,6 +259,7 @@ export function BukuHutangView() {
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onDebtUpdated={handleDebtUpdated}
+        products={products}
       />
       <DebtSummaryDetailDialog
         debts={visibleDebts}

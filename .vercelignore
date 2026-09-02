@@ -9,3 +9,6 @@ node_modules
 deploy-log.txt
 *.zip
 .local
+*.log
+*.sql
+db-export.json

@@ -102,6 +102,20 @@ export const DebtUpdateSchema = z
     dueDate: isoDateLike("Tanggal jatuh tempo").optional().nullable(),
     status: z.enum(["aktif", "lunas", "lewat_tempo"]).optional(),
     isPaid: z.literal(true).optional(),
+    amount: positiveInteger("Nominal hutang").optional(),
+    items: z
+      .array(
+        z
+          .object({
+            productId: z.string().trim().min(1).nullable().optional(),
+            name: requiredText("Nama barang"),
+            quantity: positiveInteger("Jumlah barang"),
+            unitPrice: positiveInteger("Harga barang"),
+            lineTotal: positiveInteger("Subtotal").optional(),
+          })
+          .strict()
+      )
+      .optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {

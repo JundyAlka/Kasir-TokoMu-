@@ -1,7 +1,10 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { MonthlyReportPreview } from "@/components/tokomu/monthly-report-preview";
 import { getRequestUser } from "@/lib/server/app-service";
 import { requireRole } from "@/lib/server/rbac";
+
+export const dynamic = "force-dynamic";
 
 export default async function LaporanPcmPage() {
   try {
@@ -19,6 +22,10 @@ export default async function LaporanPcmPage() {
     throw error;
   }
 
-  return <MonthlyReportPreview />;
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Memuat laporan PCM...</div>}>
+      <MonthlyReportPreview />
+    </Suspense>
+  );
 }
 

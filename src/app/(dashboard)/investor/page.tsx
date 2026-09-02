@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { InactiveInvestorManager } from "@/components/tokomu/inactive-investor-manager";
@@ -10,6 +11,9 @@ import { listInvestors } from "@/lib/server/investor-service";
 import { requireRole } from "@/lib/server/rbac";
 import { cn } from "@/lib/utils";
 import { TitipanIntakeDialog } from "@/components/tokomu/titipan-intake-dialog";
+import { InvestorImportTitipanDialog } from "@/components/tokomu/investor-import-titipan-dialog";
+
+export const dynamic = "force-dynamic";
 
 type InvestorStatus = "active" | "inactive" | "all";
 type PartnerTypeFilter = "all" | "investor_uang" | "titipan_bagihasil" | "sales_harian";
@@ -49,19 +53,40 @@ export default async function InvestorPage({
 }: Readonly<{
   searchParams?: Promise<{ status?: string; partnerType?: string }>;
 }>) {
-  await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
-  const { workspaceOwnerId } = await getRequestUser();
+  let workspaceOwnerId = "";
+  try {
+    await requireRole(["pimpinan", "pengelola_keuangan", "kasir"]);
+    const user = await getRequestUser();
+    workspaceOwnerId = user.workspaceOwnerId;
+  } catch (error) {
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      redirect("/dashboard");
+    }
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      redirect("/auth");
+    }
+    throw error;
+  }
+
   const params = searchParams ? await searchParams : {};
   const status = parseStatus(params.status);
   const partnerType = parsePartnerType(params.partnerType);
 
-  const [investors, allInvestors] = (await Promise.all([
-    listInvestors(workspaceOwnerId, {
-      status,
-      partnerType: partnerType === "all" ? undefined : partnerType,
-    }),
-    listInvestors(workspaceOwnerId, { status: "all" }),
-  ])) as [InvestorSummary[], InvestorSummary[]];
+  const allInvestors = (await listInvestors(workspaceOwnerId, { status: "all" })) as InvestorSummary[];
+
+  const investors = allInvestors.filter((inv) => {
+    const matchesStatus =
+      status === "all"
+        ? true
+        : status === "inactive"
+        ? inv.isActive === 0
+        : inv.isActive === 1;
+
+    const matchesType =
+      partnerType === "all" ? true : inv.partnerType === partnerType;
+
+    return matchesStatus && matchesType;
+  });
 
   return (
     <div className="space-y-4">
@@ -84,6 +109,7 @@ export default async function InvestorPage({
         </div>
         <div className="flex flex-wrap gap-2">
           {allInvestors.length > 0 ? <InvestorOverviewDialog investors={allInvestors} /> : null}
+          <InvestorImportTitipanDialog />
           <TitipanIntakeDialog partners={allInvestors.filter((investor) => investor.partnerType === "titipan_bagihasil" || investor.partnerType === "sales_harian")} />
           {status !== "inactive" ? <InvestorFormDialog /> : null}
         </div>
@@ -126,7 +152,10 @@ export default async function InvestorPage({
                 : "Tambahkan mitra baru untuk mulai mencatat modal uang, barang titipan, atau sales harian."}
             </p>
             {status !== "inactive" ? (
-              <InvestorFormDialog />
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <InvestorImportTitipanDialog />
+                <InvestorFormDialog />
+              </div>
             ) : null}
           </CardContent>
         </Card>
