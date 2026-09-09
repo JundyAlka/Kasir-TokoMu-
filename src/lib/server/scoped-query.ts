@@ -59,12 +59,16 @@ export function createScopedQuery(workspaceOwnerId: string) {
       .where(eq(productAliases.userId, workspaceOwnerId));
   }
 
-  async function transactionList() {
-    return db
+  async function transactionList(limit?: number) {
+    const query = db
       .select()
       .from(transactions)
       .where(eq(transactions.userId, workspaceOwnerId))
       .orderBy(desc(transactions.occurredAt));
+    if (typeof limit === "number" && limit > 0) {
+      return query.limit(limit);
+    }
+    return query;
   }
 
   async function transactionItemsForIds(transactionIds: string[]) {
@@ -76,12 +80,16 @@ export function createScopedQuery(workspaceOwnerId: string) {
       .where(inArray(transactionItems.transactionId, transactionIds));
   }
 
-  async function expenseList() {
-    return db
+  async function expenseList(limit?: number) {
+    const query = db
       .select()
       .from(expenses)
       .where(eq(expenses.userId, workspaceOwnerId))
       .orderBy(desc(expenses.createdAt));
+    if (typeof limit === "number" && limit > 0) {
+      return query.limit(limit);
+    }
+    return query;
   }
 
   async function debtList() {

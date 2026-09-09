@@ -56,7 +56,7 @@ export async function POST(
   }
 
   const formData = await request.formData();
-  const callbackURL = String(formData.get("callbackURL") ?? "/dashboard");
+  const callbackURL = String(formData.get("callbackURL") ?? "/kasir");
   const payload = {
     callbackURL,
     ...(intent === "sign-up"

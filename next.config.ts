@@ -3,8 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   allowedDevOrigins: ["127.0.0.1"],
+  compress: true,
   experimental: {
     authInterrupts: true,
+    optimizePackageImports: ["lucide-react", "@radix-ui/react-icons", "recharts", "date-fns"],
   },
   turbopack: {
     root: __dirname,

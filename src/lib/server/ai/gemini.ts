@@ -395,10 +395,11 @@ export async function callGemini(input: {
   }
 
   // --- Step 2: Coba Juan Router / Proxy jika dikonfigurasi ---
-  if (juanRouterKey) {
+  const routerKey = juanRouterKey || (process.env.GEMINI_BASE_URL ? geminiApiKey : "");
+  if (routerKey) {
     const routerModel = input.model ?? process.env.GEMINI_TEXT_MODEL ?? DEFAULT_ROUTER_MODEL;
     console.log(`[callGemini] Trying router model=${routerModel} baseUrl=${BASE_URL}`);
-    const result = await tryCallGemini(BASE_URL, juanRouterKey, routerModel, input);
+    const result = await tryCallGemini(BASE_URL, routerKey, routerModel, input);
     if (result) return result;
     lastError = `Juan Router (${routerModel}) failed`;
   }

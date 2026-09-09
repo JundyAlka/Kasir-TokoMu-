@@ -12,7 +12,7 @@ export default async function AuthPage() {
   });
 
   if (session) {
-    redirect("/dashboard");
+    redirect("/kasir");
   }
 
   return (

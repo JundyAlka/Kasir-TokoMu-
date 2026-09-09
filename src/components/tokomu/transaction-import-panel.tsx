@@ -3,6 +3,7 @@
 import { type ChangeEvent, type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  BookOpen,
   CalendarDays,
   CheckCircle2,
   Download,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAppState } from "@/components/providers/app-state-provider";
+import { ManualDailyClosingPanel } from "./manual-daily-closing-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,6 +111,7 @@ function rowValues(rowData?: Record<string, unknown>) {
 }
 
 export function TransactionImportPanel() {
+  const [importMode, setImportMode] = useState<"buku_kas" | "excel_detail">("buku_kas");
   const { products: storeProducts } = useAppState();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -431,7 +434,41 @@ export function TransactionImportPanel() {
 
   return (
     <div className="space-y-6">
-      <Card className="border-border/60 bg-card/74">
+      {/* Mode Switcher */}
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/70 bg-muted/40 p-1.5 w-fit shadow-xs">
+        <button
+          type="button"
+          onClick={() => setImportMode("buku_kas")}
+          className={cn(
+            "flex items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-bold transition-all cursor-pointer",
+            importMode === "buku_kas"
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-card/40"
+          )}
+        >
+          <BookOpen className="size-4" />
+          Rekap Tutup Buku Harian (Buku Kas)
+        </button>
+        <button
+          type="button"
+          onClick={() => setImportMode("excel_detail")}
+          className={cn(
+            "flex items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-bold transition-all cursor-pointer",
+            importMode === "excel_detail"
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground hover:bg-card/40"
+          )}
+        >
+          <FileSpreadsheet className="size-4" />
+          Impor Excel Nota Detail
+        </button>
+      </div>
+
+      {importMode === "buku_kas" ? (
+        <ManualDailyClosingPanel />
+      ) : (
+        <>
+          <Card className="border-border/60 bg-card/74">
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -974,6 +1011,8 @@ export function TransactionImportPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </>
+      )}
     </div>
   );
 }

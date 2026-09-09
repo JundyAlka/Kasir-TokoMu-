@@ -68,6 +68,7 @@ export const routePolicy: Record<string, RoutePolicy> = {
   "/api/shifts/[id]": { PATCH: LEADERSHIP_ONLY, DELETE: LEADERSHIP_ONLY },
   "/api/daily-reports": { GET: FINANCE_ROLES },
   "/api/daily-reports/lock": { POST: FINANCE_ROLES },
+  "/api/daily-reports/manual-close": { GET: FINANCE_ROLES, POST: FINANCE_ROLES, DELETE: FINANCE_ROLES },
   "/api/transactions": { POST: ALL_ROLES },
   "/api/transactions/import": { GET: FINANCE_ROLES },
   "/api/transactions/import/preview": { POST: FINANCE_ROLES },

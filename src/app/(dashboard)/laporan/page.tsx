@@ -1,9 +1,5 @@
 import { redirect } from "next/navigation";
-import { DailyShiftPanel, LaporanView } from "@/components/warung/laporan-view";
-import { LaporanAsetView } from "@/components/warung/laporan-aset-view";
-import { PengeluaranRestokView } from "@/components/warung/pengeluaran-restok-view";
-import { TransactionImportPanel } from "@/components/tokomu/transaction-import-panel";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LaporanTabs } from "@/components/tokomu/laporan-tabs";
 import { getRequestUser } from "@/lib/server/app-service";
 import type { Role } from "@/lib/server/rbac";
 
@@ -43,46 +39,7 @@ export default async function LaporanPage({
         </div>
       </div>
 
-      <Tabs defaultValue={initialTab} className="w-full">
-        <div className="mb-6 overflow-x-auto pb-2 scrollbar-hide">
-          <TabsList className="bg-muted/70 p-1.5 border border-border/70 rounded-2xl min-w-max shadow-inner">
-            <TabsTrigger value="laba_rugi" className="rounded-xl px-6 py-2.5 font-semibold transition-all">
-              Laba Rugi & Omzet
-            </TabsTrigger>
-            <TabsTrigger value="harian_shift" className="rounded-xl px-6 py-2.5 font-semibold transition-all">
-              Harian & Shift
-            </TabsTrigger>
-            <TabsTrigger value="aset_modal" className="rounded-xl px-6 py-2.5 font-semibold transition-all">
-              Aset & Modal Awal
-            </TabsTrigger>
-            <TabsTrigger value="restok_pengeluaran" className="rounded-xl px-6 py-2.5 font-semibold transition-all">
-              Pengeluaran & Restok
-            </TabsTrigger>
-            {canManageImports ? (
-              <TabsTrigger value="impor_transaksi" className="rounded-xl px-6 py-2.5 font-semibold transition-all">
-                Impor Transaksi
-              </TabsTrigger>
-            ) : null}
-          </TabsList>
-        </div>
-        <TabsContent value="laba_rugi" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-          <LaporanView />
-        </TabsContent>
-        <TabsContent value="harian_shift" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-          <DailyShiftPanel />
-        </TabsContent>
-        <TabsContent value="aset_modal" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-          <LaporanAsetView />
-        </TabsContent>
-        <TabsContent value="restok_pengeluaran" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-          <PengeluaranRestokView />
-        </TabsContent>
-        {canManageImports ? (
-          <TabsContent value="impor_transaksi" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-            <TransactionImportPanel />
-          </TabsContent>
-        ) : null}
-      </Tabs>
+      <LaporanTabs initialTab={initialTab} canManageImports={canManageImports} />
     </div>
   );
 }

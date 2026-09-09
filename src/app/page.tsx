@@ -7,5 +7,5 @@ export default async function Home() {
     headers: await headers(),
   });
 
-  redirect(session?.user ? "/dashboard" : "/auth");
+  redirect(session?.user ? "/kasir" : "/auth");
 }

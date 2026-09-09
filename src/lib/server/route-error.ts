@@ -75,7 +75,9 @@ export function handleRouteError(error: unknown, fallbackMessage: string, badReq
 
   console.error("[api] unhandled route error", error);
   const errorMessage =
-    error instanceof Error && error.message && error.message !== "REQUEST_FAILED"
+    badRequestStatus >= 500
+      ? fallbackMessage
+      : error instanceof Error && error.message && error.message !== "REQUEST_FAILED"
       ? error.message
       : fallbackMessage;
 

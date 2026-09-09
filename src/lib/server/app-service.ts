@@ -308,13 +308,14 @@ export async function getBootstrapState(userId: string): Promise<AppState> {
   }
 
   const productRows = await q.productList();
-  const transactionRows = await q.transactionList();
+  // Muat 50 transaksi terbaru untuk ringkasan cepat, memangkas payload bootstrap hingga >80%
+  const transactionRows = await q.transactionList(50);
 
   const transactionIds = transactionRows.map((transaction) => transaction.id);
   const itemRows = await q.transactionItemsForIds(transactionIds);
 
   const debtRows = await q.debtList();
-  const expenseRows = await q.expenseList();
+  const expenseRows = await q.expenseList(50);
 
   const itemsByTransaction = new Map<string, Transaction["items"]>();
   for (const item of itemRows) {

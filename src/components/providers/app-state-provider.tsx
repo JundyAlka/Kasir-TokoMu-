@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { emptyAppState } from "@/lib/empty-state";
@@ -108,28 +108,34 @@ export function AppStateProvider({
     void loadWorkspace().catch(() => undefined);
   }, [isPending, loadWorkspace, sessionUserId]);
 
-  const cartLines = state.cart.flatMap((line) => {
-    const product = state.products.find((item) => item.id === line.productId);
-    if (!product) {
-      return [];
-    }
+  const cartLines = useMemo(() => {
+    return state.cart.flatMap((line) => {
+      const product = state.products.find((item) => item.id === line.productId);
+      if (!product) {
+        return [];
+      }
 
-    return [
-      {
-        product,
-        quantity: line.quantity,
-        lineTotal: product.sellPrice * line.quantity,
-      },
-    ];
-  });
+      return [
+        {
+          product,
+          quantity: line.quantity,
+          lineTotal: product.sellPrice * line.quantity,
+        },
+      ];
+    });
+  }, [state.cart, state.products]);
 
-  const cartTotal = cartLines.reduce((sum, line) => sum + line.lineTotal, 0);
+  const cartTotal = useMemo(() => {
+    return cartLines.reduce((sum, line) => sum + line.lineTotal, 0);
+  }, [cartLines]);
 
-  const lowStockProducts = state.products.filter(
-    (product) => product.stock <= Math.max(product.minimumStock, state.settings.stockAlertThreshold)
-  );
+  const lowStockProducts = useMemo(() => {
+    return state.products.filter(
+      (product) => product.stock <= Math.max(product.minimumStock, state.settings.stockAlertThreshold)
+    );
+  }, [state.products, state.settings.stockAlertThreshold]);
 
-  function addToCart(productId: string) {
+  const addToCart = useCallback((productId: string) => {
     setState((current) => {
       const product = current.products.find((item) => item.id === productId);
       if (!product || product.stock <= 0) {
@@ -153,9 +159,9 @@ export function AppStateProvider({
         cart: nextCart,
       };
     });
-  }
+  }, []);
 
-  function updateCartQuantity(productId: string, quantity: number) {
+  const updateCartQuantity = useCallback((productId: string, quantity: number) => {
     setState((current) => {
       const product = current.products.find((item) => item.id === productId);
       if (!product) {
@@ -173,21 +179,21 @@ export function AppStateProvider({
               ),
       };
     });
-  }
+  }, []);
 
-  function removeFromCart(productId: string) {
+  const removeFromCart = useCallback((productId: string) => {
     setState((current) => ({
       ...current,
       cart: current.cart.filter((item) => item.productId !== productId),
     }));
-  }
+  }, []);
 
-  function setPaymentMethod(method: PaymentMethod) {
+  const setPaymentMethod = useCallback((method: PaymentMethod) => {
     setState((current) => ({
       ...current,
       paymentMethod: method,
     }));
-  }
+  }, []);
 
   async function checkout(paidAmount?: number) {
     if (state.cart.length === 0) {

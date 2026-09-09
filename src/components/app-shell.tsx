@@ -20,9 +20,13 @@ import {
   UserCog,
   Wallet,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { AccountPanel } from "@/components/auth/account-panel";
-import { AIAssistantPanel } from "@/components/warung/ai-assistant-panel";
+const AIAssistantPanel = dynamic(
+  () => import("@/components/warung/ai-assistant-panel").then((mod) => mod.AIAssistantPanel),
+  { ssr: false }
+);
 import { ThemeToggle } from "@/components/theme-toggle";
 import { RoleProvider } from "@/components/role-gate";
 import { cn } from "@/lib/utils";
@@ -32,8 +36,8 @@ import type { Role } from "@/lib/server/rbac";
 import { toast } from "sonner";
 
 const navigation = [
-  { href: "/dashboard", label: "Dashboard", icon: Gauge, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/kasir", label: "Kasir", icon: ShoppingBasket, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
+  { href: "/dashboard", label: "Dashboard", icon: Gauge, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/inventaris", label: "Inventaris", icon: Package2, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/buku-hutang", label: "Buku Hutang", icon: Wallet, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/investor", label: "Investor", icon: Landmark, roles: ["pimpinan", "pengelola_keuangan"] },
@@ -138,7 +142,7 @@ export function AppShell({
       });
     }
 
-    fetchReportsStatus();
+    const initialTimer = setTimeout(fetchReportsStatus, 1200);
 
     function handlePcmUpdate(e: any) {
       if (role === "kasir") {
@@ -168,6 +172,7 @@ export function AppShell({
     window.addEventListener("pcm-reports-updated", handlePcmUpdate);
     return () => {
       mounted = false;
+      clearTimeout(initialTimer);
       if (refetchTimer) clearTimeout(refetchTimer);
       window.removeEventListener("pcm-reports-updated", handlePcmUpdate);
     };
@@ -473,7 +478,9 @@ export function AppShell({
           </button>
         ) : null}
 
-        <AIAssistantPanel open={aiOpen} onOpenChange={handleAiOpenChange} width={aiWidth} role={role} />
+        {aiOpen ? (
+          <AIAssistantPanel open={aiOpen} onOpenChange={handleAiOpenChange} width={aiWidth} role={role} />
+        ) : null}
       </div>
 
       {/* Mobile Bottom Navigation - only shown on screens smaller than md */}

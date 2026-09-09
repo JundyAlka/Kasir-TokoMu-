@@ -1,8 +1,8 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import QRCode from "qrcode";
+import dynamic from "next/dynamic";
 import {
   BanknoteArrowDown,
   Building2,
@@ -26,7 +26,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAppState } from "@/components/providers/app-state-provider";
-import { ReceiptPrintDialog } from "@/components/tokomu/receipt-print";
+const ReceiptPrintDialog = dynamic(
+  () => import("@/components/tokomu/receipt-print").then((mod) => mod.ReceiptPrintDialog),
+  { ssr: false }
+);
 import { ShiftChangeBanner } from "@/components/tokomu/shift-change-banner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -179,26 +182,26 @@ function ProductDetailDialog({
   );
 }
 
-function ProductCard({
+const ProductCard = memo(function ProductCard({
   product,
   onAdd,
   onDetail,
 }: {
   product: Product;
-  onAdd: () => void;
-  onDetail?: () => void;
+  onAdd: (product: Product) => void;
+  onDetail?: (product: Product) => void;
 }) {
   const lowStock = product.stock <= product.minimumStock;
 
   return (
     <div
-      onClick={onAdd}
+      onClick={() => onAdd(product)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onAdd();
+          onAdd(product);
         }
       }}
       className={cn(
@@ -212,7 +215,7 @@ function ProductCard({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onDetail?.();
+            onDetail?.(product);
           }}
           title={`Lihat detail ${product.name} (${product.category})`}
           className="flex size-8 xl:size-9 shrink-0 items-center justify-center rounded-xl xl:rounded-2xl border border-border/60 bg-muted/60 text-muted-foreground transition hover:bg-muted hover:text-foreground"
@@ -255,7 +258,91 @@ function ProductCard({
       </div>
     </div>
   );
-}
+});
+
+type CartItemLine = {
+  product: Product;
+  quantity: number;
+  lineTotal: number;
+};
+
+const CartItemRow = memo(function CartItemRow({
+  line,
+  onRemove,
+  onUpdateQuantity,
+}: {
+  line: CartItemLine;
+  onRemove: (productId: string) => void;
+  onUpdateQuantity: (productId: string, quantity: number) => void;
+}) {
+  const handleRemove = useCallback(() => {
+    onRemove(line.product.id);
+  }, [line.product.id, onRemove]);
+
+  const handleDecrease = useCallback(() => {
+    onUpdateQuantity(line.product.id, line.quantity - 1);
+  }, [line.product.id, line.quantity, onUpdateQuantity]);
+
+  const handleIncrease = useCallback(() => {
+    if (line.quantity >= line.product.stock) {
+      toast.error(`Stok ${line.product.name} tidak cukup.`, {
+        description: `Stok tersedia hanya ${line.product.stock} pcs.`,
+      });
+      return;
+    }
+    onUpdateQuantity(line.product.id, line.quantity + 1);
+  }, [line.product.id, line.product.name, line.product.stock, line.quantity, onUpdateQuantity]);
+
+  return (
+    <div className="group/item relative rounded-[18px] border border-border border-l-4 border-l-primary bg-card py-2.5 pr-2.5 pl-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:border-l-primary hover:shadow-md dark:bg-muted/90 dark:hover:bg-muted shrink-0">
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-semibold text-foreground text-sm tracking-tight transition-colors group-hover/item:text-primary leading-snug">
+          {line.product.name}
+        </p>
+        <button
+          type="button"
+          onClick={handleRemove}
+          className="rounded-full p-1 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive shrink-0 -mt-0.5 -mr-0.5"
+          aria-label={`Hapus ${line.product.name}`}
+        >
+          <X className="size-3.5" />
+        </button>
+      </div>
+
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          {formatCurrency(line.product.sellPrice)} <span className="opacity-75">x {line.quantity}</span>
+        </p>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="inline-flex items-center gap-0.5 rounded-full bg-muted/80 p-0.5 border border-border/40 dark:bg-muted/40">
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              className="rounded-full size-6 hover:bg-background/80"
+              onClick={handleDecrease}
+            >
+              <Minus className="size-3" />
+            </Button>
+            <span className="min-w-5 text-center text-xs font-semibold text-foreground">{line.quantity}</span>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              className="rounded-full size-6 hover:bg-background/80"
+              onClick={handleIncrease}
+            >
+              <Plus className="size-3" />
+            </Button>
+          </div>
+          <p className="font-bold text-primary text-sm tracking-tight tabular-nums min-w-[72px] text-right">
+            {formatCurrency(line.lineTotal)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 type QrisPreviewLine = {
   lineTotal: number;
@@ -312,13 +399,17 @@ function QrisPaymentPreview({
     }
 
     let active = true;
-    void QRCode.toDataURL(payload, {
-      color: { dark: "#1f1713", light: "#ffffff" },
-      errorCorrectionLevel: "M",
-      margin: 1,
-      width: 220,
-    })
-      .then((dataUrl) => {
+    import("qrcode")
+      .then((mod) => {
+        const qr = mod.default || mod;
+        return qr.toDataURL(payload, {
+          color: { dark: "#1f1713", light: "#ffffff" },
+          errorCorrectionLevel: "M",
+          margin: 1,
+          width: 220,
+        });
+      })
+      .then((dataUrl: string) => {
         if (active) setQrResult({ dataUrl, payload });
       })
       .catch(() => {
@@ -551,6 +642,7 @@ export function KasirView() {
     checkout,
   } = useAppState();
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const [category, setCategory] = useState<"Semua" | ProductCategory>("Semua");
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<Transaction | null>(null);
@@ -563,8 +655,38 @@ export function KasirView() {
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const productColumnRef = useRef<HTMLDivElement>(null);
-  const [workspaceWidth, setWorkspaceWidth] = useState(0);
-  const [productColumnWidth, setProductColumnWidth] = useState(0);
+  const [workspaceWidth, setWorkspaceWidth] = useState(1024);
+  const [productColumnWidth, setProductColumnWidth] = useState(800);
+
+  const cartLinesRef = useRef(cartLines);
+  cartLinesRef.current = cartLines;
+
+  const handleAddToCart = useCallback((product: Product) => {
+    const existingLine = cartLinesRef.current.find((line) => line.product.id === product.id);
+    if (existingLine && existingLine.quantity >= product.stock) {
+      toast.error(`Stok ${product.name} tidak cukup.`, {
+        description: `Keranjang sudah mencapai stok tersedia (${product.stock} pcs).`,
+      });
+      return;
+    }
+
+    addToCart(product.id);
+    toast.success(`${product.name} ditambahkan ke keranjang.`, {
+      description: `Stok tersedia ${product.stock} pcs.`,
+    });
+  }, [addToCart]);
+
+  const handleDetailProduct = useCallback((product: Product) => {
+    setDetailProduct(product);
+  }, []);
+
+  const handleRemoveFromCart = useCallback((productId: string) => {
+    removeFromCart(productId);
+  }, [removeFromCart]);
+
+  const handleUpdateCartQuantity = useCallback((productId: string, quantity: number) => {
+    updateCartQuantity(productId, quantity);
+  }, [updateCartQuantity]);
 
   useEffect(() => {
     const element = workspaceRef.current;
@@ -647,14 +769,17 @@ export function KasirView() {
     };
   }, []);
 
-  const filteredProducts = products.filter((product) => {
-    const queryMatch =
-      query.length === 0 ||
-      product.name.toLowerCase().includes(query.toLowerCase()) ||
-      product.description.toLowerCase().includes(query.toLowerCase());
-    const categoryMatch = category === "Semua" || product.category === category;
-    return queryMatch && categoryMatch;
-  });
+  const filteredProducts = useMemo(() => {
+    const cleanQuery = deferredQuery.trim().toLowerCase();
+    return products.filter((product) => {
+      const queryMatch =
+        cleanQuery.length === 0 ||
+        product.name.toLowerCase().includes(cleanQuery) ||
+        product.description.toLowerCase().includes(cleanQuery);
+      const categoryMatch = category === "Semua" || product.category === category;
+      return queryMatch && categoryMatch;
+    });
+  }, [products, deferredQuery, category]);
   const totalItems = cartLines.reduce((sum, line) => sum + line.quantity, 0);
   const paidAmount = Math.max(0, Math.round(Number(paidAmountInput.replace(/\D/g, "")) || 0));
   const isCashPayment = paymentMethod === "Tunai";
@@ -764,12 +889,14 @@ export function KasirView() {
       {shiftBannerName ? (
         <ShiftChangeBanner cashierName={shiftBannerName} onDone={() => setShiftBannerName(null)} />
       ) : null}
-      <ReceiptPrintDialog
-        open={receiptOpen}
-        onOpenChange={setReceiptOpen}
-        settings={settings}
-        transaction={lastTransaction}
-      />
+      {receiptOpen && lastTransaction ? (
+        <ReceiptPrintDialog
+          open={receiptOpen}
+          onOpenChange={setReceiptOpen}
+          settings={settings}
+          transaction={lastTransaction}
+        />
+      ) : null}
       <PaymentInstructionDialog
         open={paymentInfoOpen}
         onOpenChange={setPaymentInfoOpen}
@@ -858,21 +985,8 @@ export function KasirView() {
                   <ProductCard
                     key={product.id}
                     product={product}
-                    onDetail={() => setDetailProduct(product)}
-                    onAdd={() => {
-                      const existingLine = cartLines.find((line) => line.product.id === product.id);
-                      if (existingLine && existingLine.quantity >= product.stock) {
-                        toast.error(`Stok ${product.name} tidak cukup.`, {
-                          description: `Keranjang sudah mencapai stok tersedia (${product.stock} pcs).`,
-                        });
-                        return;
-                      }
-
-                      addToCart(product.id);
-                      toast.success(`${product.name} ditambahkan ke keranjang.`, {
-                        description: `Stok tersedia ${product.stock} pcs.`,
-                      });
-                    }}
+                    onDetail={handleDetailProduct}
+                    onAdd={handleAddToCart}
                   />
                 ))}
               </div>
@@ -917,65 +1031,12 @@ export function KasirView() {
               {cartLines.length > 0 ? (
                 <div className="space-y-2.5">
                   {cartLines.map((line) => (
-                    <div
+                    <CartItemRow
                       key={line.product.id}
-                      className="group/item relative rounded-[18px] border border-border border-l-4 border-l-primary bg-card py-2.5 pr-2.5 pl-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:border-l-primary hover:shadow-md dark:bg-muted/90 dark:hover:bg-muted shrink-0"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="font-semibold text-foreground text-sm tracking-tight transition-colors group-hover/item:text-primary leading-snug">
-                          {line.product.name}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => removeFromCart(line.product.id)}
-                          className="rounded-full p-1 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive shrink-0 -mt-0.5 -mr-0.5"
-                          aria-label={`Hapus ${line.product.name}`}
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      </div>
-
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <p className="text-xs text-muted-foreground">
-                          {formatCurrency(line.product.sellPrice)} <span className="opacity-75">x {line.quantity}</span>
-                        </p>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="inline-flex items-center gap-0.5 rounded-full bg-muted/80 p-0.5 border border-border/40 dark:bg-muted/40">
-                            <Button
-                              type="button"
-                              size="icon-sm"
-                              variant="ghost"
-                              className="rounded-full size-6 hover:bg-background/80"
-                              onClick={() => updateCartQuantity(line.product.id, line.quantity - 1)}
-                            >
-                              <Minus className="size-3" />
-                            </Button>
-                            <span className="min-w-5 text-center text-xs font-semibold text-foreground">{line.quantity}</span>
-                            <Button
-                              type="button"
-                              size="icon-sm"
-                              variant="ghost"
-                              className="rounded-full size-6 hover:bg-background/80"
-                              onClick={() => {
-                                if (line.quantity >= line.product.stock) {
-                                  toast.error(`Stok ${line.product.name} tidak cukup.`, {
-                                    description: `Stok tersedia hanya ${line.product.stock} pcs.`,
-                                  });
-                                  return;
-                                }
-
-                                updateCartQuantity(line.product.id, line.quantity + 1);
-                              }}
-                            >
-                              <Plus className="size-3" />
-                            </Button>
-                          </div>
-                          <p className="font-bold text-primary text-sm tracking-tight tabular-nums min-w-[72px] text-right">
-                            {formatCurrency(line.lineTotal)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                      line={line}
+                      onRemove={handleRemoveFromCart}
+                      onUpdateQuantity={handleUpdateCartQuantity}
+                    />
                   ))}
                 </div>
               ) : (

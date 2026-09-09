@@ -69,7 +69,7 @@ export function AuthScreen() {
 
   useEffect(() => {
     if (!isSessionPending && session) {
-      router.replace("/dashboard");
+      router.replace("/kasir");
     }
   }, [isSessionPending, router, session]);
 
@@ -204,12 +204,12 @@ export function AuthScreen() {
                     const { error } = await authClient.signIn.email({
                       email: signInForm.email,
                       password: signInForm.password,
-                      callbackURL: "/dashboard",
+                      callbackURL: "/kasir",
                     });
                     if (error) {
                       setFormError(error.message ?? "Email atau kata sandi salah.");
                     } else {
-                      router.replace("/dashboard");
+                      router.replace("/kasir");
                     }
                   } catch {
                     setFormError("Gagal masuk. Periksa koneksi internet kamu.");
@@ -246,7 +246,7 @@ export function AuthScreen() {
                 </div>
                 <Button type="submit" size="lg" className="h-12 w-full rounded-2xl" disabled={isLoading}>
                   {isLoading ? <Loader2 className="size-4 animate-spin" /> : null}
-                  {isLoading ? "Masuk..." : "Masuk ke dashboard"}
+                  {isLoading ? "Masuk..." : "Masuk ke Kasir"}
                 </Button>
               </form>
             ) : (
@@ -261,12 +261,12 @@ export function AuthScreen() {
                       name: signUpForm.name,
                       email: signUpForm.email,
                       password: signUpForm.password,
-                      callbackURL: "/dashboard",
+                      callbackURL: "/kasir",
                     });
                     if (error) {
                       setFormError(error.message ?? "Gagal membuat akun.");
                     } else {
-                      router.replace("/dashboard");
+                      router.replace("/kasir");
                     }
                   } catch {
                     setFormError("Gagal membuat akun. Periksa koneksi internet kamu.");
