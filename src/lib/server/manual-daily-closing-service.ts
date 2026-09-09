@@ -640,3 +640,35 @@ export async function deleteManualClosing(
     client.release();
   }
 }
+
+/**
+ * Menyimpan banyak hari rekap tutup buku harian sekaligus (Batch Import Excel).
+ * Data diurutkan berdasarkan tanggal, dan jika kas awal hari berikutnya belum ditentukan,
+ * sistem otomatis menyambungkan kas tutup hari sebelumnya sebagai kas awal hari berikutnya.
+ */
+export async function saveBatchManualClosing(
+  workspaceOwnerId: string,
+  actorUserId: string,
+  items: ManualClosingInput[]
+): Promise<ManualClosingRecord[]> {
+  if (items.length === 0) return [];
+
+  const sorted = [...items].sort((a, b) => a.reportDate.localeCompare(b.reportDate));
+  const results: ManualClosingRecord[] = [];
+
+  let previousClosingCash: number | null = null;
+
+  for (let i = 0; i < sorted.length; i++) {
+    const item = { ...sorted[i] };
+    if ((!item.openingCash || item.openingCash === 0) && previousClosingCash !== null) {
+      item.openingCash = previousClosingCash;
+    }
+
+    const saved = await saveManualClosing(workspaceOwnerId, actorUserId, item);
+    results.push(saved);
+    previousClosingCash = saved.closingCash;
+  }
+
+  return results;
+}
+

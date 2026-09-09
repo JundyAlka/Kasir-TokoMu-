@@ -36,6 +36,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { DailyClosingExcelDialog } from "./daily-closing-excel-dialog";
 
 type ExpenseLine = {
   id: string;
@@ -108,6 +109,7 @@ export function ManualDailyClosingPanel() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [monthClosings, setMonthClosings] = useState<ManualClosingRecord[]>([]);
   const [isLoadingMonth, setIsLoadingMonth] = useState<boolean>(true);
+  const [excelImportOpen, setExcelImportOpen] = useState<boolean>(false);
 
   // Perhitungan Otomatis
   const totalRevenue = cashierIncome + otherIncome;
@@ -360,7 +362,17 @@ export function ManualDailyClosingPanel() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setExcelImportOpen(true)}
+              className="gap-1.5 rounded-xl border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-semibold text-emerald-700 dark:text-emerald-300"
+            >
+              <FileSpreadsheet className="size-3.5" />
+              Impor Excel Tutup Buku
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -950,6 +962,13 @@ export function ManualDailyClosingPanel() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog Impor Excel Tutup Buku Harian */}
+      <DailyClosingExcelDialog
+        open={excelImportOpen}
+        onOpenChange={setExcelImportOpen}
+        onSuccess={loadMonthData}
+      />
     </div>
   );
 }

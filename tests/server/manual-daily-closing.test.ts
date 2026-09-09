@@ -74,4 +74,66 @@ describe("manual daily closing (buku kas harian)", () => {
     expect(monthList[1].reportDate).toBe("2026-09-02");
     expect(monthList[1].openingCash).toBe(150000);
   });
+
+  it("saves multiple daily closings in batch and automatically chains opening cash", async () => {
+    await setupTestDb();
+    const { saveBatchManualClosing, listManualClosings } = await import(
+      "@/lib/server/manual-daily-closing-service"
+    );
+
+    const batch = [
+      {
+        reportDate: "2026-09-10",
+        openingCash: 100000,
+        revenue: 1500000,
+        storeExpenses: [{ name: "Plastik", amount: 100000 }],
+        titipanExpenses: [],
+        closingCash: 250000,
+        closingCoins: 50000,
+        closingSavings: 1100000,
+        note: "Hari 10 batch",
+      },
+      {
+        reportDate: "2026-09-11",
+        openingCash: 0, // Sengaja dikosongkan agar sistem menyambungkan otomatis dari hari 10
+        revenue: 1800000,
+        storeExpenses: [{ name: "Telur", amount: 200000 }],
+        titipanExpenses: [{ name: "Roti", amount: 50000 }],
+        closingCash: 300000,
+        closingCoins: 50000,
+        closingSavings: 1200000,
+        note: "Hari 11 batch",
+      },
+      {
+        reportDate: "2026-09-12",
+        openingCash: 0, // Menyambung dari hari 11 (300000)
+        revenue: 2000000,
+        storeExpenses: [],
+        titipanExpenses: [],
+        closingCash: 200000,
+        closingCoins: 100000,
+        closingSavings: 1700000,
+        note: "Hari 12 batch",
+      },
+    ];
+
+    const savedBatch = await saveBatchManualClosing(WORKSPACE_ID, WORKSPACE_ID, batch);
+    expect(savedBatch).toHaveLength(3);
+
+    expect(savedBatch[0].reportDate).toBe("2026-09-10");
+    expect(savedBatch[0].closingCash).toBe(250000);
+
+    // Hari 11 harus otomatis dapat openingCash = 250.000 dari hari 10
+    expect(savedBatch[1].reportDate).toBe("2026-09-11");
+    expect(savedBatch[1].openingCash).toBe(250000);
+    expect(savedBatch[1].closingCash).toBe(300000);
+
+    // Hari 12 harus otomatis dapat openingCash = 300.000 dari hari 11
+    expect(savedBatch[2].reportDate).toBe("2026-09-12");
+    expect(savedBatch[2].openingCash).toBe(300000);
+    expect(savedBatch[2].closingCash).toBe(200000);
+
+    const list = await listManualClosings(WORKSPACE_ID, "2026-09-10", "2026-09-12");
+    expect(list).toHaveLength(3);
+  });
 });

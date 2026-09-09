@@ -7,6 +7,7 @@ import {
   getManualClosingForDate,
   getPreviousDayClosing,
   listManualClosings,
+  saveBatchManualClosing,
   saveManualClosing,
 } from "@/lib/server/manual-daily-closing-service";
 
@@ -75,8 +76,20 @@ export async function POST(request: NextRequest) {
   try {
     const { userId, workspaceOwnerId } = await requireRoutePolicy("/api/daily-reports/manual-close", "POST");
     const json = await request.json();
-    const payload = SaveManualClosingSchema.parse(json);
 
+    if (Array.isArray(json) || (json && typeof json === "object" && "batch" in json)) {
+      const rawItems = Array.isArray(json) ? json : json.batch;
+      const parsedBatch = z.array(SaveManualClosingSchema).min(1, "Data batch tidak boleh kosong").parse(rawItems);
+      const savedList = await saveBatchManualClosing(workspaceOwnerId, userId, parsedBatch);
+      return NextResponse.json({
+        success: true,
+        count: savedList.length,
+        closings: savedList,
+        message: `Berhasil mengimpor ${savedList.length} hari tutup buku harian.`,
+      });
+    }
+
+    const payload = SaveManualClosingSchema.parse(json);
     const saved = await saveManualClosing(workspaceOwnerId, userId, payload);
     return NextResponse.json({
       success: true,
