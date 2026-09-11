@@ -47,6 +47,7 @@
   },
   "devDependencies": {
     "@better-auth/cli": "^1.4.21",
+    "@insforge/cli": "^0.2.8",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
