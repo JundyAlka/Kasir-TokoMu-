@@ -16,9 +16,11 @@ import {
   ScrollText,
   Settings2,
   ShoppingBasket,
+  Sparkles,
   Store,
   UserCog,
   Wallet,
+  X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
@@ -441,6 +443,36 @@ export function AppShell({
             })}
           </nav>
 
+          {/* AI Chat toggle button */}
+          <button
+            type="button"
+            onClick={() => setAiOpen((v) => !v)}
+            aria-label={aiOpen ? "Tutup Asisten AI" : "Buka Asisten AI"}
+            title={aiOpen ? "Tutup Asisten AI" : "Buka Asisten AI"}
+            className={cn(
+              "mt-2 flex items-center gap-2.5 rounded-xl text-xs font-medium transition-all sm:text-sm",
+              leftCollapsed
+                ? "size-12 justify-center"
+                : tabletSidebarExpanded
+                  ? "w-full justify-start px-3 py-2 2xl:px-4 2xl:py-3"
+                  : "size-10 justify-center 2xl:size-auto 2xl:justify-start 2xl:px-4 2xl:py-3",
+              aiOpen
+                ? "bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-700 dark:text-purple-300 ring-1 ring-purple-400/30 shadow-sm"
+                : "text-foreground/70 hover:bg-card/50 hover:text-foreground",
+            )}
+          >
+            {aiOpen ? (
+              <X className={cn("shrink-0", leftCollapsed ? "size-5" : "size-4")} />
+            ) : (
+              <Sparkles className={cn("shrink-0", leftCollapsed ? "size-5" : "size-4")} />
+            )}
+            {!leftCollapsed && (
+              <span className={cn(tabletSidebarExpanded ? "block" : "hidden 2xl:block", "whitespace-nowrap")}>
+                {aiOpen ? "Tutup AI" : "Asisten AI"}
+              </span>
+            )}
+          </button>
+
           {!leftCollapsed && (
             <div className={cn(tabletSidebarExpanded ? "mt-2 block" : "hidden 2xl:block")}>
               <AccountPanel />
@@ -482,6 +514,21 @@ export function AppShell({
           <AIAssistantPanel open={aiOpen} onOpenChange={handleAiOpenChange} width={aiWidth} role={role} />
         ) : null}
       </div>
+
+      {/* Mobile floating AI chat button */}
+      <button
+        type="button"
+        onClick={() => setAiOpen((v) => !v)}
+        aria-label={aiOpen ? "Tutup Asisten AI" : "Buka Asisten AI"}
+        className={cn(
+          "fixed bottom-20 right-3 z-40 flex size-12 items-center justify-center rounded-full shadow-lg transition-all md:hidden",
+          aiOpen
+            ? "bg-gradient-to-br from-purple-600 to-pink-500 text-white ring-2 ring-purple-300/50"
+            : "bg-gradient-to-br from-purple-500 to-pink-400 text-white hover:scale-105 active:scale-95"
+        )}
+      >
+        {aiOpen ? <X className="size-5" /> : <Sparkles className="size-5" />}
+      </button>
 
       {/* Mobile Bottom Navigation - only shown on screens smaller than md */}
       <nav className="md:hidden flex-shrink-0 border-t border-border/60 bg-card/90 backdrop-blur-md">

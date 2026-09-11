@@ -227,29 +227,29 @@ export function DashboardView() {
         </div>
 
         {/* Row 3: Timeline & Kasbon - Equal height and tight list */}
-        <div className="grid gap-4 lg:grid-cols-12">
+        <div className="grid gap-4 md:grid-cols-12">
           {/* Timeline Transaksi */}
-          <Card className="flex flex-col justify-between border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] lg:col-span-7">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <div>
-                <CardTitle className="flex items-center gap-2 font-heading text-xl">
-                  <ArrowRightLeft className="size-5 text-primary" />
-                  Timeline Transaksi
+          <Card className="flex flex-col justify-between border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] md:col-span-6 lg:col-span-7 min-w-0">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
+              <div className="min-w-0 flex-1">
+                <CardTitle className="flex items-center gap-2 font-heading text-lg sm:text-xl">
+                  <ArrowRightLeft className="size-4 sm:size-5 shrink-0 text-primary" />
+                  <span className="truncate">Timeline Transaksi</span>
                 </CardTitle>
-                <CardDescription className="text-xs sm:text-sm">
+                <CardDescription className="truncate text-xs sm:text-sm">
                   Aktivitas penjualan kasir terkini.
                 </CardDescription>
               </div>
               <button
                 type="button"
                 onClick={() => setTimelineOpen(true)}
-                className="flex items-center gap-1.5 rounded-xl bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20"
+                className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20 sm:px-3"
               >
                 <span>Lihat Semua ({recentTransactions.length})</span>
-                <Eye className="size-3.5" />
+                <Eye className="size-3.5 shrink-0" />
               </button>
             </CardHeader>
-            <CardContent className="flex-1">
+            <CardContent className="flex-1 min-w-0">
               <div className="min-h-[340px] max-h-[580px] space-y-2.5 overflow-y-auto pr-1">
                 {recentTransactions.length > 0 ? (
                   recentTransactions.slice(0, 10).map((transaction) => (
@@ -258,18 +258,18 @@ export function DashboardView() {
                       key={transaction.id}
                       aria-label={`Lihat detail transaksi ${formatCurrency(transaction.total)}`}
                       onClick={() => setSelectedTransaction(transaction)}
-                      className="group flex w-full items-center justify-between gap-3 rounded-[18px] bg-muted/50 px-3.5 py-2.5 text-left transition hover:bg-muted/75 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+                      className="group flex w-full items-center justify-between gap-2.5 rounded-[18px] bg-muted/50 px-3 py-2.5 sm:px-3.5 text-left transition hover:bg-muted/75 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none min-w-0"
                     >
-                      <div className="truncate pr-2">
-                        <p className="font-semibold text-foreground text-xs sm:text-sm">{formatCurrency(transaction.total)}</p>
+                      <div className="min-w-0 flex-1 truncate pr-1">
+                        <p className="truncate font-semibold text-foreground text-xs sm:text-sm">{formatCurrency(transaction.total)}</p>
                         <p className="truncate text-[11px] text-muted-foreground sm:text-xs">
                           {transaction.items.length} produk • {transaction.paymentMethod}
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-muted-foreground whitespace-nowrap">
                         <span>{formatDateTime(transaction.occurredAt)}</span>
-                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-card/70 text-muted-foreground transition group-hover:border-primary/50 group-hover:text-primary">
-                          <Eye className="size-3.5" />
+                        <span className="flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-card/70 text-muted-foreground transition group-hover:border-primary/50 group-hover:text-primary">
+                          <Eye className="size-3 sm:size-3.5" />
                         </span>
                       </div>
                     </button>
@@ -284,29 +284,29 @@ export function DashboardView() {
           </Card>
 
           {/* Kasbon Terbaru */}
-          <Card className="flex flex-col justify-between border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] lg:col-span-5">
+          <Card className="flex flex-col justify-between border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] md:col-span-6 lg:col-span-5 min-w-0">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 font-heading text-xl">
-                <WalletCards className="size-5 text-primary" />
-                Kasbon Terbaru
+              <CardTitle className="flex items-center gap-2 font-heading text-lg sm:text-xl">
+                <WalletCards className="size-4 sm:size-5 shrink-0 text-primary" />
+                <span className="truncate">Kasbon Terbaru</span>
               </CardTitle>
-              <CardDescription className="text-xs sm:text-sm">
+              <CardDescription className="truncate text-xs sm:text-sm">
                 Ringkas untuk follow-up piutang pelanggan.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex-1">
+            <CardContent className="flex-1 min-w-0">
               <div className="min-h-[340px] max-h-[580px] space-y-2.5 overflow-y-auto pr-1">
                 {latestDebts.length > 0 ? (
                   latestDebts.slice(0, 8).map((debt) => (
                     <div
                       key={debt.id}
-                      className="flex items-center justify-between gap-3 rounded-[18px] border border-border/70 bg-card/80 px-3.5 py-2.5"
+                      className="flex items-center justify-between gap-2.5 rounded-[18px] border border-border/70 bg-card/80 px-3 py-2.5 sm:px-3.5 min-w-0"
                     >
-                      <div className="truncate pr-2">
+                      <div className="min-w-0 flex-1 truncate pr-1">
                         <p className="truncate font-semibold text-xs sm:text-sm">{debt.borrowerName}</p>
                         <p className="truncate text-[11px] text-muted-foreground sm:text-xs">{debt.whatsapp}</p>
                       </div>
-                      <div className="shrink-0 text-right">
+                      <div className="shrink-0 text-right whitespace-nowrap">
                         <p className="font-semibold text-xs sm:text-sm">{formatCurrency(debt.remainingAmount)}</p>
                         <p className="text-[11px] text-muted-foreground sm:text-xs">
                           {debt.status === "lunas"

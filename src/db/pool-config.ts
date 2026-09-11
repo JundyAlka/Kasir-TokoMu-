@@ -13,7 +13,25 @@ function needsSsl(connectionString: string) {
   return !LOCAL_DATABASE_HOSTS.has(databaseUrl.hostname);
 }
 
-export function createPoolConfig(connectionString: string): PoolConfig {
+function normalizeConnectionString(connectionString: string): string {
+  try {
+    const url = new URL(connectionString);
+    const sslMode = url.searchParams.get("sslmode");
+
+    if (sslMode && ["require", "prefer", "verify-ca"].includes(sslMode)) {
+      if (!url.searchParams.has("uselibpqcompat")) {
+        url.searchParams.set("uselibpqcompat", "true");
+      }
+    }
+
+    return url.toString();
+  } catch {
+    return connectionString;
+  }
+}
+
+export function createPoolConfig(rawConnectionString: string): PoolConfig {
+  const connectionString = normalizeConnectionString(rawConnectionString);
   const isTest = process.env.NODE_ENV === "test";
   const config: PoolConfig = {
     connectionString,
