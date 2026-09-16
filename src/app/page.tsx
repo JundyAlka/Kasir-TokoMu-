@@ -3,9 +3,14 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 
 export default async function Home() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  let session = null;
+  try {
+    session = await auth.api.getSession({
+      headers: await headers(),
+    });
+  } catch (error) {
+    console.warn("Home page session check caught error, redirecting to /auth:", error);
+  }
 
   redirect(session?.user ? "/kasir" : "/auth");
 }

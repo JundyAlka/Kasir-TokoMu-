@@ -7,9 +7,14 @@ import { auth } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 export default async function AuthPage() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  let session = null;
+  try {
+    session = await auth.api.getSession({
+      headers: await headers(),
+    });
+  } catch (error) {
+    console.warn("Auth page session check caught error, proceeding to login screen:", error);
+  }
 
   if (session) {
     redirect("/kasir");
