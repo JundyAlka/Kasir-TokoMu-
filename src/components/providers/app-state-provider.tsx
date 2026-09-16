@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { emptyAppState } from "@/lib/empty-state";
 import { AppState, Debt, DebtDraft, PaymentMethod, Product, ProductDraft, Settings, Transaction } from "@/lib/types";
@@ -66,12 +66,13 @@ export function AppStateProvider({
   children: React.ReactNode;
 }>) {
   const router = useRouter();
+  const pathname = usePathname();
   const [state, setState] = useState<AppState>(emptyAppState);
   const [dataState, setDataState] = useState<"loading" | "ready" | "error">("loading");
   const { data: session, isPending } = useSession();
   const sessionUserId = session?.user?.id ?? null;
 
-  const loadWorkspace = useCallback(async () => {
+  const loadWorkspace = useCallback(async (isRetry = false) => {
     setDataState("loading");
     try {
       const response = await requestJson<{ appState: AppState }>("/api/bootstrap");
@@ -90,10 +91,34 @@ export function AppStateProvider({
         throw error;
       }
 
+      // Auto-retry once after 1s for transient network blips or cold start connection delay
+      if (!isRetry) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        try {
+          const response = await requestJson<{ appState: AppState }>("/api/bootstrap");
+          setState((current) => ({
+            ...response.appState,
+            cart: current.cart,
+            paymentMethod: response.appState.settings.enabledPayments.includes(current.paymentMethod)
+              ? current.paymentMethod
+              : response.appState.paymentMethod,
+          }));
+          setDataState("ready");
+          return;
+        } catch {
+          // fall through to error state
+        }
+      }
+
       setDataState("error");
       throw error;
     }
   }, [router]);
+
+  const retryWorkspace = useCallback(() => {
+    setDataState("loading");
+    void loadWorkspace(true).catch(() => undefined);
+  }, [loadWorkspace]);
 
   useEffect(() => {
     if (isPending) {
@@ -107,6 +132,23 @@ export function AppStateProvider({
 
     void loadWorkspace().catch(() => undefined);
   }, [isPending, loadWorkspace, sessionUserId]);
+
+  // Auto-recover when navigating between pages or returning to tab if previous fetch failed
+  useEffect(() => {
+    if (dataState === "error" && sessionUserId) {
+      void loadWorkspace(true).catch(() => undefined);
+    }
+  }, [pathname, dataState, sessionUserId, loadWorkspace]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      if (dataState === "error" && sessionUserId) {
+        void loadWorkspace(true).catch(() => undefined);
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [dataState, sessionUserId, loadWorkspace]);
 
   const cartLines = useMemo(() => {
     return state.cart.flatMap((line) => {
@@ -395,7 +437,7 @@ export function AppStateProvider({
         updateSettings,
         resetWorkspace,
         refreshWorkspace,
-        retryWorkspace: () => void loadWorkspace().catch(() => undefined),
+        retryWorkspace,
       }}
     >
       {children}

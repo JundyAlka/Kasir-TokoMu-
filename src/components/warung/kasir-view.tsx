@@ -15,6 +15,7 @@ import {
   Plus,
   QrCode,
   ReceiptText,
+  RefreshCw,
   Search,
   ShoppingBasket,
   Smartphone,
@@ -640,6 +641,8 @@ export function KasirView() {
     removeFromCart,
     setPaymentMethod,
     checkout,
+    dataState,
+    retryWorkspace,
   } = useAppState();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -974,7 +977,40 @@ export function KasirView() {
             </div>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto custom-scrollbar">
-            {filteredProducts.length > 0 ? (
+            {dataState === "loading" && products.length === 0 ? (
+              <div className={cn("grid gap-4", productGridClass)}>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div
+                    key={`skeleton-card-${i}`}
+                    className="flex min-h-[190px] xl:min-h-[210px] flex-col justify-between rounded-[24px] border border-border/50 bg-card/60 p-4 animate-pulse"
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="size-9 rounded-2xl bg-muted/60" />
+                      <div className="h-5 w-16 rounded-full bg-muted/50" />
+                    </div>
+                    <div className="space-y-2 my-3">
+                      <div className="h-4 w-3/4 rounded bg-muted/60" />
+                      <div className="h-3 w-1/2 rounded bg-muted/40" />
+                    </div>
+                    <div className="pt-3 border-t border-border/40 flex justify-between items-center">
+                      <div className="h-3 w-12 rounded bg-muted/40" />
+                      <div className="h-5 w-20 rounded bg-muted/60" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : dataState === "error" && products.length === 0 ? (
+              <div role="alert" className="flex min-h-[260px] flex-col items-center justify-center gap-3 rounded-[26px] border border-dashed border-destructive/40 bg-card/55 text-center p-6">
+                <p className="font-heading text-xl font-semibold text-foreground">Gagal memuat produk</p>
+                <p className="max-w-md text-sm text-muted-foreground">
+                  Terjadi kendala saat mengambil data katalog produk dari server.
+                </p>
+                <Button type="button" variant="outline" className="mt-2 rounded-2xl" onClick={retryWorkspace}>
+                  <RefreshCw className="mr-2 size-4" />
+                  Muat ulang
+                </Button>
+              </div>
+            ) : filteredProducts.length > 0 ? (
               <div
                 className={cn(
                   "grid gap-4",

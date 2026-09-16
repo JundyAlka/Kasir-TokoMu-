@@ -167,7 +167,10 @@ async function ensureWorkspace(userId: string, session?: SessionHint) {
 
 export async function ensureAppReady() {
   if (!initializationPromise) {
-    initializationPromise = ensureDatabaseReady();
+    initializationPromise = ensureDatabaseReady().catch((err) => {
+      initializationPromise = null;
+      throw err;
+    });
   }
 
   await initializationPromise;

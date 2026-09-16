@@ -7,9 +7,8 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    await requireRoutePolicy("/api/bootstrap", "GET");
-    const { workspaceOwnerId } = await getRequestUser();
-    const appState = await getBootstrapState(workspaceOwnerId);
+    const user = await requireRoutePolicy("/api/bootstrap", "GET");
+    const appState = await getBootstrapState(user.workspaceOwnerId);
     return NextResponse.json({ appState });
   } catch (error) {
     return handleRouteError(error, "Gagal memuat data aplikasi.", 500);

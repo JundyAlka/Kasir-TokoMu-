@@ -35,9 +35,9 @@ export function createPoolConfig(rawConnectionString: string): PoolConfig {
   const isTest = process.env.NODE_ENV === "test";
   const config: PoolConfig = {
     connectionString,
-    max: process.env.PG_MAX_POOL ? parseInt(process.env.PG_MAX_POOL, 10) : 3,
-    idleTimeoutMillis: isTest ? 2000 : 5000,
-    connectionTimeoutMillis: 3000,
+    max: process.env.PG_MAX_POOL ? parseInt(process.env.PG_MAX_POOL, 10) : 5,
+    idleTimeoutMillis: isTest ? 2000 : 15000,
+    connectionTimeoutMillis: 10000,
     allowExitOnIdle: true,
   };
 
