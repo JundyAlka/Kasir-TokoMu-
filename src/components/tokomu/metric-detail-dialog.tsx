@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  ArrowUpRight,
   Clock,
   Loader2,
   Package,
@@ -47,6 +49,13 @@ const METRIC_DESCRIPTIONS: Record<DashboardMetric, string> = {
   transaksi: "Ringkasan jumlah transaksi, produk terjual, dan distribusi per jam.",
   stok: "Daftar produk yang stoknya mendekati atau di bawah batas minimum.",
   kasbon: "Total piutang, status overdue, dan daftar pelanggan berhutang.",
+};
+
+const METRIC_NAV_TARGETS: Record<DashboardMetric, { href: string; label: string }> = {
+  omzet: { href: "/laporan", label: "Buka Laporan Omzet & Keuangan" },
+  transaksi: { href: "/kasir", label: "Buka Transaksi Kasir POS" },
+  stok: { href: "/inventaris", label: "Kelola Stok di Inventaris" },
+  kasbon: { href: "/buku-hutang", label: "Buka Buku Hutang Pelanggan" },
 };
 
 // -- Tiny sub-components --
@@ -682,6 +691,17 @@ export function MetricDetailDialog({ metric, onClose }: MetricDetailDialogProps)
                 </div>
               )}
             </ScrollArea>
+
+            <div className="pt-2 border-t border-border/60">
+              <Link
+                href={METRIC_NAV_TARGETS[metric].href}
+                onClick={onClose}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-2.5 text-xs sm:text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 active:scale-[0.98]"
+              >
+                <span>{METRIC_NAV_TARGETS[metric].label}</span>
+                <ArrowUpRight className="size-4" />
+              </Link>
+            </div>
           </>
         )}
       </DialogContent>

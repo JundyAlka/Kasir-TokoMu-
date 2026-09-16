@@ -12,6 +12,8 @@ import {
   Bot,
   CheckCircle2,
   Loader2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useSession, authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -66,6 +68,8 @@ export function AuthScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [signInForm, setSignInForm] = useState({ email: "", password: "" });
   const [signUpForm, setSignUpForm] = useState({ name: "", email: "", password: "" });
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
 
   useEffect(() => {
     if (!isSessionPending && session) {
@@ -211,8 +215,9 @@ export function AuthScreen() {
                     } else {
                       router.replace("/kasir");
                     }
-                  } catch {
-                    setFormError("Gagal masuk. Periksa koneksi internet kamu.");
+                  } catch (err) {
+                    console.error("SignIn error:", err);
+                    setFormError("Gagal masuk. Periksa email/kata sandi atau koneksi Anda.");
                   } finally {
                     setIsLoading(false);
                   }
@@ -233,16 +238,27 @@ export function AuthScreen() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signin-password">Kata sandi</Label>
-                  <Input
-                    id="signin-password"
-                    type="password"
-                    value={signInForm.password}
-                    onChange={(e) => setSignInForm((s) => ({ ...s, password: e.target.value }))}
-                    autoComplete="current-password"
-                    className="h-12 rounded-2xl bg-card/80"
-                    placeholder="Minimal 8 karakter"
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      id="signin-password"
+                      type={showSignInPassword ? "text" : "password"}
+                      value={signInForm.password}
+                      onChange={(e) => setSignInForm((s) => ({ ...s, password: e.target.value }))}
+                      autoComplete="current-password"
+                      className="h-12 rounded-2xl bg-card/80 pr-11"
+                      placeholder="Minimal 8 karakter"
+                      required
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowSignInPassword((v) => !v)}
+                      aria-label={showSignInPassword ? "Sembunyikan kata sandi" : "Lihat kata sandi"}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                    >
+                      {showSignInPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+                    </button>
+                  </div>
                 </div>
                 <Button type="submit" size="lg" className="h-12 w-full rounded-2xl" disabled={isLoading}>
                   {isLoading ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -268,8 +284,10 @@ export function AuthScreen() {
                     } else {
                       router.replace("/kasir");
                     }
-                  } catch {
-                    setFormError("Gagal membuat akun. Periksa koneksi internet kamu.");
+                  } catch (err) {
+                    console.error("SignUp error:", err);
+                    const msg = err instanceof Error ? err.message : null;
+                    setFormError(msg && !msg.includes("Failed to fetch") ? `Gagal membuat akun: ${msg}` : "Gagal membuat akun. Periksa koneksi internet kamu atau coba lagi.");
                   } finally {
                     setIsLoading(false);
                   }
@@ -302,17 +320,28 @@ export function AuthScreen() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Kata sandi</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    value={signUpForm.password}
-                    onChange={(e) => setSignUpForm((s) => ({ ...s, password: e.target.value }))}
-                    autoComplete="new-password"
-                    className="h-12 rounded-2xl bg-card/80"
-                    placeholder="Minimal 8 karakter"
-                    minLength={8}
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      id="signup-password"
+                      type={showSignUpPassword ? "text" : "password"}
+                      value={signUpForm.password}
+                      onChange={(e) => setSignUpForm((s) => ({ ...s, password: e.target.value }))}
+                      autoComplete="new-password"
+                      className="h-12 rounded-2xl bg-card/80 pr-11"
+                      placeholder="Minimal 8 karakter"
+                      minLength={8}
+                      required
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowSignUpPassword((v) => !v)}
+                      aria-label={showSignUpPassword ? "Sembunyikan kata sandi" : "Lihat kata sandi"}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                    >
+                      {showSignUpPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+                    </button>
+                  </div>
                 </div>
                 <Button type="submit" size="lg" className="h-12 w-full rounded-2xl" disabled={isLoading}>
                   {isLoading ? <Loader2 className="size-4 animate-spin" /> : null}

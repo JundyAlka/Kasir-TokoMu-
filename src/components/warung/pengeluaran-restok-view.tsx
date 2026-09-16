@@ -346,9 +346,9 @@ export function PengeluaranRestokView() {
         </Button>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2 items-start">
+      <div className="grid gap-4 md:grid-cols-2 lg:gap-6 items-start">
         {/* Kolom Kiri: Daftar Rencana Restok */}
-        <div className="w-full rounded-xl border border-border/60 bg-card/74 text-card-foreground shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] overflow-hidden p-6 relative">
+        <div className="w-full rounded-xl border border-border/60 bg-card/74 text-card-foreground shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] overflow-hidden p-4 sm:p-6 relative">
           <div className="flex items-center justify-between gap-2 mb-6">
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600 dark:text-primary">
@@ -439,7 +439,7 @@ export function PengeluaranRestokView() {
         </div>
 
         {/* Kolom Kanan: Riwayat Pengeluaran */}
-        <div className="w-full rounded-xl border border-border/60 bg-card/74 text-card-foreground shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] overflow-hidden p-6 relative">
+        <div className="w-full rounded-xl border border-border/60 bg-card/74 text-card-foreground shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] overflow-hidden p-4 sm:p-6 relative">
           <div className="flex items-center justify-between gap-2 mb-6">
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-xl bg-red-500/10 text-red-500">

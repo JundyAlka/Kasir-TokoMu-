@@ -17,6 +17,8 @@ function getTrustedAuthOrigins(request?: Request) {
     "http://localhost:3000",
     "http://127.0.0.1:3030",
     "http://127.0.0.1:3000",
+    "https://kasirmu.insforge.site",
+    "https://ehtm9kdz.insforge.site",
   ]);
 
   for (const value of [
@@ -44,7 +46,15 @@ function getTrustedAuthOrigins(request?: Request) {
   }
 
   if (request) {
-    origins.add(new URL(request.url).origin);
+    try {
+      origins.add(new URL(request.url).origin);
+    } catch {}
+    const reqOrigin = request.headers.get("origin");
+    if (reqOrigin) {
+      try {
+        origins.add(new URL(reqOrigin).origin);
+      } catch {}
+    }
   }
 
   return Array.from(origins);

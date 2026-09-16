@@ -257,7 +257,7 @@ export function AppShell({
       <div className="flex flex-1 min-h-0 w-full max-w-none gap-2 p-2 sm:gap-2.5 sm:p-2.5 lg:gap-3 lg:p-3">
         <aside
           className={cn(
-            "glass-panel flex max-md:hidden h-full shrink-0 flex-col overflow-hidden rounded-[26px] border border-border/60 shadow-[0_32px_80px_-50px_rgba(68,39,20,0.65)] transition-[width] duration-200 ease-out",
+            "glass-panel sidebar-transition flex max-md:hidden h-full shrink-0 flex-col overflow-hidden rounded-[26px] border border-border/60 shadow-[0_32px_80px_-50px_rgba(68,39,20,0.65)]",
             tabletSidebarExpanded
               ? "w-[260px] items-stretch p-3"
               : "w-[60px] items-center px-1.5 py-2.5",
@@ -302,8 +302,8 @@ export function AppShell({
           {!leftCollapsed ? (
             <div
               className={cn(
-                "rounded-[18px] border border-primary/20 bg-primary/10 px-3 py-2.5 text-foreground transition-all dark:border-sidebar-border dark:bg-sidebar dark:text-sidebar-foreground",
-                tabletSidebarExpanded ? "mt-2.5 block" : "hidden 2xl:block 2xl:rounded-[22px] 2xl:px-4 2xl:py-3"
+                "sidebar-content-fade rounded-[18px] border border-primary/20 bg-primary/10 px-3 py-2.5 text-foreground dark:border-sidebar-border dark:bg-sidebar dark:text-sidebar-foreground",
+                tabletSidebarExpanded ? "mt-2.5 block sidebar-content-visible" : "hidden 2xl:block 2xl:rounded-[22px] 2xl:px-4 2xl:py-3 sidebar-content-visible"
               )}
             >
               <div className="flex items-center gap-2.5">
@@ -474,7 +474,7 @@ export function AppShell({
           </button>
 
           {!leftCollapsed && (
-            <div className={cn(tabletSidebarExpanded ? "mt-2 block" : "hidden 2xl:block")}>
+            <div className={cn("sidebar-content-fade", tabletSidebarExpanded ? "mt-2 block sidebar-content-visible" : "hidden 2xl:block sidebar-content-visible")}>
               <AccountPanel />
             </div>
           )}
@@ -493,7 +493,7 @@ export function AppShell({
         ) : null}
 
         <RoleProvider role={role}>
-          <main ref={mainRef} className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto px-1 py-0.5 sm:px-2 sm:py-1 2xl:min-w-[680px] pb-20 md:pb-0">
+          <main ref={mainRef} className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto px-1 py-0.5 sm:px-2 sm:py-1 2xl:min-w-[680px] pb-20 md:pb-0 [contain:layout]">
             {children}
           </main>
         </RoleProvider>

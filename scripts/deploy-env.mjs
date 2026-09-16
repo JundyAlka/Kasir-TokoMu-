@@ -35,8 +35,9 @@ if (!deployEnv || !deployEnv.DATABASE_URL) {
 const envVars = {
   "DATABASE_URL": deployEnv.DATABASE_URL,
   "BETTER_AUTH_SECRET": deployEnv.BETTER_AUTH_SECRET || "",
-  "BETTER_AUTH_URL": deployEnv.BETTER_AUTH_URL || "https://ehtm9kdz.insforge.site",
-  "NEXT_PUBLIC_BETTER_AUTH_URL": deployEnv.NEXT_PUBLIC_BETTER_AUTH_URL || deployEnv.BETTER_AUTH_URL || "https://ehtm9kdz.insforge.site",
+  "BETTER_AUTH_URL": deployEnv.BETTER_AUTH_URL || "https://kasirmu.insforge.site",
+  "NEXT_PUBLIC_BETTER_AUTH_URL": deployEnv.NEXT_PUBLIC_BETTER_AUTH_URL || deployEnv.BETTER_AUTH_URL || "https://kasirmu.insforge.site",
+  "BETTER_AUTH_TRUSTED_ORIGINS": deployEnv.BETTER_AUTH_TRUSTED_ORIGINS || "https://kasirmu.insforge.site,https://ehtm9kdz.insforge.site",
   "NEXT_PUBLIC_INSFORGE_URL": deployEnv.NEXT_PUBLIC_INSFORGE_URL || "https://ehtm9kdz.ap-southeast.insforge.app",
   "NEXT_PUBLIC_INSFORGE_ANON_KEY": deployEnv.NEXT_PUBLIC_INSFORGE_ANON_KEY || "",
   "INSFORGE_URL": deployEnv.INSFORGE_URL || "https://ehtm9kdz.ap-southeast.insforge.app",
@@ -50,6 +51,7 @@ const envVars = {
   "GEMINI_VISION_MODEL": deployEnv.GEMINI_VISION_MODEL || "gemini-3.6-flash",
   "GEMINI_FALLBACK_VISION_MODEL": deployEnv.GEMINI_FALLBACK_VISION_MODEL || "gemini-3.6-flash",
   "GEMINI_GOOGLE_API_KEYS": deployEnv.GEMINI_GOOGLE_API_KEYS || "",
+  "PG_MAX_POOL": deployEnv.PG_MAX_POOL || "3",
 };
 
 const jsonStr = JSON.stringify(envVars);

@@ -1,4 +1,8 @@
-import { KasirView } from "@/components/warung/kasir-view";
+import nextDynamic from "next/dynamic";
+
+const KasirView = nextDynamic(
+  () => import("@/components/warung/kasir-view").then((m) => m.KasirView),
+);
 
 export const dynamic = "force-dynamic";
 

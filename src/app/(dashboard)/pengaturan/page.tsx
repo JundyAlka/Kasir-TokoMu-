@@ -1,8 +1,12 @@
 import { redirect } from "next/navigation";
-import { PengaturanView } from "@/components/warung/pengaturan-view";
+import nextDynamic from "next/dynamic";
 import { getRequestUser } from "@/lib/server/app-service";
 import { requireRole } from "@/lib/server/rbac";
 import type { Role } from "@/lib/server/rbac";
+
+const PengaturanView = nextDynamic(
+  () => import("@/components/warung/pengaturan-view").then((m) => m.PengaturanView),
+);
 
 export const dynamic = "force-dynamic";
 

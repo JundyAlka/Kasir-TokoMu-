@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
-import { AuditLogTable } from "@/components/tokomu/audit-log-table";
+import nextDynamic from "next/dynamic";
 import { getRequestUser } from "@/lib/server/app-service";
 import { requireRole } from "@/lib/server/rbac";
+
+const AuditLogTable = nextDynamic(
+  () => import("@/components/tokomu/audit-log-table").then((m) => m.AuditLogTable),
+);
 
 export const dynamic = "force-dynamic";
 

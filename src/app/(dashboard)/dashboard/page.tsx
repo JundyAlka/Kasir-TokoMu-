@@ -1,4 +1,8 @@
-import { DashboardView } from "@/components/warung/dashboard-view";
+import nextDynamic from "next/dynamic";
+
+const DashboardView = nextDynamic(
+  () => import("@/components/warung/dashboard-view").then((m) => m.DashboardView),
+);
 
 export const dynamic = "force-dynamic";
 

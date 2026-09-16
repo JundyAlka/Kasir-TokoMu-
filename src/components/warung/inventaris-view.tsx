@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Camera,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   PackagePlus,
   PencilLine,
   Search,
@@ -74,6 +78,10 @@ export function InventarisView() {
     retryWorkspace,
   } = useAppState();
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(25);
   const [createOpen, setCreateOpen] = useState(false);
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -100,38 +108,87 @@ export function InventarisView() {
     };
   }, []);
 
-  const visibleProducts = products.filter((product) => !pendingDeletedIds.has(product.id));
-
-  const filteredProducts = visibleProducts.filter((product) => {
-    const keyword = query.toLowerCase();
-    return (
-      product.name.toLowerCase().includes(keyword) ||
-      (product.sku ?? "").toLowerCase().includes(keyword) ||
-      product.category.toLowerCase().includes(keyword) ||
-      product.description.toLowerCase().includes(keyword)
-    );
-  });
-
-  const totalInventoryValue = visibleProducts.reduce(
-    (sum, product) => sum + product.buyPrice * product.stock,
-    0
+  const visibleProducts = useMemo(
+    () => products.filter((product) => !pendingDeletedIds.has(product.id)),
+    [products, pendingDeletedIds]
   );
-  const existingSkus = visibleProducts.map((product) => product.sku);
-  const visibleLowStockProducts = lowStockProducts.filter(
-    (product) => !pendingDeletedIds.has(product.id)
+
+  const categories = useMemo(() => {
+    const cats = new Set<string>();
+    visibleProducts.forEach((p) => {
+      if (p.category) cats.add(p.category.trim());
+    });
+    return Array.from(cats).sort();
+  }, [visibleProducts]);
+
+  const filteredProducts = useMemo(() => {
+    const keyword = deferredQuery.toLowerCase().trim();
+    return visibleProducts.filter((product) => {
+      if (selectedCategory === "low_stock") {
+        if (product.stock > product.minimumStock) return false;
+      } else if (selectedCategory !== "all") {
+        if (product.category.toLowerCase() !== selectedCategory.toLowerCase()) return false;
+      }
+
+      if (!keyword) return true;
+
+      return (
+        product.name.toLowerCase().includes(keyword) ||
+        (product.sku ?? "").toLowerCase().includes(keyword) ||
+        product.category.toLowerCase().includes(keyword) ||
+        product.description.toLowerCase().includes(keyword)
+      );
+    });
+  }, [visibleProducts, deferredQuery, selectedCategory]);
+
+  const totalPages = pageSize === -1 ? 1 : Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+
+  const paginatedProducts = useMemo(() => {
+    if (pageSize === -1) return filteredProducts;
+    const start = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(start, start + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
+
+  const totalInventoryValue = useMemo(
+    () => visibleProducts.reduce((sum, product) => sum + product.buyPrice * product.stock, 0),
+    [visibleProducts]
   );
-  const filteredProductIds = filteredProducts.map((product) => product.id);
-  const selectedProducts = visibleProducts.filter((product) => selectedProductIds.has(product.id));
-  const allFilteredProductsSelected = areAllIdsSelected(selectedProductIds, filteredProductIds);
-  const hasPartiallySelectedFilteredProducts =
-    filteredProductIds.some((id) => selectedProductIds.has(id)) && !allFilteredProductsSelected;
+
+  const existingSkus = useMemo(
+    () => visibleProducts.map((product) => product.sku),
+    [visibleProducts]
+  );
+
+  const visibleLowStockProducts = useMemo(
+    () => lowStockProducts.filter((product) => !pendingDeletedIds.has(product.id)),
+    [lowStockProducts, pendingDeletedIds]
+  );
+
+  const paginatedProductIds = useMemo(
+    () => paginatedProducts.map((product) => product.id),
+    [paginatedProducts]
+  );
+
+  const selectedProducts = useMemo(
+    () => visibleProducts.filter((product) => selectedProductIds.has(product.id)),
+    [visibleProducts, selectedProductIds]
+  );
+
+  const allPaginatedProductsSelected = areAllIdsSelected(selectedProductIds, paginatedProductIds);
+  const hasPartiallySelectedPaginatedProducts =
+    paginatedProductIds.some((id) => selectedProductIds.has(id)) && !allPaginatedProductsSelected;
   const canMutateInventory = true;
 
   useEffect(() => {
     if (selectAllRef.current) {
-      selectAllRef.current.indeterminate = hasPartiallySelectedFilteredProducts;
+      selectAllRef.current.indeterminate = hasPartiallySelectedPaginatedProducts;
     }
-  }, [hasPartiallySelectedFilteredProducts]);
+  }, [hasPartiallySelectedPaginatedProducts]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, selectedCategory]);
 
   function validateProduct(nextDraft: ProductDraft) {
     return (
@@ -346,84 +403,152 @@ export function InventarisView() {
       </section>
 
       <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
-        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle className="font-heading text-2xl">Inventaris barang jadi</CardTitle>
-            <CardDescription>
-              Semua perubahan di layar ini langsung mengubah state mock yang dipakai POS dan laporan.
-            </CardDescription>
+        <CardHeader className="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="font-heading text-2xl">Inventaris barang jadi</CardTitle>
+              <CardDescription>
+                Semua perubahan di layar ini langsung mengubah state mock yang dipakai POS dan laporan.
+              </CardDescription>
+            </div>
+
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="relative w-full min-w-[240px] flex-1 lg:w-auto">
+                <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Cari nama, SKU, atau kategori..."
+                  className="h-11 w-full rounded-2xl bg-card/85 pl-9"
+                />
+              </div>
+              {canMutateInventory ? (
+                <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+                  <Button
+                    render={<Link href="/inventaris/restok-ai" />}
+                    nativeButton={false}
+                    variant="outline"
+                    size="lg"
+                    className="h-11 shrink-0 rounded-2xl"
+                  >
+                    <Camera className="size-4" />
+                    Restok via Scan Struk
+                  </Button>
+                  <ImportProductDialog onImportComplete={async (importedProducts) => {
+                    await refreshWorkspace();
+                    if (importedProducts && importedProducts.length > 0) {
+                      const ids = importedProducts.map((p) => p.id);
+                      setNewlyAddedIds((prev) => [...ids, ...prev]);
+                      
+                      if (importedProducts.length <= 5) {
+                        toast.success(
+                          `${importedProducts.length} produk berhasil ditambahkan: ${importedProducts.map(p => p.name).join(", ")}`, 
+                          { duration: 5000 }
+                        );
+                      } else {
+                        toast.success(
+                          `${importedProducts.length} produk berhasil ditambahkan secara massal.`, 
+                          { duration: 5000 }
+                        );
+                      }
+                    }
+                  }} />
+                  <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                    <DialogTrigger
+                      render={<Button size="lg" className="h-11 shrink-0 rounded-2xl" />}
+                    >
+                      <PackagePlus className="size-4" />
+                      Tambah barang
+                    </DialogTrigger>
+                    <DialogContent className="max-h-[92vh] w-full max-w-2xl sm:max-w-2xl md:max-w-3xl overflow-y-auto overflow-x-hidden rounded-[28px] p-0">
+                      <DialogHeader className="p-6 pb-2">
+                        <DialogTitle className="font-heading text-2xl">Tambah produk baru</DialogTitle>
+                        <DialogDescription>
+                          Isi data minimum supaya kasir bisa langsung menjual barang ini.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="p-6 pt-2">
+                        <ProductForm draft={draft} onChange={setDraft} existingSkus={existingSkus} />
+                      </div>
+                      <DialogFooter
+                        className="m-0 flex flex-col-reverse gap-2 rounded-b-[28px] border-t bg-muted/50 px-6 py-4 sm:flex-row sm:justify-end"
+                        showCloseButton
+                      >
+                        <Button type="button" onClick={() => void handleCreateProduct()}>
+                          Simpan produk
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              ) : null}
+            </div>
           </div>
 
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="relative w-full min-w-[240px] flex-1 lg:w-auto">
-              <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Cari nama, kategori, atau catatan"
-                className="h-11 w-full rounded-2xl bg-card/85 pl-9"
-              />
-            </div>
-            {canMutateInventory ? (
-              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-                <Button
-                  render={<Link href="/inventaris/restok-ai" />}
-                  nativeButton={false}
-                  variant="outline"
-                  size="lg"
-                  className="h-11 shrink-0 rounded-2xl"
+          {/* Quick Category Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs no-scrollbar pt-1">
+            <button
+              type="button"
+              onClick={() => setSelectedCategory("all")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium transition-all shrink-0 cursor-pointer border",
+                selectedCategory === "all"
+                  ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                  : "border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              Semua
+              <span className={cn(
+                "rounded-full px-1.5 py-0.2 text-[10px]",
+                selectedCategory === "all" ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background/80 text-muted-foreground"
+              )}>
+                {visibleProducts.length}
+              </span>
+            </button>
+
+            {visibleLowStockProducts.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedCategory("low_stock")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium transition-all shrink-0 cursor-pointer border",
+                  selectedCategory === "low_stock"
+                    ? "border-amber-500 bg-amber-500 text-white shadow-xs"
+                    : "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400"
+                )}
+              >
+                <AlertTriangle className="size-3" />
+                Stok Menipis
+                <span className="rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-bold">
+                  {visibleLowStockProducts.length}
+                </span>
+              </button>
+            )}
+
+            {categories.map((cat) => {
+              const count = visibleProducts.filter((p) => p.category === cat).length;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium transition-all shrink-0 cursor-pointer border",
+                    selectedCategory === cat
+                      ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                      : "border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
                 >
-                  <Camera className="size-4" />
-                  Restok via Scan Struk
-                </Button>
-                <ImportProductDialog onImportComplete={async (importedProducts) => {
-                  await refreshWorkspace();
-                  if (importedProducts && importedProducts.length > 0) {
-                    const ids = importedProducts.map((p) => p.id);
-                    setNewlyAddedIds((prev) => [...ids, ...prev]);
-                    
-                    if (importedProducts.length <= 5) {
-                      toast.success(
-                        `${importedProducts.length} produk berhasil ditambahkan: ${importedProducts.map(p => p.name).join(", ")}`, 
-                        { duration: 5000 }
-                      );
-                    } else {
-                      toast.success(
-                        `${importedProducts.length} produk berhasil ditambahkan secara massal.`, 
-                        { duration: 5000 }
-                      );
-                    }
-                  }
-                }} />
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                  <DialogTrigger
-                    render={<Button size="lg" className="h-11 shrink-0 rounded-2xl" />}
-                  >
-                    <PackagePlus className="size-4" />
-                    Tambah barang
-                  </DialogTrigger>
-                  <DialogContent className="max-h-[92vh] w-full max-w-2xl sm:max-w-2xl md:max-w-3xl overflow-y-auto overflow-x-hidden rounded-[28px] p-0">
-                    <DialogHeader className="p-6 pb-2">
-                      <DialogTitle className="font-heading text-2xl">Tambah produk baru</DialogTitle>
-                      <DialogDescription>
-                        Isi data minimum supaya kasir bisa langsung menjual barang ini.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="p-6 pt-2">
-                      <ProductForm draft={draft} onChange={setDraft} existingSkus={existingSkus} />
-                    </div>
-                    <DialogFooter
-                      className="m-0 flex flex-col-reverse gap-2 rounded-b-[28px] border-t bg-muted/50 px-6 py-4 sm:flex-row sm:justify-end"
-                      showCloseButton
-                    >
-                      <Button type="button" onClick={() => void handleCreateProduct()}>
-                        Simpan produk
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            ) : null}
+                  {cat}
+                  <span className={cn(
+                    "rounded-full px-1.5 py-0.2 text-[10px]",
+                    selectedCategory === cat ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background/80 text-muted-foreground"
+                  )}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </CardHeader>
         <CardContent>
@@ -447,54 +572,54 @@ export function InventarisView() {
               </div>
             </div>
           ) : null}
-          <Table className="min-w-[760px]">
+          <Table className="w-full">
             <TableHeader>
               <TableRow>
                 {canMutateInventory ? (
-                  <TableHead className="w-12 px-3">
+                  <TableHead className="w-10 px-2">
                     <input
                       ref={selectAllRef}
                       type="checkbox"
-                      checked={allFilteredProductsSelected}
-                      onChange={() => setSelectedProductIds((current) => toggleAllIds(current, filteredProductIds))}
-                      aria-label="Pilih semua produk yang terlihat"
+                      checked={paginatedProductIds.length > 0 && allPaginatedProductsSelected}
+                      onChange={() => setSelectedProductIds((current) => toggleAllIds(current, paginatedProductIds))}
+                      aria-label="Pilih semua produk di halaman ini"
                       className="size-4 cursor-pointer accent-primary"
                     />
                   </TableHead>
                 ) : null}
-                <TableHead>
-                  <span className="inline-flex items-center gap-2">
+                <TableHead className="w-28 px-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs">
                     SKU
                     <InfoHint text={FIELD_HELP.sku} label="Penjelasan SKU" side="top" />
                   </span>
                 </TableHead>
-                <TableHead>Produk</TableHead>
-                <TableHead>Kategori</TableHead>
+                <TableHead className="min-w-[130px] max-w-[200px] px-2 text-xs">Produk</TableHead>
+                <TableHead className="w-24 px-2 text-xs">Kategori</TableHead>
                 {canMutateInventory ? (
-                  <TableHead>
-                    <span className="inline-flex items-center gap-2">
+                  <TableHead className="w-24 px-2 text-right">
+                    <span className="inline-flex items-center justify-end gap-1 text-xs">
                       Harga beli
                       <InfoHint text={FIELD_HELP.costPrice} label="Penjelasan harga beli" side="top" />
                     </span>
                   </TableHead>
                 ) : null}
-                <TableHead>Harga jual</TableHead>
+                <TableHead className="w-24 px-2 text-right text-xs">Harga jual</TableHead>
                 {canMutateInventory ? (
-                  <TableHead>
-                    <span className="inline-flex items-center gap-2">
+                  <TableHead className="w-20 px-2 text-right">
+                    <span className="inline-flex items-center justify-end gap-1 text-xs">
                       Margin
                       <InfoHint text={FIELD_HELP.margin} label="Penjelasan margin" side="top" />
                     </span>
                   </TableHead>
                 ) : null}
-                <TableHead>Stok</TableHead>
-                <TableHead>
-                  <span className="inline-flex items-center gap-2">
-                    Stok min
+                <TableHead className="w-16 px-1.5 text-center text-xs">Stok</TableHead>
+                <TableHead className="w-16 px-1.5 text-center">
+                  <span className="inline-flex items-center justify-center gap-1 text-xs">
+                    Min
                     <InfoHint text={FIELD_HELP.reorderPoint} label="Penjelasan stok minimum" side="top" />
                   </span>
                 </TableHead>
-                {canMutateInventory ? <TableHead className="text-right">Aksi</TableHead> : null}
+                {canMutateInventory ? <TableHead className="w-48 px-2 text-right text-xs">Aksi</TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -507,15 +632,66 @@ export function InventarisView() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : dataState === "loading" ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="h-44 text-center text-muted-foreground">Memuat inventaris...</TableCell>
-                </TableRow>
+              ) : (dataState === "loading" && visibleProducts.length === 0) ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <TableRow key={`skeleton-${i}`} className="animate-pulse">
+                    {canMutateInventory && (
+                      <TableCell className="w-10 px-2">
+                        <div className="size-4 rounded bg-muted/60" />
+                      </TableCell>
+                    )}
+                    <TableCell className="w-28 px-2">
+                      <div className="h-4 w-20 rounded bg-muted/50" />
+                    </TableCell>
+                    <TableCell className="min-w-[130px] max-w-[200px] px-2">
+                      <div className="space-y-1.5">
+                        <div className="h-4 w-32 rounded bg-muted/60" />
+                        <div className="h-3 w-20 rounded bg-muted/40" />
+                      </div>
+                    </TableCell>
+                    <TableCell className="w-24 px-2">
+                      <div className="h-4 w-16 rounded bg-muted/50" />
+                    </TableCell>
+                    {canMutateInventory && (
+                      <TableCell className="w-24 px-2 text-right">
+                        <div className="h-4 w-16 ml-auto rounded bg-muted/50" />
+                      </TableCell>
+                    )}
+                    <TableCell className="w-24 px-2 text-right">
+                      <div className="h-4 w-16 ml-auto rounded bg-muted/50" />
+                    </TableCell>
+                    {canMutateInventory && (
+                      <TableCell className="w-20 px-2 text-right">
+                        <div className="h-4 w-12 ml-auto rounded bg-muted/50" />
+                      </TableCell>
+                    )}
+                    <TableCell className="w-16 px-1.5 text-center">
+                      <div className="h-5 w-8 mx-auto rounded-full bg-muted/60" />
+                    </TableCell>
+                    <TableCell className="w-16 px-1.5 text-center">
+                      <div className="h-4 w-6 mx-auto rounded bg-muted/40" />
+                    </TableCell>
+                    {canMutateInventory && (
+                      <TableCell className="w-48 px-2 text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <div className="h-7 w-14 rounded-full bg-muted/50" />
+                          <div className="h-7 w-16 rounded-full bg-muted/50" />
+                          <div className="h-7 w-7 rounded-full bg-muted/40" />
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))
               ) : filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="h-44 text-center text-muted-foreground">Belum ada produk di inventaris.</TableCell>
+                  <TableCell colSpan={10} className="h-44 text-center text-muted-foreground">
+                    {query || selectedCategory !== "all"
+                      ? "Tidak ada produk yang sesuai dengan filter pencarian."
+                      : "Belum ada produk di inventaris."}
+                  </TableCell>
                 </TableRow>
-              ) : filteredProducts.map((product) => {
+              ) : (
+                paginatedProducts.map((product) => {
                 const lowStock = product.stock <= product.minimumStock;
                 const sku = product.sku || generateSku(product.name, product.category);
                 const margin = Math.max(0, product.sellPrice - product.buyPrice);
@@ -530,7 +706,7 @@ export function InventarisView() {
                     )}
                   >
                     {canMutateInventory ? (
-                      <TableCell className="px-3">
+                      <TableCell className="w-10 px-2">
                         <input
                           type="checkbox"
                           checked={selectedProductIds.has(product.id)}
@@ -542,45 +718,50 @@ export function InventarisView() {
                         />
                       </TableCell>
                     ) : null}
-                    <TableCell className="font-mono text-xs font-medium text-muted-foreground">
+                    <TableCell className="w-28 px-2 font-mono text-xs font-medium text-muted-foreground truncate">
                       {sku}
                     </TableCell>
-                    <TableCell className="min-w-[220px]">
-                      <div>
-                        <p className="font-medium">{product.name}</p>
-                        <p className="text-sm text-muted-foreground">{product.description}</p>
+                    <TableCell className="min-w-[130px] max-w-[200px] px-2 whitespace-normal">
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground truncate text-xs sm:text-sm">{product.name}</p>
+                        {product.description ? (
+                          <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{product.description}</p>
+                        ) : null}
                       </div>
                     </TableCell>
-                    <TableCell>{product.category}</TableCell>
-                    {canMutateInventory ? <TableCell>{formatCurrency(product.buyPrice)}</TableCell> : null}
-                    <TableCell>{formatCurrency(product.sellPrice)}</TableCell>
+                    <TableCell className="w-24 px-2 text-xs">{product.category}</TableCell>
                     {canMutateInventory ? (
-                      <TableCell>
-                        <span className="font-medium">{formatCurrency(margin)}</span>
-                        <span className="ml-1 text-xs text-muted-foreground">({marginPct}%)</span>
+                      <TableCell className="w-24 px-2 text-right text-xs tabular-nums">{formatCurrency(product.buyPrice)}</TableCell>
+                    ) : null}
+                    <TableCell className="w-24 px-2 text-right text-xs font-medium tabular-nums">{formatCurrency(product.sellPrice)}</TableCell>
+                    {canMutateInventory ? (
+                      <TableCell className="w-20 px-2 text-right text-xs">
+                        <span className="font-medium tabular-nums">{formatCurrency(margin)}</span>
+                        <span className="ml-1 text-[10px] text-muted-foreground">({marginPct}%)</span>
                       </TableCell>
                     ) : null}
-                    <TableCell>
-                      <div className="flex items-center gap-2">
+                    <TableCell className="w-16 px-1.5 text-center">
+                      <div className="inline-flex items-center gap-1 justify-center">
                         <Badge
                           className={cn(
-                            "rounded-full border-0",
+                            "rounded-full border-0 text-[11px] px-2 py-0.2",
                             lowStock ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
                           )}
                         >
-                          {product.stock} pcs
+                          {product.stock}
                         </Badge>
-                        {lowStock ? <AlertTriangle className="size-4 text-primary" /> : null}
+                        {lowStock ? <AlertTriangle className="size-3 text-primary shrink-0" /> : null}
                       </div>
                     </TableCell>
-                    <TableCell>{product.minimumStock} pcs</TableCell>
+                    <TableCell className="w-16 px-1.5 text-center text-xs text-muted-foreground tabular-nums">{product.minimumStock}</TableCell>
                     {canMutateInventory ? (
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                      <TableCell className="w-48 px-2 text-right">
+                        <div className="flex justify-end gap-1.5">
                           <Button
                             type="button"
                             variant="outline"
-                            className="rounded-full"
+                            size="sm"
+                            className="h-7 rounded-full px-2.5 text-xs gap-1"
                             onClick={() => {
                               setEditingProduct(product);
                               setEditDraft({
@@ -595,35 +776,125 @@ export function InventarisView() {
                               });
                             }}
                           >
-                            <PencilLine className="size-4" />
+                            <PencilLine className="size-3" />
                             Edit
                           </Button>
                           <Button
                             type="button"
                             variant="secondary"
-                            className="rounded-full"
+                            size="sm"
+                            className="h-7 rounded-full px-2.5 text-xs gap-1"
                             onClick={() => setRestockTarget(product)}
                           >
-                            <Warehouse className="size-4" />
+                            <Warehouse className="size-3" />
                             Restok
                           </Button>
                           <Button
                             type="button"
-                            variant="destructive"
-                            className="rounded-full"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 rounded-full px-2 text-xs text-destructive hover:bg-destructive/10"
                             onClick={() => handleDeleteProduct(product)}
+                            aria-label={`Hapus ${product.name}`}
                           >
-                            <Trash2 className="size-4" />
-                            Hapus
+                            <Trash2 className="size-3.5" />
                           </Button>
                         </div>
                       </TableCell>
                     ) : null}
                   </TableRow>
                 );
-              })}
+              })
+            )}
             </TableBody>
           </Table>
+
+          {/* Pagination Controls Footer */}
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-border/40 pt-4 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2">
+              <span>Baris per halaman:</span>
+              <div className="inline-flex rounded-lg border border-border/50 bg-background/50 p-0.5">
+                {[25, 50, 100, -1].map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => {
+                      setPageSize(size);
+                      setPage(1);
+                    }}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer",
+                      pageSize === size
+                        ? "bg-primary text-primary-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {size === -1 ? "Semua" : size}
+                  </button>
+                ))}
+              </div>
+              <span className="hidden sm:inline text-muted-foreground/80 pl-2">
+                Menampilkan {filteredProducts.length === 0 ? 0 : (currentPage - 1) * (pageSize === -1 ? filteredProducts.length : pageSize) + 1} -{" "}
+                {pageSize === -1 ? filteredProducts.length : Math.min(currentPage * pageSize, filteredProducts.length)} dari{" "}
+                {filteredProducts.length} produk
+              </span>
+            </div>
+
+            {pageSize !== -1 && totalPages > 1 && (
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                <span className="mr-1 sm:hidden">
+                  {currentPage}/{totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage(1)}
+                  className="h-8 w-8 p-0 rounded-lg"
+                  title="Halaman pertama"
+                >
+                  <ChevronsLeft className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="h-8 w-8 p-0 rounded-lg"
+                  title="Halaman sebelumnya"
+                >
+                  <ChevronLeft className="size-3.5" />
+                </Button>
+                <span className="hidden sm:inline px-2 font-medium text-foreground">
+                  Halaman {currentPage} dari {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="h-8 w-8 p-0 rounded-lg"
+                  title="Halaman berikutnya"
+                >
+                  <ChevronRight className="size-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setPage(totalPages)}
+                  className="h-8 w-8 p-0 rounded-lg"
+                  title="Halaman terakhir"
+                >
+                  <ChevronsRight className="size-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

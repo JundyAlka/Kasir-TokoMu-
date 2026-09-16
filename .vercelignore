@@ -12,3 +12,5 @@ deploy-log.txt
 *.log
 *.sql
 db-export.json
+testsprite_tests
+scratch

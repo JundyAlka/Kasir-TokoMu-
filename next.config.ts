@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   compress: true,
   experimental: {
     authInterrupts: true,
-    optimizePackageImports: ["lucide-react", "@radix-ui/react-icons", "recharts", "date-fns"],
+    optimizePackageImports: ["lucide-react", "@radix-ui/react-icons", "recharts", "date-fns", "date-fns-tz", "@react-pdf/renderer", "xlsx"],
   },
   turbopack: {
     root: __dirname,

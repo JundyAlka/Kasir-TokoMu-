@@ -1,8 +1,12 @@
 import { redirect } from "next/navigation";
-import { KaryawanClient } from "@/components/warung/karyawan-client";
+import nextDynamic from "next/dynamic";
 import { getRequestUser } from "@/lib/server/app-service";
 import { listWorkspaceUsers, requireRole } from "@/lib/server/rbac";
 import type { Role } from "@/lib/server/rbac";
+
+const KaryawanClient = nextDynamic(
+  () => import("@/components/warung/karyawan-client").then((m) => m.KaryawanClient),
+);
 
 export const dynamic = "force-dynamic";
 

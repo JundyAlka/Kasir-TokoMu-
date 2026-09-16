@@ -35,10 +35,10 @@ export function createPoolConfig(rawConnectionString: string): PoolConfig {
   const isTest = process.env.NODE_ENV === "test";
   const config: PoolConfig = {
     connectionString,
-    max: process.env.PG_MAX_POOL ? parseInt(process.env.PG_MAX_POOL, 10) : 10,
-    idleTimeoutMillis: isTest ? 2000 : 30000,
-    connectionTimeoutMillis: 5000,
-    allowExitOnIdle: isTest,
+    max: process.env.PG_MAX_POOL ? parseInt(process.env.PG_MAX_POOL, 10) : 3,
+    idleTimeoutMillis: isTest ? 2000 : 5000,
+    connectionTimeoutMillis: 3000,
+    allowExitOnIdle: true,
   };
 
   if (needsSsl(connectionString)) {
