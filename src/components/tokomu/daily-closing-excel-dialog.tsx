@@ -5,10 +5,15 @@ import * as XLSX from "xlsx";
 import {
   AlertCircle,
   ArrowRight,
+  Calendar,
   CheckCircle2,
   Download,
   FileSpreadsheet,
   Loader2,
+  PiggyBank,
+  RefreshCw,
+  TrendingDown,
+  TrendingUp,
   UploadCloud,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -481,18 +486,18 @@ export function DailyClosingExcelDialog({
         onOpenChange(isOpen);
       }}
     >
-      <DialogContent className="max-w-5xl max-h-[92vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="p-6 pb-4 border-b border-border/70 shrink-0">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+      <DialogContent className="w-[96vw] max-w-[96vw] sm:max-w-[95vw] md:max-w-[92vw] lg:max-w-6xl xl:max-w-7xl max-h-[94vh] flex flex-col p-0 overflow-hidden rounded-[28px] border-border/80 shadow-2xl">
+        <DialogHeader className="p-4 sm:p-6 pb-3 sm:pb-4 border-b border-border/70 shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                <FileSpreadsheet className="size-6" />
+              <div className="flex size-10 sm:size-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                <FileSpreadsheet className="size-5 sm:size-6" />
               </div>
-              <div>
-                <DialogTitle className="font-heading text-xl">
+              <div className="min-w-0">
+                <DialogTitle className="font-heading text-lg sm:text-xl truncate">
                   Impor Rekap Tutup Buku Harian via Excel
                 </DialogTitle>
-                <DialogDescription>
+                <DialogDescription className="text-xs sm:text-sm">
                   Upload spreadsheet (.xlsx / .csv) untuk memasukkan rekap tutup buku banyak hari sekaligus.
                 </DialogDescription>
               </div>
@@ -501,7 +506,7 @@ export function DailyClosingExcelDialog({
               type="button"
               variant="outline"
               size="sm"
-              className="gap-2 rounded-xl border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+              className="gap-2 rounded-xl border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300 shrink-0 self-start sm:self-auto"
               onClick={downloadTemplate}
             >
               <Download className="size-4" />
@@ -510,41 +515,67 @@ export function DailyClosingExcelDialog({
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-          <div
-            className={cn(
-              "relative rounded-3xl border-2 border-dashed border-border/80 p-6 sm:p-8 text-center transition-all bg-card/40 hover:bg-card/70",
-              file && "border-primary/50 bg-primary/5"
-            )}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleFileChange}
-              className="absolute inset-0 size-full cursor-pointer opacity-0"
-              title="Pilih file Excel"
-            />
-            <div className="flex flex-col items-center justify-center space-y-2 pointer-events-none">
-              <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-1">
-                <UploadCloud className="size-7" />
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 custom-scrollbar">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+
+          {file ? (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-500/10 p-3.5 sm:p-4 transition-all">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-400">
+                  <FileSpreadsheet className="size-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm truncate text-foreground" title={file.name}>
+                    {file.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {(file.size / 1024).toFixed(1)} KB • {parsedRows.length} baris hari terdeteksi
+                  </p>
+                </div>
               </div>
-              <p className="font-semibold text-base">
-                {file ? file.name : "Seret & lepas file Excel di sini atau klik untuk memilih"}
-              </p>
-              <p className="text-xs text-muted-foreground max-w-md">
-                Mendukung file <span className="font-mono font-medium">.xlsx</span>,{" "}
-                <span className="font-mono font-medium">.xls</span>, atau{" "}
-                <span className="font-mono font-medium">.csv</span>.
-              </p>
-              {file && (
-                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">
+              <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-between sm:justify-end">
+                <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 text-xs px-2.5 py-1 gap-1.5 font-medium">
                   <CheckCircle2 className="size-3.5" />
                   {parsedRows.length} hari berhasil diproses
-                </div>
-              )}
+                </Badge>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs rounded-xl gap-1.5 bg-background"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <RefreshCw className="size-3" />
+                  Ganti File
+                </Button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="relative cursor-pointer rounded-3xl border-2 border-dashed border-border/80 p-6 sm:p-8 text-center transition-all bg-card/40 hover:bg-card/70 hover:border-primary/50"
+            >
+              <div className="flex flex-col items-center justify-center space-y-2 pointer-events-none">
+                <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-1">
+                  <UploadCloud className="size-7" />
+                </div>
+                <p className="font-semibold text-base">
+                  Seret & lepas file Excel di sini atau klik untuk memilih
+                </p>
+                <p className="text-xs text-muted-foreground max-w-md">
+                  Mendukung file <span className="font-mono font-medium">.xlsx</span>,{" "}
+                  <span className="font-mono font-medium">.xls</span>, atau{" "}
+                  <span className="font-mono font-medium">.csv</span>.
+                </p>
+              </div>
+            </div>
+          )}
 
           {parseErrors.length > 0 && (
             <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 space-y-1">
@@ -561,73 +592,122 @@ export function DailyClosingExcelDialog({
           )}
 
           {parsedRows.length > 0 && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="rounded-2xl border border-border/70 bg-card p-3.5 shadow-xs">
-                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Total Hari</p>
-                  <p className="mt-1 text-xl font-bold">{summary.totalDays} Hari</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {summary.balancedDays} klop, {summary.unbalancedDays} selisih
-                  </p>
+            <div className="space-y-4 sm:space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5">
+                <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Periode</span>
+                    <div className="flex size-8 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground">
+                      <Calendar className="size-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2.5">
+                    <p className="text-xl sm:text-2xl font-bold font-heading tabular-nums text-foreground">
+                      {summary.totalDays} <span className="text-sm font-normal text-muted-foreground">Hari</span>
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                        <CheckCircle2 className="size-3" /> {summary.balancedDays} klop
+                      </span>
+                      {summary.unbalancedDays > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-rose-500/10 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:text-rose-400">
+                          <AlertCircle className="size-3" /> {summary.unbalancedDays} selisih
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 shadow-xs">
-                  <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Total Pemasukan</p>
-                  <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-400">
-                    {formatCurrency(summary.totalRevenue)}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Omzet kotor</p>
+
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-500/10 p-4 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">Total Pemasukan</span>
+                    <div className="flex size-8 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
+                      <TrendingUp className="size-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2.5">
+                    <p className="text-lg sm:text-xl lg:text-2xl font-bold font-heading tabular-nums tracking-tight text-emerald-700 dark:text-emerald-400 break-words">
+                      {formatCurrency(summary.totalRevenue)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Akumulasi omzet kotor
+                    </p>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-3.5 shadow-xs">
-                  <p className="text-[11px] font-medium text-rose-700 dark:text-rose-400 uppercase tracking-wider">Total Pengeluaran</p>
-                  <p className="mt-1 text-xl font-bold text-rose-700 dark:text-rose-400">
-                    {formatCurrency(summary.totalExpense)}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Toko & titipan</p>
+
+                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/5 dark:bg-rose-500/10 p-4 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-300">Total Pengeluaran</span>
+                    <div className="flex size-8 items-center justify-center rounded-xl bg-rose-500/15 text-rose-700 dark:text-rose-400">
+                      <TrendingDown className="size-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2.5">
+                    <p className="text-lg sm:text-xl lg:text-2xl font-bold font-heading tabular-nums tracking-tight text-rose-700 dark:text-rose-400 break-words">
+                      {formatCurrency(summary.totalExpense)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Toko: {formatCurrency(summary.totalStore)} • Titipan: {formatCurrency(summary.totalTitipan)}
+                    </p>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-3.5 shadow-xs">
-                  <p className="text-[11px] font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wider">Total Tabungan</p>
-                  <p className="mt-1 text-xl font-bold text-blue-700 dark:text-blue-400">
-                    {formatCurrency(summary.totalSavings)}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Disisihkan</p>
+
+                <div className="rounded-2xl border border-blue-500/30 bg-blue-500/5 dark:bg-blue-500/10 p-4 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-blue-800 dark:text-blue-300">Total Tabungan</span>
+                    <div className="flex size-8 items-center justify-center rounded-xl bg-blue-500/15 text-blue-700 dark:text-blue-400">
+                      <PiggyBank className="size-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2.5">
+                    <p className="text-lg sm:text-xl lg:text-2xl font-bold font-heading tabular-nums tracking-tight text-blue-700 dark:text-blue-400 break-words">
+                      {formatCurrency(summary.totalSavings)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Disisihkan ke kas tabungan
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-border/80 overflow-hidden shadow-xs">
-                <div className="bg-muted/50 px-4 py-2.5 border-b border-border/70 flex items-center justify-between">
-                  <span className="font-semibold text-xs text-foreground uppercase tracking-wider">
-                    Pratinjau Data Harian ({parsedRows.length} Baris)
+              <div className="rounded-2xl border border-border/80 overflow-hidden shadow-xs bg-card/60">
+                <div className="bg-muted/50 px-4 py-3 border-b border-border/70 flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-semibold text-xs text-foreground uppercase tracking-wider flex items-center gap-2">
+                    Pratinjau Data Harian
+                    <Badge variant="outline" className="text-xs font-mono font-medium">
+                      {parsedRows.length} Hari
+                    </Badge>
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    Diurutkan dari tanggal paling awal
+                    Diurutkan dari tanggal paling awal ke terbaru
                   </span>
                 </div>
-                <div className="max-h-[360px] overflow-y-auto custom-scrollbar">
-                  <Table>
-                    <TableHeader className="bg-card/90 sticky top-0 z-10 backdrop-blur-sm">
+                <div className="max-h-[360px] sm:max-h-[420px] overflow-auto custom-scrollbar">
+                  <Table className="w-full">
+                    <TableHeader className="bg-card/95 sticky top-0 z-10 backdrop-blur-md border-b">
                       <TableRow>
-                        <TableHead className="w-[120px]">Tanggal</TableHead>
-                        <TableHead className="w-[130px]">Kas Awal</TableHead>
-                        <TableHead className="text-right">Pemasukan</TableHead>
-                        <TableHead className="text-right">Pengeluaran</TableHead>
-                        <TableHead className="text-right">Sisa Kas</TableHead>
-                        <TableHead className="text-right">Alokasi Fisik</TableHead>
-                        <TableHead className="text-center w-[120px]">Status</TableHead>
-                        <TableHead>Catatan</TableHead>
+                        <TableHead className="min-w-[120px]">Tanggal</TableHead>
+                        <TableHead className="min-w-[130px]">Kas Awal</TableHead>
+                        <TableHead className="min-w-[130px] text-right">Pemasukan</TableHead>
+                        <TableHead className="min-w-[160px] text-right">Pengeluaran</TableHead>
+                        <TableHead className="min-w-[130px] text-right">Sisa Kas</TableHead>
+                        <TableHead className="min-w-[160px] text-right">Alokasi Fisik</TableHead>
+                        <TableHead className="min-w-[120px] text-center">Status</TableHead>
+                        <TableHead className="min-w-[150px]">Catatan</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {parsedRows.map((r) => (
                         <TableRow key={r.reportDate} className="hover:bg-muted/30">
                           <TableCell className="font-semibold whitespace-nowrap">
-                            <span className="text-xs font-mono">{r.reportDate}</span>
+                            <span className="text-xs font-mono px-2 py-1 rounded-md bg-muted/60 border border-border/60">{r.reportDate}</span>
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             <div className="text-xs font-medium">
                               {formatCurrency(r.openingCash)}
                             </div>
                             {r.isOpeningAutoChained && (
-                              <span className="text-[10px] text-primary flex items-center gap-0.5">
+                              <span className="text-[10px] text-primary flex items-center gap-0.5 mt-0.5">
                                 <ArrowRight className="size-2.5" /> Sambung kas tutup
                               </span>
                             )}
@@ -652,16 +732,16 @@ export function DailyClosingExcelDialog({
                           </TableCell>
                           <TableCell className="text-center whitespace-nowrap">
                             {r.isBalanced ? (
-                              <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 text-[10px]">
-                                Klop
+                              <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 text-[11px] font-semibold">
+                                <CheckCircle2 className="mr-1 size-3" /> Klop
                               </Badge>
                             ) : (
-                              <Badge variant="destructive" className="text-[10px]">
+                              <Badge variant="destructive" className="text-[11px] font-semibold">
                                 Selisih {formatCurrency(Math.abs(r.variance))}
                               </Badge>
                             )}
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate" title={r.note}>
+                          <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate" title={r.note}>
                             {r.note || "-"}
                           </TableCell>
                         </TableRow>
@@ -674,21 +754,23 @@ export function DailyClosingExcelDialog({
           )}
         </div>
 
-        <DialogFooter className="p-4 sm:p-6 border-t border-border/70 bg-card/60 shrink-0 flex items-center justify-between">
+        <DialogFooter className="p-4 sm:p-5 border-t border-border/70 bg-card/70 shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <Button
             type="button"
             variant="ghost"
+            className="rounded-xl"
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
           >
             Batal
           </Button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5 justify-end">
             {parsedRows.length > 0 && (
               <Button
                 type="button"
                 variant="outline"
+                className="rounded-xl"
                 onClick={resetState}
                 disabled={isSubmitting}
               >
@@ -700,7 +782,7 @@ export function DailyClosingExcelDialog({
               type="button"
               onClick={handleSubmit}
               disabled={parsedRows.length === 0 || isSubmitting}
-              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5"
             >
               {isSubmitting ? (
                 <>
