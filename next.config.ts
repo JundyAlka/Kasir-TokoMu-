@@ -4,9 +4,10 @@ const nextConfig: NextConfig = {
   output: "standalone",
   allowedDevOrigins: ["127.0.0.1"],
   compress: true,
+  serverExternalPackages: ["@react-pdf/renderer"],
   experimental: {
     authInterrupts: true,
-    optimizePackageImports: ["lucide-react", "@radix-ui/react-icons", "recharts", "date-fns", "date-fns-tz", "@react-pdf/renderer", "xlsx"],
+    optimizePackageImports: ["lucide-react", "@radix-ui/react-icons", "recharts", "date-fns", "date-fns-tz", "xlsx"],
   },
   turbopack: {
     root: __dirname,

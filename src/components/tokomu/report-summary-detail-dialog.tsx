@@ -27,6 +27,17 @@ export type ProfitLossSummary = {
   source?: "daily_reports" | "live_transactions";
   transactionCount: number;
   averageTicket: number;
+  dailyReports?: Array<{
+    reportDate: string;
+    revenue: number;
+    cogs?: number;
+    expenseTotal?: number;
+    grossProfit?: number;
+    netProfit?: number;
+    profitDistribution?: number;
+    transactionCount?: number;
+    status?: "draft" | "locked";
+  }>;
 };
 
 type ReportSummaryDetailDialogProps = {

@@ -461,6 +461,11 @@ export function DailyClosingExcelDialog({
         description: `Total omzet Rp ${formatCurrency(summary.totalRevenue)} tercatat ke database.`,
       });
 
+      window.dispatchEvent(new CustomEvent("tokomu-daily-closing-updated"));
+      window.dispatchEvent(
+        new CustomEvent("pcm-reports-updated", { detail: { action: "daily_closing_imported" } })
+      );
+
       onSuccess();
       onOpenChange(false);
       resetState();

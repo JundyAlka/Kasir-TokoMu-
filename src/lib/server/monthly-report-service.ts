@@ -31,20 +31,33 @@ export async function getDailyReportRollup(workspaceOwnerId: string, range: { st
 }
 
 async function getLiveReportRollup(workspaceOwnerId: string, range: { start: string; end: string }): Promise<DailyReportRollup> {
-  const summary = await calculatePeriodProfit(workspaceOwnerId, range.start, range.end);
+  const [summary, dailyRollup] = await Promise.all([
+    calculatePeriodProfit(workspaceOwnerId, range.start, range.end),
+    getDailyReportRollup(workspaceOwnerId, range),
+  ]);
+
+  const hasDaily = dailyRollup.dailyReports.length > 0;
+  const revenue = Math.max(summary.revenue, dailyRollup.revenue);
+  const expenseTotal = Math.max(summary.expenseTotal, dailyRollup.expenseTotal);
+  const cogs = Math.max(summary.cogs, dailyRollup.cogs);
+  const grossProfit = Math.max(summary.grossProfit, revenue - cogs);
+  const netProfit = hasDaily && summary.revenue === 0 ? dailyRollup.netProfit : (revenue - cogs - expenseTotal);
+  const transactionCount = Math.max(summary.transactionCount, dailyRollup.transactionCount);
+  const averageTicket = transactionCount ? Math.round(revenue / transactionCount) : 0;
+
   return {
     periodStart: range.start,
     periodEnd: range.end,
-    revenue: summary.revenue,
-    cogs: summary.cogs,
-    grossProfit: summary.grossProfit,
-    expenseTotal: summary.expenseTotal,
-    netProfit: summary.netProfit,
-    profitDistribution: summary.profitDistribution,
-    transactionCount: summary.transactionCount,
-    averageTicket: summary.averageTicket,
-    dailyReports: [],
-    source: "live_transactions",
+    revenue,
+    cogs,
+    grossProfit,
+    expenseTotal,
+    netProfit,
+    profitDistribution: summary.profitDistribution || dailyRollup.profitDistribution,
+    transactionCount,
+    averageTicket,
+    dailyReports: dailyRollup.dailyReports,
+    source: hasDaily ? "daily_reports" : "live_transactions",
   };
 }
 

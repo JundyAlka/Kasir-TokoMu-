@@ -250,7 +250,8 @@ function buildTrendSeries(
   period: string,
   range: TrendRange,
   weekNumber: number,
-  transactions: Array<{ occurredAt: string; total: number }>
+  transactions: Array<{ occurredAt: string; total: number }>,
+  dailyReports?: Array<{ reportDate: string; revenue: number; transactionCount?: number }>
 ) {
   const keys = getTrendKeys(period, range, weekNumber);
   const values = new Map(keys.map((key) => [key, { revenue: 0, transactions: 0 }]));
@@ -264,6 +265,20 @@ function buildTrendSeries(
 
     current.revenue += transaction.total;
     current.transactions += 1;
+  }
+
+  if (dailyReports && dailyReports.length > 0) {
+    for (const report of dailyReports) {
+      const key = report.reportDate ? report.reportDate.slice(0, 10) : "";
+      const current = values.get(key);
+      if (!current) {
+        continue;
+      }
+      if (report.revenue > 0) {
+        current.revenue = Math.max(current.revenue, report.revenue);
+        current.transactions = Math.max(current.transactions, report.transactionCount || 1);
+      }
+    }
   }
 
   return keys.map((key) => {
@@ -1383,12 +1398,20 @@ export function LaporanView() {
     fetchFinalizedReports(true);
     const handlePcmUpdated = (e: any) => {
       const action = e.detail?.action;
-      if (action === "finalized" || action === "updated" || action === "reopened") {
+      if (action === "finalized" || action === "updated" || action === "reopened" || action === "daily_closing_imported") {
         void fetchFinalizedReports(false);
+        setReportReloadKey((k) => k + 1);
       }
     };
+    const handleDailyUpdated = () => {
+      setReportReloadKey((k) => k + 1);
+    };
     window.addEventListener("pcm-reports-updated", handlePcmUpdated);
-    return () => window.removeEventListener("pcm-reports-updated", handlePcmUpdated);
+    window.addEventListener("tokomu-daily-closing-updated", handleDailyUpdated);
+    return () => {
+      window.removeEventListener("pcm-reports-updated", handlePcmUpdated);
+      window.removeEventListener("tokomu-daily-closing-updated", handleDailyUpdated);
+    };
   }, []);
 
   async function fetchFinalizedReports(showLoading = true) {
@@ -1526,8 +1549,8 @@ export function LaporanView() {
     year: "numeric",
   }).format(new Date(`${period}-01T00:00:00`));
   const trendSeries = useMemo(
-    () => buildTrendSeries(period, trendRange, selectedTrendWeek, transactions),
-    [period, transactions, trendRange, selectedTrendWeek]
+    () => buildTrendSeries(period, trendRange, selectedTrendWeek, transactions, summary.dailyReports),
+    [period, transactions, trendRange, selectedTrendWeek, summary.dailyReports]
   );
   const trendTotal = trendSeries.reduce((sum, item) => sum + item.revenue, 0);
   const trendTransactionCount = trendSeries.reduce((sum, item) => sum + item.transactions, 0);

@@ -1,3 +1,4 @@
+import "@/lib/server/pdf-polyfill";
 import { renderToStream } from "@react-pdf/renderer";
 import { and, desc, eq } from "drizzle-orm";
 import { Readable } from "node:stream";
@@ -97,6 +98,13 @@ async function getLowStockProducts(workspaceOwnerId: string) {
   return result.rows;
 }
 
+function parseCustomNumber(raw: string | null): number | null {
+  if (!raw) return null;
+  const cleaned = raw.replace(/[^\d.-]/g, "");
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? num : null;
+}
+
 export async function GET(request: Request) {
   try {
     await requireRoutePolicy("/api/reports/profit-loss/pdf", "GET");
@@ -110,9 +118,9 @@ export async function GET(request: Request) {
       .filter(Boolean)
       .slice(0, 6);
 
-    const customModalAwal = url.searchParams.get("modalAwal") ? Number(url.searchParams.get("modalAwal")) : null;
-    const customInventaris = url.searchParams.get("inventaris") ? Number(url.searchParams.get("inventaris")) : null;
-    const customShowcase = url.searchParams.get("showcase") ? Number(url.searchParams.get("showcase")) : null;
+    const customModalAwal = parseCustomNumber(url.searchParams.get("modalAwal"));
+    const customInventaris = parseCustomNumber(url.searchParams.get("inventaris"));
+    const customShowcase = parseCustomNumber(url.searchParams.get("showcase"));
 
     const [profile] = await db
       .select()

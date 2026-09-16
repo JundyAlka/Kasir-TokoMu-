@@ -564,7 +564,7 @@ export function ProfitLossReportDocument({
 
         {/* 3. RINCIAN PIUTANG TOKO (Daftar Kasbon Pelanggan - Sesuai Image 1) */}
         {debtors.length > 0 ? (
-          <View style={styles.section} wrap={false}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>3. Rincian Piutang Toko (Daftar Kasbon Pelanggan Belum Lunas)</Text>
             <View style={styles.table}>
               <View style={styles.tableHeader}>
@@ -593,7 +593,7 @@ export function ProfitLossReportDocument({
 
         {/* 4. RINCIAN CEK STOK BARANG DAGANGAN (HPP per Kategori - Sesuai Image 1) */}
         {stockCategories.length > 0 ? (
-          <View style={styles.section} wrap={false}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>4. Rincian Cek Stok Barang Dagangan (Nilai HPP per Bagian Rak)</Text>
             <View style={styles.table}>
               <View style={styles.tableHeader}>
@@ -624,7 +624,7 @@ export function ProfitLossReportDocument({
 
         {/* 5. RINCIAN HUTANG TOKO, KONSINYASI & MODAL INVESTASI */}
         {supplierDebts.length > 0 ? (
-          <View style={styles.section} wrap={false}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>5. Rincian Hutang Toko &amp; Titipan Konsinyasi</Text>
             <View style={styles.table}>
               <View style={styles.tableHeader}>
@@ -658,7 +658,7 @@ export function ProfitLossReportDocument({
 
         {/* 6. METRIK ARUS TRANSAKSI PENJUALAN */}
         {data.salesChannels && data.salesChannels.length > 0 ? (
-          <View style={styles.section} wrap={false}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>6. Distribusi Metode Pembayaran Penjualan</Text>
             <View style={styles.table}>
               <View style={styles.tableHeader}>
@@ -678,7 +678,7 @@ export function ProfitLossReportDocument({
         ) : null}
 
         {/* 7. DETAIL BEBAN PENGELUARAN */}
-        <View style={styles.section} wrap={false}>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>7. Rincian Detail Pengeluaran &amp; Beban Toko</Text>
           <View style={styles.table}>
             <View style={styles.tableHeader}>
@@ -725,7 +725,7 @@ export function ProfitLossReportDocument({
         </View>
 
         {/* 8. KINERJA PRODUK TERLARIS */}
-        <View style={styles.section} wrap={false}>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>8. Kinerja Produk Terlaris (Top Selling)</Text>
           <View style={styles.table}>
             <View style={styles.tableHeader}>
@@ -751,7 +751,7 @@ export function ProfitLossReportDocument({
 
         {/* 9. PEMBAGIAN HASIL INVESTOR */}
         {data.payouts && data.payouts.length > 0 ? (
-          <View style={styles.section} wrap={false}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>9. Pembagian Hasil Pemodal / Investor</Text>
             <View style={styles.table}>
               <View style={styles.tableHeader}>
@@ -773,7 +773,7 @@ export function ProfitLossReportDocument({
         ) : null}
 
         {/* 10. CATATAN PENGELOLA & PENGESAHAN */}
-        <View style={styles.section} wrap={false}>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>10. Catatan &amp; Analisis Pengelola Toko</Text>
           {data.ownerNotes.length > 0 ? (
             data.ownerNotes.map((note, index) => (

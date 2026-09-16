@@ -505,7 +505,7 @@ export async function saveManualClosing(
            $4, 'Buku Kas Harian', $5,
            'manual_closing', $6::timestamptz, $6::timestamptz
          )`,
-        [trxId, ownerId, revenue, actorUserId, sessionId, `${reportDate}T20:00:00.000Z`]
+        [trxId, ownerId, revenue, actorUserId, sessionId, `${reportDate}T12:00:00.000Z`]
       );
 
       await client.query(
