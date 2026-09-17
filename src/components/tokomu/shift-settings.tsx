@@ -159,7 +159,6 @@ export function ShiftSettings({ role }: { role: string }) {
     setSavingReminder(true);
     try {
       await updateSettings({
-        ...settings,
         shiftCloseWarningMinutes: reminderMinutes,
       });
       toast.success("Pengaturan waktu pengingat tutup buku berhasil disimpan.");

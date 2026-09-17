@@ -86,6 +86,11 @@ describe("products service", () => {
     expect(settings.enabledPayments).toEqual(["Tunai", "QRIS"]);
     expect(settings.stockAlertThreshold).toBe(2);
 
+    const updatedReminder = await updateStoreSettings(WORKSPACE_ID, {
+      shiftCloseWarningMinutes: 45,
+    });
+    expect(updatedReminder.shiftCloseWarningMinutes).toBe(45);
+
     const resetState = await resetWorkspace(WORKSPACE_ID);
     expect(resetState.products).toEqual([]);
     expect(resetState.settings.storeName).toBe("Warung Baru");

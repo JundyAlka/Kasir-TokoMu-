@@ -141,12 +141,35 @@ export const SettingsUpdateSchema = z
     pcmChairmanTitle: optionalText,
     pcmAddress: optionalText,
     ownerName: requiredText("Nama pemilik"),
-    ownerWhatsapp: requiredText("WhatsApp pemilik").min(10, "WhatsApp pemilik minimal 10 karakter."),
+    ownerWhatsapp: z
+      .string()
+      .trim()
+      .refine((val) => val === "" || val === "-" || val.length >= 10, {
+        message: "WhatsApp pemilik minimal 10 karakter.",
+      })
+      .default("-"),
     city: requiredText("Kota"),
     businessNotes: optionalText,
-    stockAlertThreshold: positiveInteger("Batas stok menipis"),
-    profitSharePcmPct: percentage("Persentase PCM"),
-    profitShareReservePct: percentage("Persentase cadangan"),
+    stockAlertThreshold: z
+      .coerce
+      .number()
+      .int("Batas stok menipis harus bilangan bulat.")
+      .min(0, "Batas stok menipis tidak boleh negatif.")
+      .default(5),
+    profitSharePcmPct: z
+      .coerce
+      .number()
+      .int("Persentase PCM harus bilangan bulat.")
+      .min(0, "Persentase PCM minimal 0.")
+      .max(100, "Persentase PCM maksimal 100.")
+      .default(30),
+    profitShareReservePct: z
+      .coerce
+      .number()
+      .int("Persentase cadangan harus bilangan bulat.")
+      .min(0, "Persentase cadangan minimal 0.")
+      .max(100, "Persentase cadangan maksimal 100.")
+      .default(20),
     enabledPayments: z
       .array(z.enum(paymentMethods))
       .min(1, "Pilih minimal satu metode bayar.")
@@ -154,9 +177,16 @@ export const SettingsUpdateSchema = z
     qrisPayload: optionalText,
     qrisImageUrl: optionalText,
     bankTransferInfo: optionalText,
-    shiftCloseWarningMinutes: positiveInteger("Peringatan tutup buku shift").default(30),
-  })
-  .strict();
+    shiftCloseWarningMinutes: z
+      .coerce
+      .number()
+      .int("Peringatan tutup buku shift harus bilangan bulat.")
+      .min(1, "Peringatan tutup buku shift minimal 1 menit.")
+      .max(180, "Peringatan tutup buku shift maksimal 180 menit.")
+      .default(30),
+  });
+
+export const SettingsPartialSchema = SettingsUpdateSchema.partial();
 
 export const ExpenseCreateSchema = z
   .object({

@@ -793,15 +793,20 @@ export function KasirView() {
 
   const shiftRemainingCalc = useMemo(() => {
     void nowTick;
+    // Peringatan tutup buku HANYA berlaku jika sesi shift sedang aktif/terbuka!
+    if (!hasOpenShift || !currentShiftInfo?.session) {
+      return null;
+    }
+
     const targetEndTime =
-      currentShiftInfo?.session?.shiftEndTime ||
-      currentShiftInfo?.activeShift?.endTime;
+      currentShiftInfo.session.shiftEndTime ||
+      currentShiftInfo.activeShift?.endTime;
     const targetStartTime =
-      currentShiftInfo?.session?.shiftStartTime ||
-      currentShiftInfo?.activeShift?.startTime;
+      currentShiftInfo.session.shiftStartTime ||
+      currentShiftInfo.activeShift?.startTime;
     const shiftName =
-      currentShiftInfo?.session?.shiftName ||
-      currentShiftInfo?.activeShift?.name ||
+      currentShiftInfo.session.shiftName ||
+      currentShiftInfo.activeShift?.name ||
       "Shift Kasir";
 
     if (!targetEndTime) return null;
@@ -848,7 +853,7 @@ export function KasirView() {
     } catch {
       return null;
     }
-  }, [currentShiftInfo, nowTick, settings.shiftCloseWarningMinutes]);
+  }, [hasOpenShift, currentShiftInfo, nowTick, settings.shiftCloseWarningMinutes]);
 
   useEffect(() => {
     void refreshShiftGate();

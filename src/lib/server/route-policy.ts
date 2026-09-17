@@ -58,7 +58,7 @@ export const routePolicy: Record<string, RoutePolicy> = {
   "/api/restock/history": { GET: ALL_ROLES },
   "/api/restock-plans": { GET: ALL_ROLES, POST: ALL_ROLES, PATCH: ALL_ROLES },
   "/api/session/[intent]": { POST: "public" },
-  "/api/settings": { PUT: LEADERSHIP_ONLY },
+  "/api/settings": { PUT: LEADERSHIP_ONLY, PATCH: FINANCE_ROLES },
   "/api/shift-sessions": { GET: ALL_ROLES, POST: ALL_ROLES },
   "/api/shift-sessions/[id]/close": { POST: ALL_ROLES },
   "/api/shifts": { GET: ALL_ROLES, POST: LEADERSHIP_ONLY },

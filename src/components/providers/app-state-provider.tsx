@@ -31,7 +31,7 @@ type AppStateContextValue = AppState & {
   addDebt: (draft: DebtDraft) => Promise<void>;
   markDebtPaid: (debtId: string) => Promise<void>;
   sendDebtReminder: (debtId: string) => Promise<Debt | null>;
-  updateSettings: (settings: Settings) => Promise<void>;
+  updateSettings: (settings: Partial<Settings>) => Promise<void>;
   resetWorkspace: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
   retryWorkspace: () => void;
@@ -416,9 +416,9 @@ export function AppStateProvider({
     return response.debt;
   }
 
-  async function updateSettings(settings: Settings) {
+  async function updateSettings(settings: Partial<Settings>) {
     const response = await requestJson<{ settings: Settings }>("/api/settings", {
-      method: "PUT",
+      method: "PATCH",
       body: JSON.stringify(settings),
     });
 

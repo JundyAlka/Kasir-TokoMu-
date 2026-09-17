@@ -1124,20 +1124,48 @@ export async function remindDebt(userId: string, debtId: string) {
 
 
 
-export async function updateStoreSettings(userId: string, settings: Settings) {
-  const nextSettings = normalizeSettings(SettingsUpdateSchema.parse(settings));
+export async function getStoreSettings(userId: string): Promise<Settings> {
+  await ensureAppReady();
+  const [profile] = await db
+    .select()
+    .from(storeProfiles)
+    .where(eq(storeProfiles.userId, userId))
+    .limit(1);
 
-  if (
-    nextSettings.storeName.length === 0 ||
-    nextSettings.storeAddress.length === 0 ||
-    nextSettings.ownerName.length === 0 ||
-    nextSettings.ownerWhatsapp.length < 10 ||
-    nextSettings.city.length === 0 ||
-    nextSettings.enabledPayments.length === 0
-  ) {
-    throw new Error(
-      "Lengkapi nama warung, alamat, pemilik, WhatsApp, kota, dan pilih minimal satu metode bayar."
-    );
+  if (!profile) {
+    throw new Error("Pengaturan warung tidak ditemukan.");
+  }
+
+  return mapSettings(profile);
+}
+
+export async function updateStoreSettings(userId: string, settings: Partial<Settings>) {
+  await ensureAppReady();
+  const current = await getStoreSettings(userId);
+  const merged = {
+    ...current,
+    ...settings,
+  };
+  const nextSettings = normalizeSettings(SettingsUpdateSchema.parse(merged));
+
+  const isFullUpdate =
+    settings.storeName !== undefined ||
+    settings.storeAddress !== undefined ||
+    settings.ownerName !== undefined;
+
+  if (isFullUpdate) {
+    if (
+      nextSettings.storeName.length === 0 ||
+      nextSettings.storeAddress.length === 0 ||
+      nextSettings.ownerName.length === 0 ||
+      (nextSettings.ownerWhatsapp !== "-" && nextSettings.ownerWhatsapp.length > 0 && nextSettings.ownerWhatsapp.length < 10) ||
+      nextSettings.city.length === 0 ||
+      nextSettings.enabledPayments.length === 0
+    ) {
+      throw new Error(
+        "Lengkapi nama warung, alamat, pemilik, WhatsApp, kota, dan pilih minimal satu metode bayar."
+      );
+    }
   }
 
   const [updated] = await db
