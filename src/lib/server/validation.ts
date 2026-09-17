@@ -50,6 +50,7 @@ export const TransactionCheckoutSchema = z
   .object({
     paymentMethod: z.enum(paymentMethods),
     paidAmount: nonNegativeInteger("Uang dibayarkan").optional(),
+    externalRef: z.string().trim().optional().nullable(),
     items: z
       .array(
         z
@@ -153,6 +154,7 @@ export const SettingsUpdateSchema = z
     qrisPayload: optionalText,
     qrisImageUrl: optionalText,
     bankTransferInfo: optionalText,
+    shiftCloseWarningMinutes: positiveInteger("Peringatan tutup buku shift").default(30),
   })
   .strict();
 

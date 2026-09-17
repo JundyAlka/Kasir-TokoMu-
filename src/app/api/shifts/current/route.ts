@@ -26,6 +26,8 @@ export async function GET() {
         cashierUserId: openSession.cashierUserId,
         cashierName: openSession.cashierName,
         startedAt: openSession.startedAt,
+        shiftStartTime: openSession.shiftStartTime,
+        shiftEndTime: openSession.shiftEndTime,
       } : null,
       activeShift,
       recordedBy: session ? recordedBy : null,

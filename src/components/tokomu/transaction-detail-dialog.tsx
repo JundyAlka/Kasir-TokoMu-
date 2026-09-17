@@ -1,6 +1,9 @@
 "use client";
 
-import { CalendarClock, CreditCard, ReceiptText, UserRoundCheck } from "lucide-react";
+import { useState } from "react";
+import { CalendarClock, CreditCard, Loader2, ReceiptText, Trash2, UserRoundCheck } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +18,9 @@ import { cn } from "@/lib/utils";
 
 type TransactionDetailDialogProps = {
   canViewProfit?: boolean;
+  canDelete?: boolean;
   onClose: () => void;
+  onDelete?: (transactionId: string) => Promise<void>;
   transaction: Transaction | null;
 };
 
@@ -46,9 +51,14 @@ function SummaryRow({
 
 export function TransactionDetailDialog({
   canViewProfit = false,
+  canDelete = false,
   onClose,
+  onDelete,
   transaction,
 }: TransactionDetailDialogProps) {
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const itemCount = transaction?.items.length ?? 0;
   const totalQty =
     transaction?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
@@ -65,11 +75,16 @@ export function TransactionDetailDialog({
   const averagePerItem =
     transaction && totalQty > 0 ? transaction.total / totalQty : 0;
 
+  function handleDialogClose() {
+    setIsConfirmingDelete(false);
+    onClose();
+  }
+
   return (
     <Dialog
       open={transaction !== null}
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (!open) handleDialogClose();
       }}
     >
       <DialogContent className="sm:max-w-lg">
@@ -83,7 +98,7 @@ export function TransactionDetailDialog({
             </DialogHeader>
 
             <ScrollArea
-              className="max-h-[64vh] pr-3"
+              className="max-h-[60vh] pr-3"
               scrollBarClassName="data-vertical:w-1.5 data-vertical:border-l-0 data-vertical:px-0"
             >
               <div className="space-y-4 pr-4">
@@ -205,6 +220,76 @@ export function TransactionDetailDialog({
                 </div>
               </div>
             </ScrollArea>
+
+            {canDelete ? (
+              <div className="pt-3 border-t border-border/60">
+                {isConfirmingDelete ? (
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-destructive">
+                      Hapus transaksi ini?
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Stok barang yang ada di transaksi ini akan otomatis dikembalikan ke inventaris, dan total penjualan akan disesuaikan kembali.
+                    </p>
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-lg text-xs"
+                        disabled={isDeleting}
+                        onClick={() => setIsConfirmingDelete(false)}
+                      >
+                        Batal
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="h-8 rounded-lg text-xs"
+                        disabled={isDeleting}
+                        onClick={async () => {
+                          if (!transaction || !onDelete) return;
+                          setIsDeleting(true);
+                          try {
+                            await onDelete(transaction.id);
+                            toast.success("Transaksi berhasil dihapus dan stok barang telah dikembalikan.");
+                            setIsConfirmingDelete(false);
+                            onClose();
+                          } catch (error) {
+                            toast.error(error instanceof Error ? error.message : "Gagal menghapus transaksi.");
+                          } finally {
+                            setIsDeleting(false);
+                          }
+                        }}
+                      >
+                        {isDeleting ? (
+                          <>
+                            <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                            Menghapus...
+                          </>
+                        ) : (
+                          "Ya, Hapus Transaksi"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive h-9 rounded-xl text-xs gap-1.5"
+                      onClick={() => setIsConfirmingDelete(true)}
+                    >
+                      <Trash2 className="size-3.5" />
+                      Hapus Transaksi (Pimpinan)
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </>
         ) : null}
       </DialogContent>

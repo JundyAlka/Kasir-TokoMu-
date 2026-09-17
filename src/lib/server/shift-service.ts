@@ -44,6 +44,8 @@ export type ShiftSessionSummary = {
   variance: number | null;
   varianceNote: string | null;
   status: "open" | "closed";
+  shiftStartTime?: string;
+  shiftEndTime?: string;
 };
 
 export type RecordedByResolution = {
@@ -159,6 +161,8 @@ function mapSession(row: {
   status: string;
   shiftName: string;
   cashierName: string;
+  shiftStartTime?: string | null;
+  shiftEndTime?: string | null;
 }): ShiftSessionSummary {
   const openingCash = numberValue(row.openingCash);
   const openingCoins = numberValue(row.openingCoins);
@@ -189,6 +193,8 @@ function mapSession(row: {
     variance: row.variance == null ? null : numberValue(row.variance),
     varianceNote: row.varianceNote,
     status: row.status === "closed" ? "closed" : "open",
+    shiftStartTime: row.shiftStartTime ?? undefined,
+    shiftEndTime: row.shiftEndTime ?? undefined,
   };
 }
 
@@ -200,12 +206,14 @@ async function sessionById(workspaceOwnerId: string, sessionId: string) {
     closingCash: number | string | null; closingCoins: number | string | null; closingSavings: number | string | null;
     expectedCash: number | string | null; expectedClosing: number | string | null; difference: number | string | null;
     variance: number | string | null; varianceNote: string | null; status: string; shiftName: string; cashierName: string;
+    shiftStartTime?: string | null; shiftEndTime?: string | null;
   }>(
     `select ss.id, ss.workspace_owner_id as "workspaceOwnerId", ss.shift_id as "shiftId", ss.cashier_user_id as "cashierUserId",
       ss.started_at as "startedAt", ss.ended_at as "endedAt", ss.opening_cash as "openingCash", ss.opening_coins as "openingCoins",
       ss.opening_savings as "openingSavings", ss.closing_cash as "closingCash", ss.closing_coins as "closingCoins",
       ss.closing_savings as "closingSavings", ss.expected_cash as "expectedCash", ss.expected_closing as "expectedClosing",
       ss.difference, ss.variance, ss.variance_note as "varianceNote", ss.status, s.name as "shiftName",
+      s.start_time as "shiftStartTime", s.end_time as "shiftEndTime",
       coalesce(u.name, u.email, 'Kasir') as "cashierName"
      from shift_sessions ss join shifts s on s.id = ss.shift_id
      left join "user" u on u.id = ss.cashier_user_id

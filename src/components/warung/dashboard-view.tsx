@@ -43,7 +43,7 @@ import { cn } from "@/lib/utils";
 
 export function DashboardView() {
   const currentRole = useCurrentRole();
-  const { debts, lowStockProducts, products, transactions, dataState, retryWorkspace } = useAppState();
+  const { debts, lowStockProducts, products, transactions, dataState, retryWorkspace, deleteTransaction } = useAppState();
   const todayRange = getJakartaDayRange();
 
   const todayTransactions = useMemo(() => {
@@ -83,6 +83,7 @@ export function DashboardView() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const canViewTransactionProfit = currentRole !== "kasir";
+  const isPimpinan = currentRole === "pimpinan";
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
@@ -604,6 +605,8 @@ export function DashboardView() {
 
       <TransactionDetailDialog
         canViewProfit={canViewTransactionProfit}
+        canDelete={isPimpinan}
+        onDelete={deleteTransaction}
         onClose={() => setSelectedTransaction(null)}
         transaction={selectedTransaction}
       />

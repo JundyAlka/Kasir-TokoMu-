@@ -3,7 +3,8 @@ import { calculatePeriodProfit } from "@/lib/server/profit-sharing";
 import { getJakartaDayRange, getJakartaMonthRange, getJakartaWeekRange } from "@/lib/server/timezone";
 
 export type DailyRollup = { reportDate: string; revenue: number; cogs: number; expenseTotal: number; grossProfit: number; netProfit: number; profitDistribution: number; transactionCount: number; status: "draft" | "locked" };
-export type DailyReportRollup = { periodStart: string; periodEnd: string; revenue: number; cogs: number; grossProfit: number; expenseTotal: number; netProfit: number; profitDistribution: number; transactionCount: number; averageTicket: number; dailyReports: DailyRollup[]; source: "daily_reports" | "live_transactions" };
+export type DailyTransactionSummary = { dateKey: string; revenue: number; transactionCount: number };
+export type DailyReportRollup = { periodStart: string; periodEnd: string; revenue: number; cogs: number; grossProfit: number; expenseTotal: number; netProfit: number; profitDistribution: number; transactionCount: number; averageTicket: number; dailyReports: DailyRollup[]; dailyTransactions?: DailyTransactionSummary[]; source: "daily_reports" | "live_transactions" };
 
 function number(value: unknown) { return Number(value ?? 0); }
 function dayRange(date: string) { return getJakartaDayRange(new Date(`${date}T12:00:00.000Z`)); }
@@ -27,14 +28,40 @@ export async function getDailyReportRollup(workspaceOwnerId: string, range: { st
   );
   const dailyReports: DailyRollup[] = result.rows.map((row) => ({ reportDate: String(row.reportDate), revenue: number(row.revenue), cogs: number(row.cogs), expenseTotal: number(row.expenseTotal), grossProfit: number(row.grossProfit), netProfit: number(row.netProfit), profitDistribution: number(row.profitDistribution), transactionCount: number(row.transactionCount), status: row.status === "locked" ? "locked" : "draft" }));
   const totals = dailyReports.reduce((sum, row) => ({ revenue: sum.revenue + row.revenue, cogs: sum.cogs + row.cogs, grossProfit: sum.grossProfit + row.grossProfit, expenseTotal: sum.expenseTotal + row.expenseTotal, netProfit: sum.netProfit + row.netProfit, profitDistribution: sum.profitDistribution + row.profitDistribution, transactionCount: sum.transactionCount + row.transactionCount }), { revenue: 0, cogs: 0, grossProfit: 0, expenseTotal: 0, netProfit: 0, profitDistribution: 0, transactionCount: 0 });
-  return { periodStart: range.start, periodEnd: range.end, ...totals, averageTicket: totals.transactionCount ? Math.round(totals.revenue / totals.transactionCount) : 0, dailyReports, source: "daily_reports" };
+  return { periodStart: range.start, periodEnd: range.end, ...totals, averageTicket: totals.transactionCount ? Math.round(totals.revenue / totals.transactionCount) : 0, dailyReports, dailyTransactions: [], source: "daily_reports" };
 }
 
 async function getLiveReportRollup(workspaceOwnerId: string, range: { start: string; end: string }): Promise<DailyReportRollup> {
-  const [summary, dailyRollup] = await Promise.all([
+  const [summary, dailyRollup, liveTransactions] = await Promise.all([
     calculatePeriodProfit(workspaceOwnerId, range.start, range.end),
     getDailyReportRollup(workspaceOwnerId, range),
+    pool.query<{ occurredAt: string; total: number }>(
+      `select occurred_at as "occurredAt", total
+       from transactions
+       where user_id = $1
+         and occurred_at >= $2::timestamptz
+         and occurred_at < $3::timestamptz
+       order by occurred_at asc`,
+      [workspaceOwnerId, range.start, range.end]
+    ),
   ]);
+
+  const dailyMap = new Map<string, { revenue: number; transactionCount: number }>();
+  for (const row of liveTransactions.rows) {
+    const key = jakartaDateKey(String(row.occurredAt));
+    const current = dailyMap.get(key) ?? { revenue: 0, transactionCount: 0 };
+    current.revenue += number(row.total);
+    current.transactionCount += 1;
+    dailyMap.set(key, current);
+  }
+
+  const dailyTransactions = Array.from(dailyMap.entries())
+    .map(([dateKey, val]) => ({
+      dateKey,
+      revenue: val.revenue,
+      transactionCount: val.transactionCount,
+    }))
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 
   const hasDaily = dailyRollup.dailyReports.length > 0;
   const revenue = Math.max(summary.revenue, dailyRollup.revenue);
@@ -57,6 +84,7 @@ async function getLiveReportRollup(workspaceOwnerId: string, range: { start: str
     transactionCount,
     averageTicket,
     dailyReports: dailyRollup.dailyReports,
+    dailyTransactions,
     source: hasDaily ? "daily_reports" : "live_transactions",
   };
 }

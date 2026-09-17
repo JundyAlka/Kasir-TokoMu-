@@ -141,6 +141,7 @@ async function main() {
   await runSql("shift_sessions: add needs_review", `ALTER TABLE "shift_sessions" ADD COLUMN IF NOT EXISTS "needs_review" boolean DEFAULT false NOT NULL;`);
 
   await runSql("store_profiles: add pcm_chairman_title", `ALTER TABLE "store_profiles" ADD COLUMN IF NOT EXISTS "pcm_chairman_title" text DEFAULT 'Ketua PCM' NOT NULL;`);
+  await runSql("store_profiles: add shift_close_warning_minutes", `ALTER TABLE "store_profiles" ADD COLUMN IF NOT EXISTS "shift_close_warning_minutes" integer DEFAULT 30 NOT NULL;`);
 
   await runSql("transaction_items: drop not null product_id", `ALTER TABLE "transaction_items" ALTER COLUMN "product_id" DROP NOT NULL;`);
   await runSql("transaction_items: add is_adjustment", `ALTER TABLE "transaction_items" ADD COLUMN IF NOT EXISTS "is_adjustment" boolean DEFAULT false NOT NULL;`);

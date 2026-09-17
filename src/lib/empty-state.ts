@@ -26,5 +26,6 @@ export const emptyAppState: AppState = {
     qrisPayload: "",
     qrisImageUrl: "",
     bankTransferInfo: "",
+    shiftCloseWarningMinutes: 30,
   },
 };

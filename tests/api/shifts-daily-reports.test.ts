@@ -236,4 +236,71 @@ describe("shifts and daily reports API", () => {
     }));
     expect(response.status).toBe(404);
   });
+
+  it("exposes shiftStartTime and shiftEndTime in current shift session", async () => {
+    const { pool } = await setupTestDb({ role: "kasir" });
+    await pool.query(
+      `insert into shifts (id, workspace_owner_id, name, start_time, end_time, is_active, created_at)
+       values ('shift_timed', $1, 'Shift Pagi', '07:00', '13:30', 1, $2)`,
+      [WORKSPACE_ID, OPENED_AT]
+    );
+    const { POST: open } = await import("@/app/api/shifts/open/route");
+    const { GET: current } = await import("@/app/api/shifts/current/route");
+
+    await open(
+      new NextRequest("http://localhost/api/shifts/open", {
+        method: "POST",
+        body: JSON.stringify({
+          shiftId: "shift_timed",
+          openingCash: 50000,
+          openingCoins: 0,
+          openingSavings: 0,
+        }),
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    const currentResponse = await current();
+    expect(currentResponse.status).toBe(200);
+    const data = await currentResponse.json();
+    expect(data.session).toMatchObject({
+      shiftName: "Shift Pagi",
+      shiftStartTime: "07:00",
+      shiftEndTime: "13:30",
+    });
+    expect(data.openSessionInfo).toMatchObject({
+      shiftStartTime: "07:00",
+      shiftEndTime: "13:30",
+    });
+  });
+
+  it("updates and stores shiftCloseWarningMinutes via store settings", async () => {
+    await setupTestDb({ role: "pimpinan" });
+    const { PUT: updateSettings } = await import("@/app/api/settings/route");
+
+    const res = await updateSettings(
+      new NextRequest("http://localhost/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          storeName: "TokoMu Sejahtera",
+          storeTagline: "Toko Berkah",
+          storeAddress: "Jl. Sudirman 10",
+          ownerName: "Pimpinan Toko",
+          ownerWhatsapp: "081234567890",
+          city: "Purworejo",
+          stockAlertThreshold: 5,
+          profitSharePcmPct: 30,
+          profitShareReservePct: 20,
+          enabledPayments: ["Tunai", "QRIS"],
+          shiftCloseWarningMinutes: 45,
+        }),
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.settings.shiftCloseWarningMinutes).toBe(45);
+  });
 });
+

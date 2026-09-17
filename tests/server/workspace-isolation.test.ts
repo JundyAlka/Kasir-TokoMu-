@@ -61,6 +61,7 @@ function applySchema(mem: TestDb) {
     `ALTER TABLE "store_profiles" ADD COLUMN "qris_payload" text DEFAULT '' NOT NULL`,
     `ALTER TABLE "store_profiles" ADD COLUMN "qris_image_url" text DEFAULT '' NOT NULL`,
     `ALTER TABLE "store_profiles" ADD COLUMN "bank_transfer_info" text DEFAULT '' NOT NULL`,
+    `ALTER TABLE "store_profiles" ADD COLUMN "shift_close_warning_minutes" integer DEFAULT 30 NOT NULL`,
   ]) {
     mem.public.none(stmt);
   }

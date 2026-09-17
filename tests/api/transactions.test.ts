@@ -141,4 +141,78 @@ describe("POS transactions", () => {
       shift_session_id: data.transaction.shiftSessionId,
     });
   });
+
+  it("handles idempotent checkout with externalRef without duplicating transactions or stock deduction", async () => {
+    const { pool } = await setupTestDb();
+    const { createTransaction } = await import("@/lib/server/app-service");
+
+    const idempotencyKey = "pos_test_dedup_123";
+    const firstCall = await createTransaction(WORKSPACE_ID, {
+      paymentMethod: "Tunai",
+      paidAmount: 10000,
+      externalRef: idempotencyKey,
+      items: [{ productId: "prd_kopi", quantity: 2 }],
+    });
+
+    const secondCall = await createTransaction(WORKSPACE_ID, {
+      paymentMethod: "Tunai",
+      paidAmount: 10000,
+      externalRef: idempotencyKey,
+      items: [{ productId: "prd_kopi", quantity: 2 }],
+    });
+
+    expect(secondCall.transaction.id).toBe(firstCall.transaction.id);
+    expect(secondCall.transaction.externalRef).toBe(idempotencyKey);
+
+    // Stock was 20 initially, reduced by 2 once = 18. Must NOT be 16.
+    const stock = await pool.query("select stock from products where id = 'prd_kopi'");
+    expect(stock.rows[0].stock).toBe(18);
+
+    // Transactions count for this externalRef must be exactly 1
+    const trxCount = await pool.query("select count(*) from transactions where external_ref = $1", [idempotencyKey]);
+    expect(Number(trxCount.rows[0].count)).toBe(1);
+  });
+
+  it("allows pimpinan to delete a transaction and restores product stock", async () => {
+    const { pool } = await setupTestDb();
+    const { createTransaction } = await import("@/lib/server/app-service");
+    const { DELETE } = await import("@/app/api/transactions/[id]/route");
+
+    // Initially stock is 20
+    const created = await createTransaction(WORKSPACE_ID, {
+      paymentMethod: "Tunai",
+      paidAmount: 10000,
+      items: [{ productId: "prd_kopi", quantity: 3 }],
+    });
+
+    // Stock after checkout should be 17
+    let stock = await pool.query("select stock from products where id = 'prd_kopi'");
+    expect(stock.rows[0].stock).toBe(17);
+
+    // Pimpinan deletes the transaction
+    const response = await DELETE(new NextRequest(`http://localhost/api/transactions/${created.transaction.id}`, { method: "DELETE" }), {
+      params: Promise.resolve({ id: created.transaction.id }),
+    });
+
+    expect(response.status).toBe(200);
+
+    // Transaction must no longer exist
+    const trxRow = await pool.query("select * from transactions where id = $1", [created.transaction.id]);
+    expect(trxRow.rows.length).toBe(0);
+
+    // Stock must be restored back to 20
+    stock = await pool.query("select stock from products where id = 'prd_kopi'");
+    expect(stock.rows[0].stock).toBe(20);
+  });
+
+  it("rejects non-pimpinan (kasir) from deleting a transaction", async () => {
+    const { pool } = await setupTestDb({ role: "kasir" });
+    const { DELETE } = await import("@/app/api/transactions/[id]/route");
+
+    const response = await DELETE(new NextRequest("http://localhost/api/transactions/trx_random", { method: "DELETE" }), {
+      params: Promise.resolve({ id: "trx_random" }),
+    });
+
+    expect(response.status).toBe(403);
+  });
 });

@@ -33,7 +33,7 @@ import {
   TransactionCheckoutSchema,
   ExpenseCreateSchema,
 } from "@/lib/server/validation";
-import { AppState, Debt, DebtDetail, DebtDraft, ExpenseDraft, PaymentMethod, ProductDraft, Settings, Transaction } from "@/lib/types";
+import { AppState, Debt, DebtDetail, DebtDraft, ExpenseDraft, PaymentMethod, Product, ProductDraft, Settings, Transaction } from "@/lib/types";
 import { getJakartaDayRange } from "@/lib/server/timezone";
 import { notFoundError } from "@/lib/server/route-error";
 import { getOpenSession } from "@/lib/server/shift-service";
@@ -144,6 +144,7 @@ async function ensureWorkspace(userId: string, session?: SessionHint) {
         qrisPayload: "",
         qrisImageUrl: "",
         bankTransferInfo: "",
+        shiftCloseWarningMinutes: 30,
         createdAt: timestamp,
         updatedAt: timestamp,
       });
@@ -266,6 +267,7 @@ function mapSettings(profile: typeof storeProfiles.$inferSelect): Settings {
     qrisPayload: profile.qrisPayload,
     qrisImageUrl: profile.qrisImageUrl,
     bankTransferInfo: profile.bankTransferInfo,
+    shiftCloseWarningMinutes: profile.shiftCloseWarningMinutes ?? 30,
   };
 }
 
@@ -297,6 +299,31 @@ function normalizeSettings(settings: Settings): Settings {
     qrisPayload: settings.qrisPayload.trim(),
     qrisImageUrl: settings.qrisImageUrl.trim(),
     bankTransferInfo: settings.bankTransferInfo.trim(),
+    shiftCloseWarningMinutes: Math.max(1, Math.min(180, Math.round(Number(settings.shiftCloseWarningMinutes) || 30))),
+  };
+}
+
+function mapProduct(product: {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  buyPrice: number;
+  sellPrice: number;
+  stock: number;
+  minimumStock: number;
+  description: string;
+}): Product {
+  return {
+    id: product.id,
+    sku: product.sku,
+    name: product.name,
+    category: product.category as Product["category"],
+    buyPrice: product.buyPrice,
+    sellPrice: product.sellPrice,
+    stock: product.stock,
+    minimumStock: product.minimumStock,
+    description: product.description,
   };
 }
 
@@ -305,20 +332,21 @@ export async function getBootstrapState(userId: string): Promise<AppState> {
 
   const q = createScopedQuery(userId);
 
-  const profile = await q.storeProfile();
+  // Parallelize initial queries to significantly speed up app bootstrap and product loading
+  const [profile, productRows, transactionRows, debtRows, expenseRows] = await Promise.all([
+    q.storeProfile(),
+    q.productList(),
+    q.transactionList(50),
+    q.debtList(),
+    q.expenseList(50),
+  ]);
+
   if (!profile) {
     throw new Error("Profil warung tidak ditemukan.");
   }
 
-  const productRows = await q.productList();
-  // Muat 50 transaksi terbaru untuk ringkasan cepat, memangkas payload bootstrap hingga >80%
-  const transactionRows = await q.transactionList(50);
-
   const transactionIds = transactionRows.map((transaction) => transaction.id);
   const itemRows = await q.transactionItemsForIds(transactionIds);
-
-  const debtRows = await q.debtList();
-  const expenseRows = await q.expenseList(50);
 
   const itemsByTransaction = new Map<string, Transaction["items"]>();
   for (const item of itemRows) {
@@ -334,17 +362,7 @@ export async function getBootstrapState(userId: string): Promise<AppState> {
   }
 
   return {
-    products: productRows.map((product) => ({
-      id: product.id,
-      sku: product.sku,
-      name: product.name,
-      category: product.category as AppState["products"][number]["category"],
-      buyPrice: product.buyPrice,
-      sellPrice: product.sellPrice,
-      stock: product.stock,
-      minimumStock: product.minimumStock,
-      description: product.description,
-    })),
+    products: productRows.map(mapProduct),
     cart: [],
     paymentMethod: (profile.enabledPayments[0] ?? "Tunai") as PaymentMethod,
     transactions: transactionRows.map((transaction) => ({
@@ -534,16 +552,63 @@ export async function createTransaction(
     recordedByUserId?: string;
     recordedByName?: string;
     shiftSessionId?: string | null;
+    externalRef?: string | null;
   }
 ) {
   const nextPayload = TransactionCheckoutSchema.parse({
     paymentMethod: payload.paymentMethod,
     paidAmount: payload.paidAmount,
     items: payload.items,
+    externalRef: payload.externalRef,
   });
 
   if (nextPayload.items.length === 0) {
     throw new Error("Keranjang masih kosong.");
+  }
+
+  const q = createScopedQuery(userId);
+
+  // Idempotency: If externalRef already exists for this user, return the existing transaction directly
+  if (nextPayload.externalRef) {
+    const existing = await db
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.userId, userId), eq(transactions.externalRef, nextPayload.externalRef)))
+      .limit(1);
+
+    if (existing.length > 0) {
+      const existingTrx = existing[0];
+      const existingItems = await db
+        .select()
+        .from(transactionItems)
+        .where(eq(transactionItems.transactionId, existingTrx.id));
+      const productRows = await q.productList();
+
+      return {
+        transaction: {
+          id: existingTrx.id,
+          paymentMethod: existingTrx.paymentMethod as PaymentMethod,
+          total: existingTrx.total,
+          paidAmount: existingTrx.paidAmount,
+          changeAmount: existingTrx.changeAmount,
+          createdAt: existingTrx.createdAt,
+          occurredAt: existingTrx.occurredAt,
+          entrySource: existingTrx.entrySource as Transaction["entrySource"],
+          externalRef: existingTrx.externalRef,
+          recordedByUserId: existingTrx.recordedByUserId || existingTrx.userId,
+          recordedByName: existingTrx.recordedByName || "",
+          shiftSessionId: existingTrx.shiftSessionId,
+          items: existingItems.map((item) => ({
+            productId: item.productId ?? "",
+            productName: item.productName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            costPrice: item.costPrice,
+          })),
+        },
+        products: productRows.map(mapProduct),
+      };
+    }
   }
 
   const productIds = nextPayload.items.map((item) => item.productId);
@@ -594,7 +659,7 @@ export async function createTransaction(
       createdAt,
       occurredAt: createdAt,
       entrySource: "pos",
-      externalRef: null,
+      externalRef: nextPayload.externalRef ?? null,
     });
 
     await tx.insert(transactionItems).values(
@@ -609,27 +674,105 @@ export async function createTransaction(
       }))
     );
 
-    for (const item of lineItems) {
-      await tx
-        .update(products)
-        .set({
-          stock: item.product.stock - item.quantity,
-          updatedAt: createdAt,
-        })
-        .where(and(eq(products.id, item.product.id), eq(products.userId, userId)));
-    }
+    // Parallelize stock updates in the transaction
+    await Promise.all(
+      lineItems.map((item) =>
+        tx
+          .update(products)
+          .set({
+            stock: item.product.stock - item.quantity,
+            updatedAt: createdAt,
+          })
+          .where(and(eq(products.id, item.product.id), eq(products.userId, userId)))
+      )
+    );
   });
 
-  const nextState = await getBootstrapState(userId);
-  const transaction = nextState.transactions.find((item) => item.id === transactionId);
+  // Fast direct response: fetch only updated products without heavy getBootstrapState
+  const updatedProductRows = await q.productList();
 
-  if (!transaction) {
-    throw new Error("Transaksi gagal dibuat.");
-  }
+  const transaction: Transaction = {
+    id: transactionId,
+    paymentMethod: nextPayload.paymentMethod,
+    total,
+    paidAmount,
+    changeAmount,
+    createdAt,
+    occurredAt: createdAt,
+    entrySource: "pos",
+    externalRef: nextPayload.externalRef ?? null,
+    recordedByUserId: payload.recordedByUserId ?? userId,
+    recordedByName: payload.recordedByName ?? "",
+    shiftSessionId: payload.shiftSessionId ?? null,
+    items: lineItems.map((item) => ({
+      productId: item.product.id,
+      productName: item.product.name,
+      quantity: item.quantity,
+      unitPrice: item.product.sellPrice,
+      costPrice: item.product.buyPrice,
+    })),
+  };
 
   return {
     transaction,
-    products: nextState.products,
+    products: updatedProductRows.map(mapProduct),
+  };
+}
+
+export async function deleteTransaction(workspaceOwnerId: string, transactionId: string) {
+  const [transactionRow] = await db
+    .select()
+    .from(transactions)
+    .where(and(eq(transactions.id, transactionId), eq(transactions.userId, workspaceOwnerId)));
+
+  if (!transactionRow) {
+    throw new Error("Transaksi tidak ditemukan.");
+  }
+
+  const items = await db
+    .select()
+    .from(transactionItems)
+    .where(eq(transactionItems.transactionId, transactionId));
+
+  const updatedAt = nowIso();
+
+  await db.transaction(async (tx) => {
+    // Restore product stock
+    await Promise.all(
+      items.map(async (item) => {
+        if (!item.productId) return;
+        const [prod] = await tx
+          .select({ stock: products.stock })
+          .from(products)
+          .where(and(eq(products.id, item.productId), eq(products.userId, workspaceOwnerId)));
+
+        if (prod) {
+          await tx
+            .update(products)
+            .set({
+              stock: prod.stock + item.quantity,
+              updatedAt,
+            })
+            .where(and(eq(products.id, item.productId), eq(products.userId, workspaceOwnerId)));
+        }
+      })
+    );
+
+    // Delete transaction items
+    await tx.delete(transactionItems).where(eq(transactionItems.transactionId, transactionId));
+
+    // Delete transaction
+    await tx
+      .delete(transactions)
+      .where(and(eq(transactions.id, transactionId), eq(transactions.userId, workspaceOwnerId)));
+  });
+
+  const q = createScopedQuery(workspaceOwnerId);
+  const updatedProductRows = await q.productList();
+
+  return {
+    deletedTransactionId: transactionId,
+    products: updatedProductRows.map(mapProduct),
   };
 }
 
@@ -1018,6 +1161,7 @@ export async function updateStoreSettings(userId: string, settings: Settings) {
       qrisPayload: nextSettings.qrisPayload,
       qrisImageUrl: nextSettings.qrisImageUrl,
       bankTransferInfo: nextSettings.bankTransferInfo,
+      shiftCloseWarningMinutes: nextSettings.shiftCloseWarningMinutes,
       updatedAt: nowIso(),
     })
     .where(eq(storeProfiles.userId, userId))
@@ -1063,6 +1207,7 @@ export async function resetWorkspace(userId: string) {
     profitSharePcmPct: 30,
     profitShareReservePct: 20,
     enabledPayments: ["Tunai", "QRIS", "Transfer"],
+    shiftCloseWarningMinutes: 30,
     createdAt: timestamp,
     updatedAt: timestamp,
   });

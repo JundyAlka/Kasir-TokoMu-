@@ -10,6 +10,7 @@ import {
   Coffee,
   Copy,
   CreditCard,
+  Loader2,
   Minus,
   PackageSearch,
   Plus,
@@ -20,6 +21,9 @@ import {
   ShoppingBasket,
   Smartphone,
   Sparkles,
+  BellRing,
+  CircleDollarSign,
+  Clock,
   UserRoundCheck,
   WalletCards,
   Wheat,
@@ -32,6 +36,7 @@ const ReceiptPrintDialog = dynamic(
   { ssr: false }
 );
 import { ShiftChangeBanner } from "@/components/tokomu/shift-change-banner";
+import { ShiftClosingDialog } from "@/components/tokomu/shift-closing-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -656,13 +661,47 @@ export function KasirView() {
   const [paymentInfoOpen, setPaymentInfoOpen] = useState(false);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null);
+  const [shiftClosingOpen, setShiftClosingOpen] = useState(false);
+  const [shiftWarningDismissed, setShiftWarningDismissed] = useState(false);
+  const [currentShiftInfo, setCurrentShiftInfo] = useState<{
+    session?: {
+      id: string;
+      shiftId: string;
+      shiftName: string;
+      cashierUserId: string;
+      cashierName: string;
+      startedAt: string;
+      shiftStartTime?: string;
+      shiftEndTime?: string;
+      openingTotal?: number;
+    } | null;
+    activeShift?: {
+      id: string;
+      name: string;
+      startTime: string;
+      endTime: string;
+    } | null;
+  } | null>(null);
+  const [nowTick, setNowTick] = useState(Date.now());
   const workspaceRef = useRef<HTMLDivElement>(null);
   const productColumnRef = useRef<HTMLDivElement>(null);
   const [workspaceWidth, setWorkspaceWidth] = useState(1024);
   const [productColumnWidth, setProductColumnWidth] = useState(800);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const cartLinesRef = useRef(cartLines);
   cartLinesRef.current = cartLines;
+
+  const focusAndSelectSearch = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (searchInputRef.current) {
+        searchInputRef.current.focus();
+        searchInputRef.current.select();
+      }
+    });
+  }, []);
 
   const handleAddToCart = useCallback((product: Product) => {
     const existingLine = cartLinesRef.current.find((line) => line.product.id === product.id);
@@ -677,7 +716,8 @@ export function KasirView() {
     toast.success(`${product.name} ditambahkan ke keranjang.`, {
       description: `Stok tersedia ${product.stock} pcs.`,
     });
-  }, [addToCart]);
+    focusAndSelectSearch();
+  }, [addToCart, focusAndSelectSearch]);
 
   const handleDetailProduct = useCallback((product: Product) => {
     setDetailProduct(product);
@@ -714,15 +754,101 @@ export function KasirView() {
   async function refreshShiftGate() {
     try {
       const response = await fetch("/api/shifts/current", { cache: "no-store" });
-      const data = await response.json().catch(() => null) as { session?: { id: string } | null } | null;
+      const data = (await response.json().catch(() => null)) as {
+        session?: {
+          id: string;
+          shiftId: string;
+          shiftName: string;
+          cashierUserId: string;
+          cashierName: string;
+          startedAt: string;
+          shiftStartTime?: string;
+          shiftEndTime?: string;
+          openingTotal?: number;
+        } | null;
+        activeShift?: {
+          id: string;
+          name: string;
+          startTime: string;
+          endTime: string;
+        } | null;
+      } | null;
       const isOpen = Boolean(response.ok && data?.session);
       setHasOpenShift(isOpen);
+      setCurrentShiftInfo(data ?? null);
       return isOpen;
     } catch {
       setHasOpenShift(false);
+      setCurrentShiftInfo(null);
       return false;
     }
   }
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowTick(Date.now());
+    }, 20000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const shiftRemainingCalc = useMemo(() => {
+    void nowTick;
+    const targetEndTime =
+      currentShiftInfo?.session?.shiftEndTime ||
+      currentShiftInfo?.activeShift?.endTime;
+    const targetStartTime =
+      currentShiftInfo?.session?.shiftStartTime ||
+      currentShiftInfo?.activeShift?.startTime;
+    const shiftName =
+      currentShiftInfo?.session?.shiftName ||
+      currentShiftInfo?.activeShift?.name ||
+      "Shift Kasir";
+
+    if (!targetEndTime) return null;
+
+    try {
+      const now = new Date();
+      const jakartaFormatter = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Jakarta",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      const [nowH, nowM] = jakartaFormatter.format(now).split(":").map(Number);
+      const nowMinutes = nowH * 60 + nowM;
+
+      const [endH, endM] = targetEndTime.split(":").map(Number);
+      const endMinutes = endH * 60 + endM;
+
+      const [startH, startM] = (targetStartTime || "00:00").split(":").map(Number);
+      const startMinutes = startH * 60 + startM;
+
+      let remaining = 0;
+      if (startMinutes <= endMinutes) {
+        remaining = endMinutes - nowMinutes;
+      } else {
+        if (nowMinutes >= startMinutes) {
+          remaining = endMinutes + 24 * 60 - nowMinutes;
+        } else {
+          remaining = endMinutes - nowMinutes;
+        }
+      }
+
+      const warningThreshold = settings.shiftCloseWarningMinutes || 30;
+      const isDue = remaining <= warningThreshold;
+      const isOverdue = remaining <= 0;
+
+      return {
+        shiftName,
+        endTime: targetEndTime,
+        remainingMinutes: remaining,
+        isDue,
+        isOverdue,
+      };
+    } catch {
+      return null;
+    }
+  }, [currentShiftInfo, nowTick, settings.shiftCloseWarningMinutes]);
 
   useEffect(() => {
     void refreshShiftGate();
@@ -774,13 +900,17 @@ export function KasirView() {
 
   const filteredProducts = useMemo(() => {
     const cleanQuery = deferredQuery.trim().toLowerCase();
+    const terms = cleanQuery ? cleanQuery.split(/\s+/).filter(Boolean) : [];
     return products.filter((product) => {
-      const queryMatch =
-        cleanQuery.length === 0 ||
-        product.name.toLowerCase().includes(cleanQuery) ||
-        product.description.toLowerCase().includes(cleanQuery);
-      const categoryMatch = category === "Semua" || product.category === category;
-      return queryMatch && categoryMatch;
+      if (category !== "Semua" && product.category !== category) {
+        return false;
+      }
+      if (terms.length === 0) {
+        return true;
+      }
+      const name = product.name.toLowerCase();
+      const desc = product.description ? product.description.toLowerCase() : "";
+      return terms.every((term) => name.includes(term) || desc.includes(term));
     });
   }, [products, deferredQuery, category]);
   const totalItems = cartLines.reduce((sum, line) => sum + line.quantity, 0);
@@ -807,8 +937,14 @@ export function KasirView() {
     cartLines.length > 0 && hasOpenShift === true && (!isCashPayment || (paidAmountInput.trim() !== "" && cashShortfall === 0));
 
   async function handleCheckout() {
+    if (isSubmittingRef.current) {
+      return;
+    }
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+
     try {
-      if (!(await refreshShiftGate())) {
+      if (hasOpenShift === false) {
         toast.error("Buka shift dulu sebelum mulai jualan.");
         return;
       }
@@ -868,6 +1004,7 @@ export function KasirView() {
       setLastTransaction(transaction);
       setReceiptOpen(true);
       setPaidAmountInput("");
+      setQuery("");
 
       if (lowProducts.length > 0) {
         toast.warning("Ada produk yang mendekati stok minimum.", {
@@ -875,7 +1012,16 @@ export function KasirView() {
         });
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal menyimpan transaksi.");
+      const msg = error instanceof Error ? error.message : "Gagal menyimpan transaksi.";
+      if (msg.includes("SHIFT_NOT_OPEN")) {
+        setHasOpenShift(false);
+        toast.error("Shift belum dibuka atau sudah ditutup.");
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
     }
   }
 
@@ -925,6 +1071,7 @@ export function KasirView() {
           toast.success(`${detailProduct.name} ditambahkan ke keranjang.`, {
             description: `Stok tersedia ${detailProduct.stock} pcs.`,
           });
+          focusAndSelectSearch();
         }}
       />
       <div ref={productColumnRef} className="min-w-0 min-h-0 flex flex-col overflow-hidden">
@@ -953,13 +1100,41 @@ export function KasirView() {
               )}
             >
               <div className={cn("relative", isProductHeaderCompact ? "w-full" : "min-w-[220px]")}>
-                <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  ref={searchInputRef}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
+                  onFocus={(event) => {
+                    event.currentTarget.select();
+                  }}
+                  onMouseUp={(event) => {
+                    if (event.currentTarget.value) {
+                      event.currentTarget.select();
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && filteredProducts.length > 0) {
+                      event.preventDefault();
+                      handleAddToCart(filteredProducts[0]);
+                    }
+                  }}
                   placeholder="Cari produk atau kategori"
-                  className="h-11 rounded-2xl border-border/80 bg-card/80 pl-9"
+                  className="h-11 rounded-2xl border-border/80 bg-card/80 pl-9 pr-9"
                 />
+                {query ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery("");
+                      searchInputRef.current?.focus();
+                    }}
+                    className="absolute top-1/2 right-2.5 -translate-y-1/2 p-1 text-muted-foreground transition-colors hover:text-foreground rounded-full"
+                    title="Hapus pencarian"
+                  >
+                    <X className="size-4" />
+                  </button>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
                 {categoryLabels.map((item) => (
@@ -1046,15 +1221,111 @@ export function KasirView() {
             !shouldStackCheckout && "sticky top-0"
           )}
         >
-          <CardHeader className="shrink-0">
-            <div className="flex items-center justify-between">
+          <CardHeader className="shrink-0 pb-3">
+            <div className="flex items-center justify-between gap-2">
               <div>
                 <CardTitle className="font-heading text-2xl">Keranjang aktif</CardTitle>
                 <CardDescription>Semua item yang sudah ditap akan muncul di sini.</CardDescription>
               </div>
-              <Badge className="rounded-full bg-foreground text-background">{cartLines.length} item</Badge>
+              <div className="flex items-center gap-2 shrink-0">
+                {shiftRemainingCalc?.isDue && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShiftWarningDismissed(false);
+                      setShiftClosingOpen(true);
+                    }}
+                    title="Klik untuk membuka dialog tutup buku shift"
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold transition-all shadow-sm cursor-pointer",
+                      shiftRemainingCalc.isOverdue
+                        ? "bg-red-500/15 text-red-700 dark:text-red-400 border border-red-500/30 animate-pulse hover:bg-red-500/25"
+                        : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25"
+                    )}
+                  >
+                    <CircleDollarSign className="size-3.5" />
+                    <span>
+                      {shiftRemainingCalc.isOverdue
+                        ? `Tutup Buku (${Math.abs(shiftRemainingCalc.remainingMinutes)}m lalu)`
+                        : `Tutup Buku (${shiftRemainingCalc.remainingMinutes}m)`}
+                    </span>
+                  </button>
+                )}
+                <Badge className="rounded-full bg-foreground text-background">{cartLines.length} item</Badge>
+              </div>
             </div>
           </CardHeader>
+
+          {shiftRemainingCalc?.isDue && !shiftWarningDismissed && (
+            <div className="mx-4 sm:mx-5 mb-2 rounded-2xl border border-amber-500/35 bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-amber-500/15 p-3.5 text-amber-950 dark:text-amber-100 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex items-start justify-between gap-2.5">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <div
+                    className={cn(
+                      "p-2 rounded-xl text-white shrink-0 mt-0.5 shadow-sm",
+                      shiftRemainingCalc.isOverdue ? "bg-red-600 animate-pulse" : "bg-amber-600"
+                    )}
+                  >
+                    <BellRing className="size-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-heading font-bold text-sm text-foreground">
+                        {shiftRemainingCalc.isOverdue
+                          ? "Shift Telah Berakhir — Tutup Buku"
+                          : "Pemberitahuan Tutup Buku Shift"}
+                      </p>
+                      <span
+                        className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
+                          shiftRemainingCalc.isOverdue
+                            ? "bg-red-500/20 text-red-700 dark:text-red-300"
+                            : "bg-amber-500/20 text-amber-800 dark:text-amber-200"
+                        )}
+                      >
+                        {shiftRemainingCalc.isOverdue
+                          ? `Lewat ${Math.abs(shiftRemainingCalc.remainingMinutes)} Menit`
+                          : `Sisa ${shiftRemainingCalc.remainingMinutes} Menit`}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      {shiftRemainingCalc.isOverdue
+                        ? `Shift ${shiftRemainingCalc.shiftName} selesai pkl ${shiftRemainingCalc.endTime}. Harap segera lakukan tutup buku dan rekonsiliasi uang kas fisik.`
+                        : `Shift ${shiftRemainingCalc.shiftName} akan berakhir pkl ${shiftRemainingCalc.endTime}. Mohon persiapkan rekonsiliasi kas dan tutup buku.`}
+                    </p>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setShiftClosingOpen(true)}
+                        className="h-8 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs px-3.5 shadow-sm cursor-pointer"
+                      >
+                        <CircleDollarSign className="size-3.5 mr-1" />
+                        Tutup Buku Sekarang
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShiftWarningDismissed(true)}
+                        className="h-8 rounded-xl text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                      >
+                        Tutup Sementara
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShiftWarningDismissed(true)}
+                  className="text-muted-foreground hover:text-foreground p-1 rounded-lg transition-colors cursor-pointer shrink-0"
+                  title="Sembunyikan peringatan"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            </div>
+          )}
           <CardContent className="flex-1 flex flex-col p-0 min-h-0 overflow-hidden">
             {/* Scrollable middle: cart items + payment options */}
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 sm:space-y-4 p-4 sm:p-5 min-h-0">
@@ -1232,17 +1503,30 @@ export function KasirView() {
               <Button
                 type="button"
                 size="lg"
-                className="mt-2 sm:mt-3 h-10 sm:h-11 lg:h-12 w-full rounded-xl lg:rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-sm sm:text-base shadow-md"
-                disabled={!canCheckout}
+                className="mt-2 sm:mt-3 h-10 sm:h-11 lg:h-12 w-full rounded-xl lg:rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-sm sm:text-base shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={!canCheckout || isSubmitting}
                 onClick={() => void handleCheckout()}
               >
-                Selesaikan transaksi
+                {isSubmitting ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <Loader2 className="size-4 sm:size-5 animate-spin" />
+                    Memproses transaksi...
+                  </span>
+                ) : (
+                  "Selesaikan transaksi"
+                )}
               </Button>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <ShiftClosingDialog
+        open={shiftClosingOpen}
+        onOpenChange={setShiftClosingOpen}
+        onClosed={() => void refreshShiftGate()}
+      />
     </div>
   );
 }

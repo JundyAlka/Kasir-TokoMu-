@@ -251,20 +251,32 @@ function buildTrendSeries(
   range: TrendRange,
   weekNumber: number,
   transactions: Array<{ occurredAt: string; total: number }>,
-  dailyReports?: Array<{ reportDate: string; revenue: number; transactionCount?: number }>
+  dailyReports?: Array<{ reportDate: string; revenue: number; transactionCount?: number }>,
+  dailyTransactions?: Array<{ dateKey: string; revenue: number; transactionCount: number }>
 ) {
   const keys = getTrendKeys(period, range, weekNumber);
   const values = new Map(keys.map((key) => [key, { revenue: 0, transactions: 0 }]));
 
-  for (const transaction of transactions) {
-    const key = getJakartaDateKey(transaction.occurredAt);
-    const current = values.get(key);
-    if (!current) {
-      continue;
+  // Prioritize actual full-period daily transaction rollup from database
+  if (dailyTransactions && dailyTransactions.length > 0) {
+    for (const dt of dailyTransactions) {
+      const current = values.get(dt.dateKey);
+      if (current) {
+        current.revenue = dt.revenue;
+        current.transactions = dt.transactionCount;
+      }
     }
+  } else {
+    for (const transaction of transactions) {
+      const key = getJakartaDateKey(transaction.occurredAt);
+      const current = values.get(key);
+      if (!current) {
+        continue;
+      }
 
-    current.revenue += transaction.total;
-    current.transactions += 1;
+      current.revenue += transaction.total;
+      current.transactions += 1;
+    }
   }
 
   if (dailyReports && dailyReports.length > 0) {
@@ -323,14 +335,30 @@ function buildLinePath(points: Array<{ x: number; y: number }>) {
     const previousPoint = points[index];
     const beforePreviousPoint = points[index - 1] ?? previousPoint;
     const nextPoint = points[index + 2] ?? point;
-    const tension = 0.18;
+    const tension = 0.15;
+
+    let cpAy = previousPoint.y + (point.y - beforePreviousPoint.y) * tension;
+    let cpBy = point.y - (nextPoint.y - previousPoint.y) * tension;
+
+    // Prevent curve from dipping below baseline (y=88) or jumping wildly
+    if (Math.abs(previousPoint.y - 88) < 0.1 && Math.abs(point.y - 88) < 0.1) {
+      cpAy = 88;
+      cpBy = 88;
+    } else {
+      const minY = Math.min(previousPoint.y, point.y);
+      cpAy = Math.min(88, Math.max(minY - 4, cpAy));
+      cpBy = Math.min(88, Math.max(minY - 4, cpBy));
+      if (point.y >= 87.9) cpBy = 88;
+      if (previousPoint.y >= 87.9) cpAy = 88;
+    }
+
     const controlPointA = {
       x: previousPoint.x + (point.x - beforePreviousPoint.x) * tension,
-      y: previousPoint.y + (point.y - beforePreviousPoint.y) * tension,
+      y: cpAy,
     };
     const controlPointB = {
       x: point.x - (nextPoint.x - previousPoint.x) * tension,
-      y: point.y - (nextPoint.y - previousPoint.y) * tension,
+      y: cpBy,
     };
 
     commands.push(
@@ -365,7 +393,7 @@ function TrendRevenueChart({
   const lastX = chartPoints.at(-1)?.x ?? 95;
   const areaPath =
     chartPoints.length > 0
-      ? `${linePath} L ${lastX} 95 L ${firstX} 95 Z`
+      ? `${linePath} L ${lastX} 88 L ${firstX} 88 Z`
       : "";
 
   const peakRevenue = Math.max(...chartPoints.map((point) => point.revenue), 0);
@@ -1549,8 +1577,8 @@ export function LaporanView() {
     year: "numeric",
   }).format(new Date(`${period}-01T00:00:00`));
   const trendSeries = useMemo(
-    () => buildTrendSeries(period, trendRange, selectedTrendWeek, transactions, summary.dailyReports),
-    [period, transactions, trendRange, selectedTrendWeek, summary.dailyReports]
+    () => buildTrendSeries(period, trendRange, selectedTrendWeek, transactions, summary.dailyReports, summary.dailyTransactions),
+    [period, transactions, trendRange, selectedTrendWeek, summary.dailyReports, summary.dailyTransactions]
   );
   const trendTotal = trendSeries.reduce((sum, item) => sum + item.revenue, 0);
   const trendTransactionCount = trendSeries.reduce((sum, item) => sum + item.transactions, 0);

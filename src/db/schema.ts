@@ -22,6 +22,7 @@ export const storeProfiles = pgTable("store_profiles", {
   qrisPayload: text("qris_payload").notNull().default(""),
   qrisImageUrl: text("qris_image_url").notNull().default(""),
   bankTransferInfo: text("bank_transfer_info").notNull().default(""),
+  shiftCloseWarningMinutes: integer("shift_close_warning_minutes").notNull().default(30),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull(),
 });

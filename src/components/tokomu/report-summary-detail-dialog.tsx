@@ -38,6 +38,11 @@ export type ProfitLossSummary = {
     transactionCount?: number;
     status?: "draft" | "locked";
   }>;
+  dailyTransactions?: Array<{
+    dateKey: string;
+    revenue: number;
+    transactionCount: number;
+  }>;
 };
 
 type ReportSummaryDetailDialogProps = {

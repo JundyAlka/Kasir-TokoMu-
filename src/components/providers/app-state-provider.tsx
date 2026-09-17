@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { emptyAppState } from "@/lib/empty-state";
@@ -21,7 +21,8 @@ type AppStateContextValue = AppState & {
   updateCartQuantity: (productId: string, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
-  checkout: (paidAmount?: number) => Promise<Transaction | null>;
+  checkout: (paidAmount?: number, idempotencyKey?: string) => Promise<Transaction | null>;
+  deleteTransaction: (transactionId: string) => Promise<void>;
   addProduct: (draft: ProductDraft) => Promise<Product>;
   updateProduct: (productId: string, draft: ProductDraft) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
@@ -71,6 +72,7 @@ export function AppStateProvider({
   const [dataState, setDataState] = useState<"loading" | "ready" | "error">("loading");
   const { data: session, isPending } = useSession();
   const sessionUserId = session?.user?.id ?? null;
+  const isCheckingOutRef = useRef(false);
 
   const loadWorkspace = useCallback(async (isRetry = false) => {
     setDataState("loading");
@@ -237,35 +239,68 @@ export function AppStateProvider({
     }));
   }, []);
 
-  async function checkout(paidAmount?: number) {
+  async function checkout(paidAmount?: number, idempotencyKey?: string) {
     if (state.cart.length === 0) {
       return null;
     }
 
+    if (isCheckingOutRef.current) {
+      return null;
+    }
+    isCheckingOutRef.current = true;
+
+    try {
+      const clientRef =
+        idempotencyKey ||
+        `pos_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+      const response = await requestJson<{
+        transaction: Transaction;
+        products: Product[];
+      }>("/api/transactions", {
+        method: "POST",
+        body: JSON.stringify({
+          paymentMethod: state.paymentMethod,
+          paidAmount,
+          externalRef: clientRef,
+          items: state.cart.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+        }),
+      });
+
+      setState((current) => ({
+        ...current,
+        cart: [],
+        transactions: [response.transaction, ...current.transactions.filter((t) => t.id !== response.transaction.id)],
+        products: response.products,
+      }));
+
+      const transaction = response.transaction;
+      return transaction;
+    } finally {
+      isCheckingOutRef.current = false;
+    }
+  }
+
+  async function deleteTransaction(transactionId: string) {
     const response = await requestJson<{
-      transaction: Transaction;
+      deletedTransactionId: string;
       products: Product[];
-    }>("/api/transactions", {
-      method: "POST",
-      body: JSON.stringify({
-        paymentMethod: state.paymentMethod,
-        paidAmount,
-        items: state.cart.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-        })),
-      }),
+    }>(`/api/transactions/${transactionId}`, {
+      method: "DELETE",
     });
 
     setState((current) => ({
       ...current,
-      cart: [],
-      transactions: [response.transaction, ...current.transactions],
+      transactions: current.transactions.filter((t) => t.id !== transactionId),
       products: response.products,
     }));
 
-    const transaction = response.transaction;
-    return transaction;
+    window.dispatchEvent(new CustomEvent("pcm-reports-updated", { detail: { action: "transaction_deleted" } }));
+    window.dispatchEvent(new CustomEvent("cashier-shift-updated"));
+    window.dispatchEvent(new CustomEvent("tokomu-daily-closing-updated"));
   }
 
   async function addProduct(draft: ProductDraft) {
@@ -426,6 +461,7 @@ export function AppStateProvider({
         removeFromCart,
         setPaymentMethod,
         checkout,
+        deleteTransaction,
         addProduct,
         updateProduct,
         deleteProduct,

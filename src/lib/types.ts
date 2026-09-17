@@ -114,6 +114,7 @@ export interface Settings {
   qrisPayload: string;
   qrisImageUrl: string;
   bankTransferInfo: string;
+  shiftCloseWarningMinutes: number;
 }
 
 export interface AppState {
