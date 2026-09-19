@@ -1,12 +1,14 @@
 import pg from "pg";
+import { getPoolConfig } from "./db-ssl-helper.mjs";
+
 const { Pool } = pg;
 
-const connectionString = "postgresql://postgres:7a3487df62b84e9a4f03c459bc530e56@ehtm9kdz.ap-southeast.database.insforge.app:5432/insforge?sslmode=require&uselibpqcompat=true";
+const connectionString =
+  process.env.DATABASE_URL ||
+  "postgresql://postgres:7a3487df62b84e9a4f03c459bc530e56@ehtm9kdz.ap-southeast.database.insforge.app:5432/insforge?sslmode=require&uselibpqcompat=true";
 
-const pool = new Pool({
-  connectionString,
-  ssl: { rejectUnauthorized: false },
-});
+const pool = new Pool(getPoolConfig(connectionString));
+
 
 async function main() {
   console.log("Setting database timeouts...");

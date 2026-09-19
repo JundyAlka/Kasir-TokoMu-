@@ -61,16 +61,18 @@ console.log("Models:", envVars.GEMINI_TEXT_MODEL, "| Key type:", envVars.GEMINI_
 console.log("Target site:", envVars.BETTER_AUTH_URL);
 
 import pg from 'pg';
+import { getPoolConfig } from './db-ssl-helper.mjs';
 const { Pool } = pg;
 
 async function cleanDatabaseZombies(connectionString) {
   if (!connectionString) return;
   try {
-    const p = new Pool({
-      connectionString,
-      ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5000,
-    });
+    const p = new Pool(
+      getPoolConfig(connectionString, {
+        connectionTimeoutMillis: 5000,
+      })
+    );
+
     await p.query("ALTER DATABASE insforge SET idle_session_timeout = '30s';").catch(() => {});
     await p.query("ALTER ROLE postgres SET idle_session_timeout = '30s';").catch(() => {});
     await p.query("ALTER DATABASE insforge SET idle_in_transaction_session_timeout = '60s';").catch(() => {});

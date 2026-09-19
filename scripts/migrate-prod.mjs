@@ -7,6 +7,7 @@ import pg from 'pg';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getClientConfig } from './db-ssl-helper.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'migrations');
@@ -17,7 +18,8 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const client = new pg.Client({ connectionString: DATABASE_URL });
+const client = new pg.Client(getClientConfig(DATABASE_URL));
+
 
 async function run() {
   await client.connect();

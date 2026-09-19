@@ -1,13 +1,12 @@
 import { Pool } from 'pg';
 import * as schema from '../src/db/schema.js';
+import { getPoolConfig } from './db-ssl-helper.mjs';
 
 const url = process.env.DATABASE_URL;
 
 async function main() {
-  const pool = new Pool({
-    connectionString: url,
-    ssl: { rejectUnauthorized: false },
-  });
+  const pool = new Pool(getPoolConfig(url));
+
 
   // Fetch all db tables and columns
   const res = await pool.query(`

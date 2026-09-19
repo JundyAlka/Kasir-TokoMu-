@@ -1,13 +1,15 @@
 import { Pool } from 'pg';
+import { getPoolConfig } from './db-ssl-helper.mjs';
 
 const url = process.env.DATABASE_URL;
 
 async function main() {
-  const pool = new Pool({
-    connectionString: url,
-    ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 10000,
-  });
+  const pool = new Pool(
+    getPoolConfig(url, {
+      connectionTimeoutMillis: 10000,
+    })
+  );
+
 
   const res = await pool.query(`
     SELECT table_name 

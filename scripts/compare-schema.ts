@@ -1,14 +1,18 @@
 import { Pool } from 'pg';
 import { getTableColumns, getTableName, isTable } from 'drizzle-orm';
 import * as schema from '../src/db/schema';
+import { createPoolConfig } from '../src/db/pool-config';
 
 const url = process.env.DATABASE_URL;
 
 async function main() {
-  const pool = new Pool({
-    connectionString: url,
-    ssl: { rejectUnauthorized: false },
-  });
+  if (!url) {
+    console.error("DATABASE_URL is not set");
+    process.exit(1);
+  }
+
+  const pool = new Pool(createPoolConfig(url));
+
 
   const res = await pool.query(`
     SELECT table_name, column_name, data_type, is_nullable

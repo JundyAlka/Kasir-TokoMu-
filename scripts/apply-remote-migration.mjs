@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { getPoolConfig } from './db-ssl-helper.mjs';
 
 const url = process.env.DATABASE_URL;
 
@@ -7,10 +8,8 @@ if (!url) {
   process.exit(1);
 }
 
-const pool = new Pool({
-  connectionString: url,
-  ssl: { rejectUnauthorized: false },
-});
+const pool = new Pool(getPoolConfig(url));
+
 
 async function runSql(name, sqlQuery) {
   try {
