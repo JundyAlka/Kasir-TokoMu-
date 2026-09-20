@@ -689,8 +689,7 @@ function ShiftMetricCard({
   );
 }
 
-function isRowToday(dateVal: string | Date | null | undefined, isOpen?: boolean) {
-  if (isOpen) return true;
+function isRowToday(dateVal: string | Date | null | undefined) {
   if (!dateVal) return false;
   try {
     return getJakartaDateKey(dateVal) === jakartaToday();
@@ -1174,7 +1173,7 @@ export function DailyShiftPanel() {
                     </TableRow>
                   ) : (
                     sortedShiftHistory.map((item) => {
-                      const isToday = isRowToday(item.startedAt, item.status === "open");
+                      const isToday = isRowToday(item.startedAt);
                       return (
                         <TableRow
                           key={item.id}
@@ -1313,7 +1312,7 @@ export function DailyShiftPanel() {
                         </TableRow>
                       ) : (
                         sortedShiftHistory.map((item) => {
-                          const isToday = isRowToday(item.startedAt, item.status === "open");
+                          const isToday = isRowToday(item.startedAt);
                           return (
                             <TableRow
                               key={item.id}

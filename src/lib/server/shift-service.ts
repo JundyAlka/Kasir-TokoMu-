@@ -215,6 +215,7 @@ async function sessionById(workspaceOwnerId: string, sessionId: string) {
       ss.started_at as "startedAt", ss.ended_at as "endedAt", ss.opening_cash as "openingCash", ss.opening_coins as "openingCoins",
       ss.opening_savings as "openingSavings", ss.closing_cash as "closingCash", ss.closing_coins as "closingCoins",
       ss.closing_savings as "closingSavings", ss.expected_cash as "expectedCash", ss.expected_closing as "expectedClosing",
+      ss.difference as "difference", ss.variance as "variance", ss.variance_note as "varianceNote", ss.status as "status",
       coalesce(s.name, 'Shift') as "shiftName",
       s.start_time as "shiftStartTime", s.end_time as "shiftEndTime",
       coalesce(u.name, u.email, 'Kasir') as "cashierName"
