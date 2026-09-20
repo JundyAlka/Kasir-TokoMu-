@@ -19,6 +19,9 @@ export type CashBalances = {
   savings: number;
   openedAt?: string;
   closedAt?: string;
+  lastShiftName?: string | null;
+  lastClosedAt?: string | null;
+  lastCashierName?: string | null;
 };
 
 export type ShiftSessionSummary = {
@@ -430,7 +433,7 @@ export async function listShifts(
     `select id from shift_sessions
      where workspace_owner_id = $1 and coalesce(opened_at, started_at) >= $2::timestamptz and coalesce(opened_at, started_at) < $3::timestamptz
        and ($4::text is null or cashier_user_id = $4)
-     order by coalesce(opened_at, started_at) asc`,
+      order by coalesce(opened_at, started_at) desc, created_at desc`,
     [ownerId, range.start, range.end, cashierUserId ?? null]
   );
   return (await Promise.all(result.rows.map((row) => sessionById(ownerId, row.id)))).filter(
@@ -440,14 +443,29 @@ export async function listShifts(
 
 export async function getSuggestedOpeningBalances(workspaceOwnerId: string): Promise<CashBalances> {
   const ownerId = scopedWorkspace(workspaceOwnerId);
-  const result = await pool.query<{ cash: number | string | null; coins: number | string | null; savings: number | string | null }>(
-    `select closing_cash as cash, closing_coins as coins, closing_savings as savings
+  const result = await pool.query<{
+    cash: number | string | null;
+    coins: number | string | null;
+    savings: number | string | null;
+    shift_name: string | null;
+    closed_at: string | null;
+    cashier_name: string | null;
+  }>(
+    `select closing_cash as cash, closing_coins as coins, closing_savings as savings,
+            shift_name, coalesce(closed_at, ended_at) as closed_at, cashier_name
      from shift_sessions where workspace_owner_id = $1 and status = 'closed'
      order by closed_at desc nulls last, ended_at desc limit 1`,
     [ownerId]
   );
   const prior = result.rows[0];
-  return { cash: numberValue(prior?.cash), coins: numberValue(prior?.coins), savings: numberValue(prior?.savings) };
+  return {
+    cash: numberValue(prior?.cash),
+    coins: numberValue(prior?.coins),
+    savings: numberValue(prior?.savings),
+    lastShiftName: prior?.shift_name ?? null,
+    lastClosedAt: prior?.closed_at ? new Date(prior.closed_at).toISOString() : null,
+    lastCashierName: prior?.cashier_name ?? null,
+  };
 }
 
 export async function resolveRecordedBy(workspaceOwnerId: string, currentUserId: string): Promise<RecordedByResolution> {

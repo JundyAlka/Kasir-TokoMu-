@@ -5,14 +5,17 @@ import Link from "next/link";
 import {
   ArrowRight,
   AlertTriangle,
+  Banknote,
   BanknoteArrowDown,
   CalendarDays,
   Check,
   CircleDollarSign,
   Clock,
+  Coins,
   Download,
   ExternalLink,
   FileText,
+  Landmark,
   ListChecks,
   Loader2,
   Printer,
@@ -686,12 +689,29 @@ function ShiftMetricCard({
   );
 }
 
+function isRowToday(dateVal: string | Date | null | undefined, isOpen?: boolean) {
+  if (isOpen) return true;
+  if (!dateVal) return false;
+  try {
+    return getJakartaDateKey(dateVal) === jakartaToday();
+  } catch {
+    return false;
+  }
+}
+
 export function DailyShiftPanel() {
   const role = useCurrentRole();
   const [state, setState] = useState<RequestState>("loading");
   const [session, setSession] = useState<ShiftSession | null>(null);
   const [activeShift, setActiveShift] = useState<{ id: string; name: string } | null>(null);
-  const [suggestion, setSuggestion] = useState({ cash: 0, coins: 0, savings: 0 });
+  const [suggestion, setSuggestion] = useState<{
+    cash: number;
+    coins: number;
+    savings: number;
+    lastShiftName?: string | null;
+    lastClosedAt?: string | null;
+    lastCashierName?: string | null;
+  }>({ cash: 0, coins: 0, savings: 0 });
   const [cashMovement, setCashMovement] = useState<ShiftCashMovement | null>(null);
   const [hasOtherOpenShift, setHasOtherOpenShift] = useState(false);
   const [openSessionInfo, setOpenSessionInfo] = useState<{
@@ -719,6 +739,12 @@ export function DailyShiftPanel() {
     amount: number;
     note: string;
   }>({ fromBucket: "cash", toBucket: "savings", amount: 0, note: "" });
+
+  const sortedShiftHistory = useMemo(() => {
+    return [...shiftHistory].sort(
+      (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+    );
+  }, [shiftHistory]);
 
   const range = useMemo(() => {
     const today = jakartaToday();
@@ -1047,6 +1073,77 @@ export function DailyShiftPanel() {
         </div>
       ) : null}
 
+      {/* KARTU INFORMASI SALDO KAS TERAKHIR TERCATAT */}
+      <Card className="border-border/70 bg-card/80 backdrop-blur-md overflow-hidden shadow-sm">
+        <div className="bg-muted/40 px-4 sm:px-5 py-3 border-b border-border/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <span className="p-1.5 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+              <WalletCards className="size-4" />
+            </span>
+            <div>
+              <h4 className="font-heading text-sm font-semibold text-foreground">
+                Informasi Kas Tutup Terakhir Tercatat
+              </h4>
+              <p className="text-[11px] text-muted-foreground">
+                {suggestion.lastClosedAt
+                  ? `Kondisi uang fisik saat penutupan shift terakhir (${formatDate(suggestion.lastClosedAt)}${suggestion.lastShiftName ? ` • ${suggestion.lastShiftName}` : ""}${suggestion.lastCashierName ? ` oleh ${suggestion.lastCashierName}` : ""})`
+                  : "Kondisi uang fisik toko saat penutupan shift terakhir sebagai acuan modal awal kasir."}
+              </p>
+            </div>
+          </div>
+          <Badge variant="outline" className="w-fit text-[11px] bg-background/80 font-semibold border-amber-500/30 text-amber-700 dark:text-amber-300">
+            Acuan Fisik Kasir
+          </Badge>
+        </div>
+        <CardContent className="p-4 sm:p-5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="rounded-2xl border border-border/70 bg-background/70 p-3.5 sm:p-4 transition-colors hover:border-emerald-500/40">
+              <div className="flex items-center justify-between text-muted-foreground mb-1">
+                <span className="text-xs font-medium">Kas Tutup (Laci)</span>
+                <Banknote className="size-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <p className="text-base sm:text-xl font-bold tracking-tight tabular-nums text-foreground">
+                {formatCurrency(suggestion.cash)}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Uang tunai fisik di laci kasir</p>
+            </div>
+
+            <div className="rounded-2xl border border-border/70 bg-background/70 p-3.5 sm:p-4 transition-colors hover:border-amber-500/40">
+              <div className="flex items-center justify-between text-muted-foreground mb-1">
+                <span className="text-xs font-medium">Receh</span>
+                <Coins className="size-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <p className="text-base sm:text-xl font-bold tracking-tight tabular-nums text-foreground">
+                {formatCurrency(suggestion.coins)}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Uang koin / pecahan kembalian</p>
+            </div>
+
+            <div className="rounded-2xl border border-border/70 bg-background/70 p-3.5 sm:p-4 transition-colors hover:border-blue-500/40">
+              <div className="flex items-center justify-between text-muted-foreground mb-1">
+                <span className="text-xs font-medium">Tabungan</span>
+                <Landmark className="size-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <p className="text-base sm:text-xl font-bold tracking-tight tabular-nums text-foreground">
+                {formatCurrency(suggestion.savings)}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Uang simpanan / brankas toko</p>
+            </div>
+
+            <div className="rounded-2xl border border-primary/30 bg-primary/5 p-3.5 sm:p-4">
+              <div className="flex items-center justify-between text-primary mb-1">
+                <span className="text-xs font-semibold">Total Kas Tercatat</span>
+                <CircleDollarSign className="size-4 text-primary" />
+              </div>
+              <p className="text-base sm:text-xl font-bold tracking-tight tabular-nums text-primary">
+                {formatCurrency(suggestion.cash + suggestion.coins + suggestion.savings)}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Akumulasi uang toko fisik</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {role === "kasir" ? (
         <Card className="border-border/60 bg-card/60 backdrop-blur-sm">
           <CardHeader>
@@ -1076,35 +1173,56 @@ export function DailyShiftPanel() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    shiftHistory.map((item) => (
-                      <TableRow key={item.id} className={item.variance ? "bg-destructive/10" : ""}>
-                        <TableCell className="font-medium whitespace-nowrap">{formatDate(item.startedAt)}</TableCell>
-                        <TableCell className="font-medium whitespace-nowrap">{item.shiftName}</TableCell>
-                        <TableCell className="whitespace-nowrap">{item.cashierName}</TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {item.expectedClosing == null
-                            ? "-"
-                            : formatCurrency(Math.max(0, item.expectedClosing - item.openingTotal))}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">-</TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {item.closingTotal == null ? "-" : formatCurrency(item.closingTotal)}
-                        </TableCell>
-                        <TableCell
+                    sortedShiftHistory.map((item) => {
+                      const isToday = isRowToday(item.startedAt, item.status === "open");
+                      return (
+                        <TableRow
+                          key={item.id}
                           className={cn(
-                            "whitespace-nowrap font-semibold",
-                            item.variance ? "text-destructive" : "text-emerald-600"
+                            "hover:bg-muted/40 transition-colors",
+                            item.variance ? "bg-destructive/10" : "",
+                            isToday && "bg-amber-500/10 dark:bg-amber-500/15 border-l-4 border-l-amber-500"
                           )}
                         >
-                          {item.variance == null ? "-" : formatCurrency(item.variance)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <Badge variant={item.status === "closed" ? "secondary" : "default"}>
-                            {item.status === "closed" ? "Ditutup" : "Terbuka"}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                          <TableCell className="font-medium whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              <span>{formatDate(item.startedAt)}</span>
+                              {isToday && (
+                                <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 font-bold">
+                                  Hari Ini
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium whitespace-nowrap">
+                            <Badge variant="outline" className="font-normal text-xs">{item.shiftName}</Badge>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{item.cashierName}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {item.expectedClosing == null
+                              ? "-"
+                              : formatCurrency(Math.max(0, item.expectedClosing - item.openingTotal))}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-muted-foreground">-</TableCell>
+                          <TableCell className="whitespace-nowrap font-medium">
+                            {item.closingTotal == null ? "-" : formatCurrency(item.closingTotal)}
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              "whitespace-nowrap font-semibold",
+                              item.variance && item.variance < 0 ? "text-destructive" : item.variance && item.variance > 0 ? "text-blue-600" : "text-emerald-600"
+                            )}
+                          >
+                            {item.variance == null ? "-" : formatCurrency(item.variance)}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <Badge variant={item.status === "closed" ? "secondary" : "default"}>
+                              {item.status === "closed" ? "Ditutup" : "Terbuka"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -1187,44 +1305,63 @@ export function DailyShiftPanel() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {shiftHistory.length === 0 ? (
+                      {sortedShiftHistory.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={8} className="h-28 text-center text-muted-foreground">
                             Belum ada riwayat shift di bulan ini.
                           </TableCell>
                         </TableRow>
                       ) : (
-                        shiftHistory.map((item) => (
-                          <TableRow key={item.id} className={cn("hover:bg-muted/40 transition-colors", item.variance ? "bg-destructive/10" : "")}>
-                            <TableCell className="font-medium whitespace-nowrap">{formatDate(item.startedAt)}</TableCell>
-                            <TableCell className="font-medium whitespace-nowrap">
-                              <Badge variant="outline" className="font-normal text-xs">{item.shiftName}</Badge>
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">{item.cashierName}</TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              {item.expectedClosing == null
-                                ? "-"
-                                : formatCurrency(Math.max(0, item.expectedClosing - item.openingTotal))}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap text-muted-foreground">-</TableCell>
-                            <TableCell className="whitespace-nowrap font-medium">
-                              {item.closingTotal == null ? "-" : formatCurrency(item.closingTotal)}
-                            </TableCell>
-                            <TableCell
+                        sortedShiftHistory.map((item) => {
+                          const isToday = isRowToday(item.startedAt, item.status === "open");
+                          return (
+                            <TableRow
+                              key={item.id}
                               className={cn(
-                                "whitespace-nowrap font-semibold",
-                                item.variance && item.variance < 0 ? "text-destructive" : item.variance && item.variance > 0 ? "text-blue-600" : "text-emerald-600"
+                                "hover:bg-muted/40 transition-colors",
+                                item.variance ? "bg-destructive/10" : "",
+                                isToday && "bg-amber-500/10 dark:bg-amber-500/15 border-l-4 border-l-amber-500"
                               )}
                             >
-                              {item.variance == null ? "-" : formatCurrency(item.variance)}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              <Badge variant={item.status === "closed" ? "secondary" : "default"}>
-                                {item.status === "closed" ? "Ditutup" : "Terbuka"}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))
+                              <TableCell className="font-medium whitespace-nowrap">
+                                <div className="flex items-center gap-1.5">
+                                  <span>{formatDate(item.startedAt)}</span>
+                                  {isToday && (
+                                    <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 font-bold">
+                                      Hari Ini
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-medium whitespace-nowrap">
+                                <Badge variant="outline" className="font-normal text-xs">{item.shiftName}</Badge>
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">{item.cashierName}</TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                {item.expectedClosing == null
+                                  ? "-"
+                                  : formatCurrency(Math.max(0, item.expectedClosing - item.openingTotal))}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-muted-foreground">-</TableCell>
+                              <TableCell className="whitespace-nowrap font-medium">
+                                {item.closingTotal == null ? "-" : formatCurrency(item.closingTotal)}
+                              </TableCell>
+                              <TableCell
+                                className={cn(
+                                  "whitespace-nowrap font-semibold",
+                                  item.variance && item.variance < 0 ? "text-destructive" : item.variance && item.variance > 0 ? "text-blue-600" : "text-emerald-600"
+                                )}
+                              >
+                                {item.variance == null ? "-" : formatCurrency(item.variance)}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <Badge variant={item.status === "closed" ? "secondary" : "default"}>
+                                  {item.status === "closed" ? "Ditutup" : "Terbuka"}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>
@@ -1306,22 +1443,43 @@ export function DailyShiftPanel() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        dailyReports.map((report) => (
-                          <TableRow key={report.id} className="hover:bg-muted/40 transition-colors">
-                            <TableCell className="font-medium whitespace-nowrap">{formatDate(report.reportDate)}</TableCell>
-                            <TableCell className="whitespace-nowrap font-medium">{formatCurrency(report.revenue)}</TableCell>
-                            <TableCell className="whitespace-nowrap text-muted-foreground">{formatCurrency(report.cogs)}</TableCell>
-                            <TableCell className="whitespace-nowrap text-destructive">{formatCurrency(report.expenseTotal)}</TableCell>
-                            <TableCell className={cn("whitespace-nowrap font-semibold", report.netProfit >= 0 ? "text-emerald-600" : "text-destructive")}>
-                              {formatCurrency(report.netProfit)}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              <Badge variant={report.status === "locked" ? "secondary" : "default"}>
-                                {report.status === "locked" ? "Terkunci" : "Draf"}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))
+                        dailyReports.map((report) => {
+                          const isToday = isRowToday(report.reportDate);
+                          return (
+                            <TableRow
+                              key={report.id}
+                              className={cn(
+                                "hover:bg-muted/40 transition-colors",
+                                isToday && "bg-amber-500/10 dark:bg-amber-500/15 border-l-4 border-l-amber-500"
+                              )}
+                            >
+                              <TableCell className="font-medium whitespace-nowrap">
+                                <div className="flex items-center gap-1.5">
+                                  <span>{formatDate(report.reportDate)}</span>
+                                  {isToday && (
+                                    <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 font-bold">
+                                      Hari Ini
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap font-medium">{formatCurrency(report.revenue)}</TableCell>
+                              <TableCell className="whitespace-nowrap text-muted-foreground">{formatCurrency(report.cogs)}</TableCell>
+                              <TableCell className="whitespace-nowrap text-destructive">{formatCurrency(report.expenseTotal)}</TableCell>
+                              <TableCell className={cn("whitespace-nowrap font-semibold", report.netProfit >= 0 ? "text-emerald-600" : "text-destructive")}>
+                                {formatCurrency(report.netProfit)}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <Badge
+                                  variant={report.status === "locked" ? "secondary" : "default"}
+                                  className={cn(report.status !== "locked" && "bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold")}
+                                >
+                                  {report.status === "locked" ? "Terkunci" : "Draf / Berjalan"}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>
@@ -1339,6 +1497,17 @@ export function DailyShiftPanel() {
             <DialogDescription>Masukkan nominal kas fisik awal di laci kasir saat membuka shift.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="space-y-0.5">
+                <p className="font-bold text-amber-800 dark:text-amber-200">Saldo Kas Terakhir Tercatat</p>
+                <p className="text-muted-foreground">
+                  Laci: <span className="font-semibold text-foreground">{formatCurrency(suggestion.cash)}</span> • Receh: <span className="font-semibold text-foreground">{formatCurrency(suggestion.coins)}</span> • Tabungan: <span className="font-semibold text-foreground">{formatCurrency(suggestion.savings)}</span>
+                </p>
+              </div>
+              <Badge variant="outline" className="w-fit border-amber-500/40 text-amber-700 dark:text-amber-300 font-bold bg-background/60">
+                Total: {formatCurrency(suggestion.cash + suggestion.coins + suggestion.savings)}
+              </Badge>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
               {(["cash", "coins", "savings"] as const).map((key) => (
                 <div key={key} className="grid gap-2">

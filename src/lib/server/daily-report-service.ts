@@ -87,29 +87,38 @@ export async function buildDailyReport(workspaceOwnerId: string, reportDate: str
     ),
     pool.query<{ revenue: number | string; transactionCount: number | string }>(
       `select coalesce(sum(t.total), 0) as revenue, count(*) as "transactionCount"
-       from transactions t join shift_sessions ss on ss.id = t.shift_session_id
-       where t.user_id = $1 and ss.workspace_owner_id = $1
-         and coalesce(ss.opened_at, ss.started_at) >= $2::timestamptz
-         and coalesce(ss.opened_at, ss.started_at) < $3::timestamptz`,
+       from transactions t left join shift_sessions ss on ss.id = t.shift_session_id
+       where t.user_id = $1
+         and (
+           (ss.id is not null and coalesce(ss.opened_at, ss.started_at) >= $2::timestamptz and coalesce(ss.opened_at, ss.started_at) < $3::timestamptz)
+           or
+           (coalesce(t.occurred_at, t.created_at) >= $2::timestamptz and coalesce(t.occurred_at, t.created_at) < $3::timestamptz)
+         )`,
       [ownerId, range.start, range.end]
     ),
     pool.query<{ cogs: number | string }>(
       `select coalesce(sum(ti.quantity * ti.cost_price), 0) as cogs
        from transaction_items ti join transactions t on t.id = ti.transaction_id
-       join shift_sessions ss on ss.id = t.shift_session_id
-       where t.user_id = $1 and ss.workspace_owner_id = $1
-         and coalesce(ss.opened_at, ss.started_at) >= $2::timestamptz
-         and coalesce(ss.opened_at, ss.started_at) < $3::timestamptz`,
+       left join shift_sessions ss on ss.id = t.shift_session_id
+       where t.user_id = $1
+         and (
+           (ss.id is not null and coalesce(ss.opened_at, ss.started_at) >= $2::timestamptz and coalesce(ss.opened_at, ss.started_at) < $3::timestamptz)
+           or
+           (coalesce(t.occurred_at, t.created_at) >= $2::timestamptz and coalesce(t.occurred_at, t.created_at) < $3::timestamptz)
+         )`,
       [ownerId, range.start, range.end]
     ),
     pool.query<{ expenseTotal: number | string; profitDistribution: number | string }>(
       `select
          coalesce(sum(case when e.is_cash_movement = false and e.expense_type <> 'bagi_hasil_investor' then e.amount else 0 end), 0) as "expenseTotal",
          coalesce(sum(case when e.expense_type = 'bagi_hasil_investor' then e.amount else 0 end), 0) as "profitDistribution"
-       from expenses e join shift_sessions ss on ss.id = e.shift_session_id
-       where e.user_id = $1 and ss.workspace_owner_id = $1
-         and coalesce(ss.opened_at, ss.started_at) >= $2::timestamptz
-         and coalesce(ss.opened_at, ss.started_at) < $3::timestamptz`,
+       from expenses e left join shift_sessions ss on ss.id = e.shift_session_id
+       where e.user_id = $1
+         and (
+           (ss.id is not null and coalesce(ss.opened_at, ss.started_at) >= $2::timestamptz and coalesce(ss.opened_at, ss.started_at) < $3::timestamptz)
+           or
+           (coalesce(e.created_at, e.created_at) >= $2::timestamptz and coalesce(e.created_at, e.created_at) < $3::timestamptz)
+         )`,
       [ownerId, range.start, range.end]
     ),
   ]);
@@ -180,6 +189,37 @@ export async function lockDailyReport(workspaceOwnerId: string, reportDate: stri
 
 export async function listDailyReports(workspaceOwnerId: string, range: { start: string; end: string }) {
   const ownerId = scopedWorkspace(workspaceOwnerId);
+  try {
+    const activeDates = await pool.query<{ reportDate: string }>(
+      `select distinct to_char(coalesce(t.occurred_at, t.created_at) at time zone 'Asia/Jakarta', 'YYYY-MM-DD') as "reportDate"
+       from transactions t
+       where t.user_id = $1
+         and coalesce(t.occurred_at, t.created_at) >= $2::timestamptz
+         and coalesce(t.occurred_at, t.created_at) < $3::timestamptz
+       union
+       select distinct to_char(coalesce(ss.opened_at, ss.started_at) at time zone 'Asia/Jakarta', 'YYYY-MM-DD') as "reportDate"
+       from shift_sessions ss
+       where ss.workspace_owner_id = $1
+         and coalesce(ss.opened_at, ss.started_at) >= $2::timestamptz
+         and coalesce(ss.opened_at, ss.started_at) < $3::timestamptz`,
+      [ownerId, range.start, range.end]
+    );
+
+    for (const row of activeDates.rows) {
+      if (row.reportDate) {
+        const check = await pool.query<{ status: string }>(
+          `select status from daily_reports where user_id = $1 and report_date = $2::date`,
+          [ownerId, row.reportDate]
+        );
+        if (!check.rows[0] || check.rows[0].status === "draft") {
+          await buildDailyReport(ownerId, row.reportDate);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[daily-report] auto-sync active draft daily reports warning:", err);
+  }
+
   const rows = await pool.query<Record<string, unknown>>(
     `select id, user_id as "userId", report_date as "reportDate", opening_total as "openingTotal",
        revenue, cogs, expense_total as "expenseTotal", gross_profit as "grossProfit", net_profit as "netProfit",
