@@ -215,10 +215,10 @@ async function sessionById(workspaceOwnerId: string, sessionId: string) {
       ss.started_at as "startedAt", ss.ended_at as "endedAt", ss.opening_cash as "openingCash", ss.opening_coins as "openingCoins",
       ss.opening_savings as "openingSavings", ss.closing_cash as "closingCash", ss.closing_coins as "closingCoins",
       ss.closing_savings as "closingSavings", ss.expected_cash as "expectedCash", ss.expected_closing as "expectedClosing",
-      ss.difference, ss.variance, ss.variance_note as "varianceNote", ss.status, s.name as "shiftName",
+      coalesce(s.name, 'Shift') as "shiftName",
       s.start_time as "shiftStartTime", s.end_time as "shiftEndTime",
       coalesce(u.name, u.email, 'Kasir') as "cashierName"
-     from shift_sessions ss join shifts s on s.id = ss.shift_id
+     from shift_sessions ss left join shifts s on s.id = ss.shift_id
      left join "user" u on u.id = ss.cashier_user_id
      where ss.id = $1 and ss.workspace_owner_id = $2 limit 1`,
     [sessionId, ownerId]
