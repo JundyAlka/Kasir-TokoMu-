@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Check,
   CircleDollarSign,
+  Clock,
   Download,
   ExternalLink,
   FileText,
@@ -53,6 +54,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCompactCurrency, formatCurrency, formatDate, formatTime } from "@/lib/format";
 import { estimateProductVelocity } from "@/lib/reporting";
@@ -1045,116 +1047,60 @@ export function DailyShiftPanel() {
         </div>
       ) : null}
 
-      <div className={cn("grid gap-6", role === "kasir" ? "grid-cols-1" : "xl:grid-cols-2")}>
+      {role === "kasir" ? (
         <Card className="border-border/60 bg-card/60 backdrop-blur-sm">
           <CardHeader>
             <CardTitle>Riwayat Shift</CardTitle>
             <CardDescription>Kas dan selisih setiap shift di bulan ini.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tanggal</TableHead>
-                  <TableHead>Shift</TableHead>
-                  <TableHead>Kasir</TableHead>
-                  <TableHead>Pemasukan</TableHead>
-                  <TableHead>Pengeluaran</TableHead>
-                  <TableHead>Kas akhir</TableHead>
-                  <TableHead>Selisih</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {shiftHistory.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="h-28 text-center text-muted-foreground">
-                      Belum ada riwayat shift.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  shiftHistory.map((item) => (
-                    <TableRow key={item.id} className={item.variance ? "bg-destructive/10" : ""}>
-                      <TableCell>{formatDate(item.startedAt)}</TableCell>
-                      <TableCell className="font-medium">{item.shiftName}</TableCell>
-                      <TableCell>{item.cashierName}</TableCell>
-                      <TableCell>
-                        {item.expectedClosing == null
-                          ? "-"
-                          : formatCurrency(Math.max(0, item.expectedClosing - item.openingTotal))}
-                      </TableCell>
-                      <TableCell>-</TableCell>
-                      <TableCell>
-                        {item.closingTotal == null ? "-" : formatCurrency(item.closingTotal)}
-                      </TableCell>
-                      <TableCell
-                        className={
-                          item.variance ? "font-semibold text-destructive" : "text-emerald-600"
-                        }
-                      >
-                        {item.variance == null ? "-" : formatCurrency(item.variance)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={item.status === "closed" ? "secondary" : "default"}>
-                          {item.status === "closed" ? "Ditutup" : "Terbuka"}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        {role !== "kasir" ? (
-          <Card className="border-border/60 bg-card/60 backdrop-blur-sm">
-            <CardHeader className="flex-row items-start justify-between gap-3">
-              <div>
-                <CardTitle>Riwayat Harian</CardTitle>
-                <CardDescription>Omzet, HPP, beban, dan laba bersih yang telah disiapkan.</CardDescription>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                disabled={Boolean(session) || isSaving}
-                onClick={() => void lockToday()}
-              >
-                {Boolean(session) ? "Tutup shift dulu" : "Kunci Hari Ini"}
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <Table>
+          <CardContent className="p-0 sm:p-6">
+            <div className="overflow-x-auto">
+              <Table className="min-w-[760px]">
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Tanggal</TableHead>
-                    <TableHead>Omzet</TableHead>
-                    <TableHead>HPP</TableHead>
-                    <TableHead>Beban</TableHead>
-                    <TableHead>Laba bersih</TableHead>
-                    <TableHead>Status</TableHead>
+                  <TableRow className="bg-muted/30">
+                    <TableHead className="font-semibold">Tanggal</TableHead>
+                    <TableHead className="font-semibold">Shift</TableHead>
+                    <TableHead className="font-semibold">Kasir</TableHead>
+                    <TableHead className="font-semibold">Pemasukan Laci</TableHead>
+                    <TableHead className="font-semibold">Pengeluaran Laci</TableHead>
+                    <TableHead className="font-semibold">Kas Akhir Fisik</TableHead>
+                    <TableHead className="font-semibold">Selisih Fisik</TableHead>
+                    <TableHead className="font-semibold">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {dailyReports.length === 0 ? (
+                  {shiftHistory.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-28 text-center text-muted-foreground">
-                        Belum ada laporan harian. Tutup seluruh shift lalu kunci hari.
+                      <TableCell colSpan={8} className="h-28 text-center text-muted-foreground">
+                        Belum ada riwayat shift.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    dailyReports.map((report) => (
-                      <TableRow key={report.id}>
-                        <TableCell>{formatDate(report.reportDate)}</TableCell>
-                        <TableCell>{formatCurrency(report.revenue)}</TableCell>
-                        <TableCell>{formatCurrency(report.cogs)}</TableCell>
-                        <TableCell>{formatCurrency(report.expenseTotal)}</TableCell>
-                        <TableCell className="font-semibold text-emerald-600">
-                          {formatCurrency(report.netProfit)}
+                    shiftHistory.map((item) => (
+                      <TableRow key={item.id} className={item.variance ? "bg-destructive/10" : ""}>
+                        <TableCell className="font-medium whitespace-nowrap">{formatDate(item.startedAt)}</TableCell>
+                        <TableCell className="font-medium whitespace-nowrap">{item.shiftName}</TableCell>
+                        <TableCell className="whitespace-nowrap">{item.cashierName}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {item.expectedClosing == null
+                            ? "-"
+                            : formatCurrency(Math.max(0, item.expectedClosing - item.openingTotal))}
                         </TableCell>
-                        <TableCell>
-                          <Badge variant={report.status === "locked" ? "secondary" : "default"}>
-                            {report.status === "locked" ? "Terkunci" : "Draf"}
+                        <TableCell className="whitespace-nowrap">-</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {item.closingTotal == null ? "-" : formatCurrency(item.closingTotal)}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "whitespace-nowrap font-semibold",
+                            item.variance ? "text-destructive" : "text-emerald-600"
+                          )}
+                        >
+                          {item.variance == null ? "-" : formatCurrency(item.variance)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <Badge variant={item.status === "closed" ? "secondary" : "default"}>
+                            {item.status === "closed" ? "Ditutup" : "Terbuka"}
                           </Badge>
                         </TableCell>
                       </TableRow>
@@ -1162,10 +1108,229 @@ export function DailyShiftPanel() {
                   )}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
-        ) : null}
-      </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Tabs defaultValue="shift" className="w-full space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/40 pb-3">
+            <div>
+              <h3 className="font-heading text-lg font-semibold">Riwayat Operasional & Rekap Harian</h3>
+              <p className="text-xs text-muted-foreground">
+                Gunakan tab di bawah untuk melihat rincian per shift kasir atau buku rekapitulasi laba rugi harian toko.
+              </p>
+            </div>
+            <TabsList className="grid grid-cols-2 w-full sm:w-[380px] p-1 bg-muted/60 rounded-xl">
+              <TabsTrigger value="shift" className="rounded-lg text-xs font-medium py-1.5 flex items-center justify-center gap-1.5">
+                <Clock className="size-3.5" />
+                <span>Riwayat Shift Kasir</span>
+              </TabsTrigger>
+              <TabsTrigger value="harian" className="rounded-lg text-xs font-medium py-1.5 flex items-center justify-center gap-1.5">
+                <CalendarDays className="size-3.5" />
+                <span>Rekap Harian Toko</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          {/* TAB 1: RIWAYAT SHIFT */}
+          <TabsContent value="shift" className="space-y-4 mt-0 focus-visible:outline-none">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-2xl border border-border/60 bg-card/60 p-3.5">
+                <p className="text-xs text-muted-foreground">Total Shift Bulan Ini</p>
+                <p className="text-lg font-semibold mt-1">{shiftHistory.length} shift</p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card/60 p-3.5">
+                <p className="text-xs text-muted-foreground">Shift Sesuai (Nol Selisih)</p>
+                <p className="text-lg font-semibold text-emerald-600 mt-1">
+                  {shiftHistory.filter((s) => !s.variance || s.variance === 0).length} shift
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card/60 p-3.5">
+                <p className="text-xs text-muted-foreground">Shift Ada Selisih</p>
+                <p className={cn("text-lg font-semibold mt-1", shiftHistory.some((s) => s.variance) ? "text-destructive" : "text-muted-foreground")}>
+                  {shiftHistory.filter((s) => s.variance && s.variance !== 0).length} shift
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card/60 p-3.5">
+                <p className="text-xs text-muted-foreground">Akumulasi Selisih Kas</p>
+                {(() => {
+                  const totalVar = shiftHistory.reduce((sum, s) => sum + (s.variance || 0), 0);
+                  return (
+                    <p className={cn("text-lg font-semibold mt-1", totalVar < 0 ? "text-destructive" : totalVar > 0 ? "text-blue-600" : "text-emerald-600")}>
+                      {formatCurrency(totalVar)}
+                    </p>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <Card className="border-border/60 bg-card/60 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="pb-3 border-b border-border/30">
+                <CardTitle className="text-base">Pertanggungjawaban Fisik Laci Kasir</CardTitle>
+                <CardDescription className="text-xs">
+                  Daftar uang kas fisik awal, pemasukan/pengeluaran laci, kas akhir serah terima, dan selisih per shift.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[760px]">
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        <TableHead className="font-semibold">Tanggal</TableHead>
+                        <TableHead className="font-semibold">Shift</TableHead>
+                        <TableHead className="font-semibold">Kasir Bertugas</TableHead>
+                        <TableHead className="font-semibold">Pemasukan Laci</TableHead>
+                        <TableHead className="font-semibold">Pengeluaran Laci</TableHead>
+                        <TableHead className="font-semibold">Kas Akhir Fisik</TableHead>
+                        <TableHead className="font-semibold">Selisih Fisik</TableHead>
+                        <TableHead className="font-semibold">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {shiftHistory.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="h-28 text-center text-muted-foreground">
+                            Belum ada riwayat shift di bulan ini.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        shiftHistory.map((item) => (
+                          <TableRow key={item.id} className={cn("hover:bg-muted/40 transition-colors", item.variance ? "bg-destructive/10" : "")}>
+                            <TableCell className="font-medium whitespace-nowrap">{formatDate(item.startedAt)}</TableCell>
+                            <TableCell className="font-medium whitespace-nowrap">
+                              <Badge variant="outline" className="font-normal text-xs">{item.shiftName}</Badge>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{item.cashierName}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {item.expectedClosing == null
+                                ? "-"
+                                : formatCurrency(Math.max(0, item.expectedClosing - item.openingTotal))}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-muted-foreground">-</TableCell>
+                            <TableCell className="whitespace-nowrap font-medium">
+                              {item.closingTotal == null ? "-" : formatCurrency(item.closingTotal)}
+                            </TableCell>
+                            <TableCell
+                              className={cn(
+                                "whitespace-nowrap font-semibold",
+                                item.variance && item.variance < 0 ? "text-destructive" : item.variance && item.variance > 0 ? "text-blue-600" : "text-emerald-600"
+                              )}
+                            >
+                              {item.variance == null ? "-" : formatCurrency(item.variance)}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <Badge variant={item.status === "closed" ? "secondary" : "default"}>
+                                {item.status === "closed" ? "Ditutup" : "Terbuka"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* TAB 2: REKAP HARIAN & LABA BERSIH */}
+          <TabsContent value="harian" className="space-y-4 mt-0 focus-visible:outline-none">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-2xl border border-border/60 bg-card/60 p-3.5">
+                <p className="text-xs text-muted-foreground">Hari Terkunci</p>
+                <p className="text-lg font-semibold mt-1">
+                  {dailyReports.filter((r) => r.status === "locked").length} dari {dailyReports.length} hari
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card/60 p-3.5">
+                <p className="text-xs text-muted-foreground">Total Omzet</p>
+                <p className="text-lg font-semibold text-primary mt-1">
+                  {formatCurrency(dailyReports.reduce((s, r) => s + r.revenue, 0))}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card/60 p-3.5">
+                <p className="text-xs text-muted-foreground">Total Beban Operasional</p>
+                <p className="text-lg font-semibold text-destructive mt-1">
+                  {formatCurrency(dailyReports.reduce((s, r) => s + r.expenseTotal, 0))}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-card/60 p-3.5">
+                <p className="text-xs text-muted-foreground">Total Laba Bersih</p>
+                {(() => {
+                  const totalProfit = dailyReports.reduce((s, r) => s + r.netProfit, 0);
+                  return (
+                    <p className={cn("text-lg font-semibold mt-1", totalProfit >= 0 ? "text-emerald-600" : "text-destructive")}>
+                      {formatCurrency(totalProfit)}
+                    </p>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <Card className="border-border/60 bg-card/60 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/30 pb-3">
+                <div>
+                  <CardTitle className="text-base">Rekapitulasi Keuangan Harian (Omzet, HPP, Laba)</CardTitle>
+                  <CardDescription className="text-xs">
+                    Akumulasi penjualan seluruh shift, modal pokok (HPP), biaya operasional, dan laba bersih per hari.
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={Boolean(session) || isSaving}
+                  onClick={() => void lockToday()}
+                  className="rounded-full shadow-sm"
+                >
+                  {Boolean(session) ? "Tutup shift dulu" : "Kunci Hari Ini"}
+                </Button>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[700px]">
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        <TableHead className="font-semibold">Tanggal</TableHead>
+                        <TableHead className="font-semibold">Omzet Penjualan</TableHead>
+                        <TableHead className="font-semibold">HPP (Modal)</TableHead>
+                        <TableHead className="font-semibold">Beban Operasional</TableHead>
+                        <TableHead className="font-semibold">Laba Bersih</TableHead>
+                        <TableHead className="font-semibold">Status Buku</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dailyReports.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="h-28 text-center text-muted-foreground">
+                            Belum ada laporan harian. Tutup seluruh shift kasir lalu klik Kunci Hari Ini.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        dailyReports.map((report) => (
+                          <TableRow key={report.id} className="hover:bg-muted/40 transition-colors">
+                            <TableCell className="font-medium whitespace-nowrap">{formatDate(report.reportDate)}</TableCell>
+                            <TableCell className="whitespace-nowrap font-medium">{formatCurrency(report.revenue)}</TableCell>
+                            <TableCell className="whitespace-nowrap text-muted-foreground">{formatCurrency(report.cogs)}</TableCell>
+                            <TableCell className="whitespace-nowrap text-destructive">{formatCurrency(report.expenseTotal)}</TableCell>
+                            <TableCell className={cn("whitespace-nowrap font-semibold", report.netProfit >= 0 ? "text-emerald-600" : "text-destructive")}>
+                              {formatCurrency(report.netProfit)}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <Badge variant={report.status === "locked" ? "secondary" : "default"}>
+                                {report.status === "locked" ? "Terkunci" : "Draf"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      )}
 
       <Dialog open={openDialog} onOpenChange={setOpenDialog}>
         <DialogContent className="sm:max-w-xl md:max-w-2xl w-full rounded-[28px] p-6 sm:p-7 gap-5">
