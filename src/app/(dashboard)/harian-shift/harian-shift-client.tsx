@@ -1,0 +1,24 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import { Loader2 } from "lucide-react";
+
+function TabLoadingFallback() {
+  return (
+    <div className="flex h-64 w-full items-center justify-center rounded-2xl border border-border/60 bg-card/40">
+      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+        <Loader2 className="size-6 animate-spin text-primary" />
+        <p className="text-sm font-medium">Memuat data harian & shift...</p>
+      </div>
+    </div>
+  );
+}
+
+const DailyShiftPanel = dynamic(
+  () => import("@/components/warung/laporan-view").then((m) => m.DailyShiftPanel),
+  { ssr: false, loading: TabLoadingFallback }
+);
+
+export function HarianShiftClient() {
+  return <DailyShiftPanel />;
+}

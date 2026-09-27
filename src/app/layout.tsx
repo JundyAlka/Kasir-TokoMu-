@@ -26,6 +26,32 @@ export const metadata: Metadata = {
   description: "Aplikasi kasir tablet-first untuk operasional warung modern.",
 };
 
+const extensionFixScript = `
+  (function() {
+    try {
+      var origSetAttr = Element.prototype.setAttribute;
+      Element.prototype.setAttribute = function(name, value) {
+        if (name === 'bis_skin_checked' || name === 'bis_register' || name === 'bis_size') {
+          return;
+        }
+        return origSetAttr.apply(this, arguments);
+      };
+      var cleanup = function() {
+        var elements = document.querySelectorAll('[bis_skin_checked], [bis_register], [bis_size]');
+        for (var i = 0; i < elements.length; i++) {
+          elements[i].removeAttribute('bis_skin_checked');
+          elements[i].removeAttribute('bis_register');
+          elements[i].removeAttribute('bis_size');
+        }
+      };
+      cleanup();
+      if (document.readyState !== 'complete') {
+        window.addEventListener('DOMContentLoaded', cleanup, { once: true });
+      }
+    } catch(e) {}
+  })();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -37,7 +63,10 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${plusJakartaSans.variable} ${bricolageGrotesque.variable} ${ibmPlexMono.variable} h-full w-full overflow-hidden antialiased`}
     >
-      <body className="h-full w-full flex flex-col overflow-hidden bg-background">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: extensionFixScript }} />
+      </head>
+      <body suppressHydrationWarning className="h-full w-full flex flex-col overflow-hidden bg-background">
         <ThemeProvider defaultTheme="dark">
           <AppStateProvider>
             {children}

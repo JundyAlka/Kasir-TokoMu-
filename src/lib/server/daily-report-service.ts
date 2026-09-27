@@ -137,7 +137,7 @@ export async function buildDailyReport(workspaceOwnerId: string, reportDate: str
     `insert into daily_reports (
        id, user_id, report_date, opening_total, revenue, cogs, expense_total, gross_profit, net_profit,
        closing_total, transaction_count, profit_distribution, status, created_at, updated_at
-     ) values ($1, $2, $3::date, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'draft', $13::timestamptz, $13::timestamptz)
+     ) values ($1, $2, $3::date, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'draft', $13::timestamptz, $14::timestamptz)
      on conflict (user_id, report_date) do update set
        opening_total = excluded.opening_total, revenue = excluded.revenue, cogs = excluded.cogs,
        expense_total = excluded.expense_total, gross_profit = excluded.gross_profit, net_profit = excluded.net_profit,
@@ -148,7 +148,7 @@ export async function buildDailyReport(workspaceOwnerId: string, reportDate: str
        revenue, cogs, expense_total as "expenseTotal", gross_profit as "grossProfit", net_profit as "netProfit",
        closing_total as "closingTotal", transaction_count as "transactionCount",
        profit_distribution as "profitDistribution", status, locked_at as "lockedAt", locked_by_user_id as "lockedByUserId"`,
-    [createId(), ownerId, reportDate, openingTotal, revenue, cogs, expenseTotal, grossProfit, netProfit, closingTotal, transactionCount, profitDistribution, timestamp]
+    [createId(), ownerId, reportDate, openingTotal, revenue, cogs, expenseTotal, grossProfit, netProfit, closingTotal, transactionCount, profitDistribution, timestamp, timestamp]
   );
   if (saved.rows[0]) return mapRow(saved.rows[0]);
 
@@ -185,6 +185,68 @@ export async function lockDailyReport(workspaceOwnerId: string, reportDate: stri
   );
   if (!locked.rows[0]) throw new Error("Laporan harian tidak ditemukan.");
   return mapRow(locked.rows[0]);
+}
+
+export async function unlockDailyReport(workspaceOwnerId: string, reportDate: string) {
+  const ownerId = scopedWorkspace(workspaceOwnerId);
+  const unlocked = await pool.query<Record<string, unknown>>(
+    `update daily_reports set status = 'draft', locked_at = null, locked_by_user_id = null, updated_at = $3::timestamptz
+     where user_id = $1 and report_date = $2::date
+     returning id, user_id as "userId", report_date as "reportDate", opening_total as "openingTotal",
+       revenue, cogs, expense_total as "expenseTotal", gross_profit as "grossProfit", net_profit as "netProfit",
+       closing_total as "closingTotal", transaction_count as "transactionCount", profit_distribution as "profitDistribution",
+       status, locked_at as "lockedAt", locked_by_user_id as "lockedByUserId"`,
+    [ownerId, reportDate, nowIso()]
+  );
+  if (!unlocked.rows[0]) throw new Error("Laporan harian tidak ditemukan.");
+  return mapRow(unlocked.rows[0]);
+}
+
+export async function updateDailyReport(
+  workspaceOwnerId: string,
+  reportDate: string,
+  data: {
+    revenue?: number;
+    cogs?: number;
+    expenseTotal?: number;
+    status?: "draft" | "locked";
+  }
+) {
+  const ownerId = scopedWorkspace(workspaceOwnerId);
+  const report = await pool.query<Record<string, unknown>>(
+    `select * from daily_reports where user_id = $1 and report_date = $2::date`,
+    [ownerId, reportDate]
+  );
+  if (!report.rows[0]) {
+    await buildDailyReport(ownerId, reportDate);
+  }
+
+  const existing = report.rows[0] ? mapRow(report.rows[0]) : await buildDailyReport(ownerId, reportDate);
+  const revenue = data.revenue !== undefined ? data.revenue : existing.revenue;
+  const cogs = data.cogs !== undefined ? data.cogs : existing.cogs;
+  const expenseTotal = data.expenseTotal !== undefined ? data.expenseTotal : existing.expenseTotal;
+  const grossProfit = revenue - cogs;
+  const netProfit = grossProfit - expenseTotal;
+  const status = data.status || existing.status;
+
+  const updated = await pool.query<Record<string, unknown>>(
+    `update daily_reports set
+      revenue = $3,
+      cogs = $4,
+      expense_total = $5,
+      gross_profit = $6,
+      net_profit = $7,
+      status = $8,
+      updated_at = $9::timestamptz
+     where user_id = $1 and report_date = $2::date
+     returning id, user_id as "userId", report_date as "reportDate", opening_total as "openingTotal",
+       revenue, cogs, expense_total as "expenseTotal", gross_profit as "grossProfit", net_profit as "netProfit",
+       closing_total as "closingTotal", transaction_count as "transactionCount", profit_distribution as "profitDistribution",
+       status, locked_at as "lockedAt", locked_by_user_id as "lockedByUserId"`,
+    [ownerId, reportDate, revenue, cogs, expenseTotal, grossProfit, netProfit, status, nowIso()]
+  );
+  if (!updated.rows[0]) throw new Error("Gagal memperbarui laporan harian.");
+  return mapRow(updated.rows[0]);
 }
 
 export async function listDailyReports(workspaceOwnerId: string, range: { start: string; end: string }) {

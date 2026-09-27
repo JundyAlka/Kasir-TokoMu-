@@ -88,7 +88,7 @@ function legacyToReportData(
       profitShareReservePct: 20,
     },
     payouts: [],
-    topProducts: [],
+    expenseCategories: [],
   };
 }
 

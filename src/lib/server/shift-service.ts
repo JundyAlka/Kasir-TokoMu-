@@ -431,15 +431,225 @@ export async function listShifts(
 ) {
   const ownerId = scopedWorkspace(workspaceOwnerId);
   const result = await pool.query<{ id: string }>(
-    `select id from shift_sessions
-     where workspace_owner_id = $1 and coalesce(opened_at, started_at) >= $2::timestamptz and coalesce(opened_at, started_at) < $3::timestamptz
-       and ($4::text is null or cashier_user_id = $4)
-      order by coalesce(opened_at, started_at) desc, started_at desc`,
+    `select ss.id from shift_sessions ss
+     left join shifts s on s.id = ss.shift_id
+     where ss.workspace_owner_id = $1 and coalesce(ss.opened_at, ss.started_at) >= $2::timestamptz and coalesce(ss.opened_at, ss.started_at) < $3::timestamptz
+       and ($4::text is null or ss.cashier_user_id = $4 or s.name like 'Impor %' or ss.variance_note like '%impor%')
+      order by coalesce(ss.opened_at, ss.started_at) desc, ss.started_at desc`,
     [ownerId, range.start, range.end, cashierUserId ?? null]
   );
   return (await Promise.all(result.rows.map((row) => sessionById(ownerId, row.id)))).filter(
     (session): session is ShiftSessionSummary => session !== null
   );
+}
+
+export async function updateShiftSession(
+  workspaceOwnerId: string,
+  sessionId: string,
+  data: {
+    status?: "open" | "closed";
+    openingCash?: number | null;
+    openingCoins?: number | null;
+    openingSavings?: number | null;
+    closingCash?: number | null;
+    closingCoins?: number | null;
+    closingSavings?: number | null;
+    variance?: number | null;
+    varianceNote?: string | null;
+    action?: "close" | "update";
+  },
+  actorUserId?: string
+) {
+  const ownerId = scopedWorkspace(workspaceOwnerId);
+  const session = await sessionById(ownerId, sessionId);
+  if (!session) throw notFoundError();
+
+  const now = nowIso();
+
+  if (data.action === "close" || (data.status === "closed" && session.status === "open")) {
+    const balances = {
+      cash: data.closingCash ?? session.closingCash ?? 0,
+      coins: data.closingCoins ?? session.closingCoins ?? 0,
+      savings: data.closingSavings ?? session.closingSavings ?? 0,
+    };
+    const movement = await getShiftCashMovement(ownerId, sessionId, session.startedAt, now);
+    const expectedClosing = session.openingTotal + movement.cashIn - movement.cashExpenses;
+    const actualClosing = balances.cash + balances.coins + balances.savings;
+    const variance = data.variance ?? (actualClosing - expectedClosing);
+    const note = data.varianceNote ?? session.varianceNote ?? (variance !== 0 ? "Ditutup manual oleh pimpinan." : "Ditutup oleh pimpinan.");
+
+    await pool.query(
+      `update shift_sessions set
+        status = 'closed',
+        ended_at = coalesce(ended_at, $3),
+        closed_at = coalesce(closed_at, $3),
+        closing_cash = $4,
+        closing_coins = $5,
+        closing_savings = $6,
+        expected_cash = $7,
+        expected_closing = $8,
+        difference = $9,
+        variance = $10,
+        variance_note = $11,
+        closed_by_user_id = coalesce(closed_by_user_id, $12)
+       where id = $1 and workspace_owner_id = $2`,
+      [
+        sessionId,
+        ownerId,
+        now,
+        balances.cash,
+        balances.coins,
+        balances.savings,
+        expectedClosing,
+        expectedClosing,
+        variance,
+        variance,
+        note,
+        actorUserId || session.cashierUserId,
+      ]
+    );
+  } else {
+    const openingCash = data.openingCash !== undefined ? data.openingCash : session.openingCash;
+    const openingCoins = data.openingCoins !== undefined ? data.openingCoins : session.openingCoins;
+    const openingSavings = data.openingSavings !== undefined ? data.openingSavings : session.openingSavings;
+    const closingCash = data.closingCash !== undefined ? data.closingCash : session.closingCash;
+    const closingCoins = data.closingCoins !== undefined ? data.closingCoins : session.closingCoins;
+    const closingSavings = data.closingSavings !== undefined ? data.closingSavings : session.closingSavings;
+    const status = data.status || session.status;
+    const variance = data.variance !== undefined ? data.variance : session.variance;
+    const varianceNote = data.varianceNote !== undefined ? data.varianceNote : session.varianceNote;
+
+    const now = new Date().toISOString();
+    await pool.query(
+      `update shift_sessions set
+        status = $3,
+        ended_at = case when $3 = 'open' then null else coalesce(ended_at, $12) end,
+        closed_at = case when $3 = 'open' then null else coalesce(closed_at, $12) end,
+        closed_by_user_id = case when $3 = 'open' then null else closed_by_user_id end,
+        opening_cash = $4,
+        opening_coins = $5,
+        opening_savings = $6,
+        closing_cash = $7,
+        closing_coins = $8,
+        closing_savings = $9,
+        variance = $10,
+        difference = $10,
+        variance_note = $11
+       where id = $1 and workspace_owner_id = $2`,
+      [
+        sessionId,
+        ownerId,
+        status,
+        openingCash,
+        openingCoins,
+        openingSavings,
+        closingCash,
+        closingCoins,
+        closingSavings,
+        variance,
+        varianceNote,
+        now,
+      ]
+    );
+  }
+
+  const updated = await sessionById(ownerId, sessionId);
+  if (!updated) throw new Error("Gagal memperbarui data shift.");
+  return updated;
+}
+
+export async function deleteShiftSession(workspaceOwnerId: string, sessionId: string) {
+  const ownerId = scopedWorkspace(workspaceOwnerId);
+  await pool.query(`update transactions set shift_session_id = null where shift_session_id = $1 and user_id = $2`, [sessionId, ownerId]);
+  await pool.query(`update expenses set shift_session_id = null where shift_session_id = $1 and user_id = $2`, [sessionId, ownerId]);
+  await pool.query(`update debt_payments set shift_session_id = null where shift_session_id = $1`, [sessionId]);
+  const res = await pool.query(`delete from shift_sessions where id = $1 and workspace_owner_id = $2 returning id`, [sessionId, ownerId]);
+  if (!res.rows[0]) throw notFoundError();
+  return { id: sessionId };
+}
+
+export async function restoreShiftSession(workspaceOwnerId: string, sessionData: {
+  id: string;
+  shiftId?: string;
+  cashierUserId?: string;
+  startedAt: string;
+  endedAt?: string | null;
+  openingCash?: number | null;
+  openingCoins?: number | null;
+  openingSavings?: number | null;
+  closingCash?: number | null;
+  closingCoins?: number | null;
+  closingSavings?: number | null;
+  expectedClosing?: number | null;
+  variance?: number | null;
+  varianceNote?: string | null;
+  status: string;
+}) {
+  const ownerId = scopedWorkspace(workspaceOwnerId);
+  let shiftId = sessionData.shiftId;
+  if (!shiftId) {
+    const shiftRes = await pool.query<{ id: string }>(`select id from shifts where workspace_owner_id = $1 limit 1`, [ownerId]);
+    shiftId = shiftRes.rows[0]?.id;
+    if (!shiftId) {
+      const newShiftRes = await pool.query<{ id: string }>(
+        `insert into shifts (id, workspace_owner_id, name, start_time, end_time, created_at)
+         values ($1, $2, 'Shift Umum', '07:00', '21:00', now()) returning id`,
+        [createId("shift"), ownerId]
+      );
+      shiftId = newShiftRes.rows[0]?.id;
+    }
+  }
+  const cashierUserId = sessionData.cashierUserId || ownerId;
+
+  await db
+    .insert(shiftSessions)
+    .values({
+      id: sessionData.id,
+      workspaceOwnerId: ownerId,
+      shiftId: shiftId!,
+      cashierUserId,
+      startedAt: sessionData.startedAt,
+      endedAt: sessionData.endedAt || null,
+      openingCash: sessionData.openingCash ?? 0,
+      openingCoins: sessionData.openingCoins ?? 0,
+      openingSavings: sessionData.openingSavings ?? 0,
+      closingCash: sessionData.closingCash ?? null,
+      closingCoins: sessionData.closingCoins ?? null,
+      closingSavings: sessionData.closingSavings ?? null,
+      expectedCash: sessionData.expectedClosing ?? null,
+      expectedClosing: sessionData.expectedClosing ?? null,
+      variance: sessionData.variance ?? null,
+      difference: sessionData.variance ?? null,
+      varianceNote: sessionData.varianceNote ?? null,
+      status: sessionData.status || "open",
+      openedAt: sessionData.startedAt,
+      closedAt: sessionData.status === "closed" ? (sessionData.endedAt || sessionData.startedAt) : null,
+      openedByUserId: cashierUserId,
+      closedByUserId: sessionData.status === "closed" ? cashierUserId : null,
+      needsReview: false,
+    })
+    .onConflictDoUpdate({
+      target: shiftSessions.id,
+      set: {
+        status: sessionData.status || "open",
+        openingCash: sessionData.openingCash ?? 0,
+        openingCoins: sessionData.openingCoins ?? 0,
+        openingSavings: sessionData.openingSavings ?? 0,
+        closingCash: sessionData.closingCash ?? null,
+        closingCoins: sessionData.closingCoins ?? null,
+        closingSavings: sessionData.closingSavings ?? null,
+        expectedCash: sessionData.expectedClosing ?? null,
+        expectedClosing: sessionData.expectedClosing ?? null,
+        variance: sessionData.variance ?? null,
+        difference: sessionData.variance ?? null,
+        varianceNote: sessionData.varianceNote ?? null,
+        endedAt: sessionData.status === "closed" ? (sessionData.endedAt || sessionData.startedAt) : null,
+        closedAt: sessionData.status === "closed" ? (sessionData.endedAt || sessionData.startedAt) : null,
+        closedByUserId: sessionData.status === "closed" ? cashierUserId : null,
+      },
+    });
+
+  return await sessionById(ownerId, sessionData.id);
 }
 
 export async function getSuggestedOpeningBalances(workspaceOwnerId: string): Promise<CashBalances> {

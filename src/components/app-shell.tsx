@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
+  BanknoteArrowDown,
+  CalendarClock,
   ChevronsLeft,
   ChevronsRight,
   FileChartColumn,
@@ -41,6 +43,8 @@ const navigation = [
   { href: "/kasir", label: "Kasir", icon: ShoppingBasket, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/dashboard", label: "Dashboard", icon: Gauge, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/inventaris", label: "Inventaris", icon: Package2, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
+  { href: "/pengeluaran", label: "Pengeluaran & Restok", icon: BanknoteArrowDown, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
+  { href: "/harian-shift", label: "Harian & Shift", icon: CalendarClock, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/buku-hutang", label: "Buku Hutang", icon: Wallet, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/investor", label: "Investor", icon: Landmark, roles: ["pimpinan", "pengelola_keuangan"] },
   { href: "/bagi-hasil", label: "Bagi Hasil", icon: HandCoins, roles: ["pimpinan", "pengelola_keuangan"] },
@@ -128,18 +132,17 @@ export function AppShell({
         const currentSnapshot = monthlyData?.reports?.find((r: any) =>
           r.periodYear === currentYear && r.periodMonth === currentMonth
         );
-        // The sidebar reminder is intentionally quiet until H-2 at month end.
-        const inReportReminderWindow = isReportReminderWindow(now);
         const staleSnapshotPeriod = monthlyData?.notifications?.snapshotOutdatedPeriods?.find((p: string) => p === currentPeriodStr) ?? null;
         const stalePcmPeriod = monthlyData?.notifications?.pcmOutdatedPeriods?.find((p: string) => p === currentPeriodStr) ?? null;
 
-        // A finalized report that changed after closing is always actionable,
-        // even outside the routine H-2 reminder window.
-        const monthlyPending = Boolean(staleSnapshotPeriod) || (inReportReminderWindow && (!currentSnapshot || unsavedTransactionsRef.current));
+        // Info 'Perbarui' hanya muncul jika user SUDAH mengaktifkan/menyimpan snapshot (final),
+        // dan kemudian ada transaksi baru atau perubahan yang menyebabkan snapshot stale.
+        const isSnapshotActiveAndFinalized = Boolean(currentSnapshot && currentSnapshot.status === "final");
+        const monthlyPending = isSnapshotActiveAndFinalized && Boolean(staleSnapshotPeriod);
         setHasPendingMonthlyReport(monthlyPending);
 
-        // PCM becomes actionable only once its source snapshot is current.
-        setHasPendingPcmReport(Boolean(stalePcmPeriod));
+        // PCM becomes actionable only once its source snapshot is finalized and PCM data is outdated.
+        setHasPendingPcmReport(isSnapshotActiveAndFinalized && Boolean(stalePcmPeriod));
         setPendingPcmPeriod(stalePcmPeriod);
       });
     }
@@ -152,23 +155,14 @@ export function AppShell({
         setHasPendingPcmReport(false);
         return;
       }
-      if (e.detail?.action === "unsaved_changes") {
-        const unsaved = !!e.detail?.hasUnsaved;
-        unsavedTransactionsRef.current = unsaved;
-        setHasPendingMonthlyReport(isReportReminderWindow(new Date()) && unsaved);
-      } else if (e.detail?.action === "transaction_added") {
-        unsavedTransactionsRef.current = true;
-        setHasPendingMonthlyReport(true);
-      } else if (e.detail?.action === "snapshot_updated") {
+      if (e.detail?.action === "snapshot_updated" || e.detail?.action === "finalized") {
         unsavedTransactionsRef.current = false;
         setHasPendingMonthlyReport(false);
-      } else if (e.detail?.action === "updated" || e.detail?.action === "finalized") {
+      } else if (e.detail?.action === "updated") {
         setHasPendingPcmReport(false);
-      } else if (e.detail?.action === "reopened") {
-        setHasPendingPcmReport(isReportReminderWindow(new Date()));
       }
       if (refetchTimer) clearTimeout(refetchTimer);
-      refetchTimer = setTimeout(fetchReportsStatus, 800);
+      refetchTimer = setTimeout(fetchReportsStatus, 600);
     }
 
     window.addEventListener("pcm-reports-updated", handlePcmUpdate);
@@ -253,7 +247,7 @@ export function AppShell({
   }
 
   return (
-    <div className={cn("flex flex-col h-full w-full overflow-hidden bg-background", isResizing && "select-none cursor-col-resize")}>
+    <div suppressHydrationWarning className={cn("flex flex-col h-full w-full overflow-hidden bg-background", isResizing && "select-none cursor-col-resize")}>
       <div className="flex flex-1 min-h-0 w-full max-w-none gap-2 p-2 sm:gap-2.5 sm:p-2.5 lg:gap-3 lg:p-3">
         <aside
           className={cn(

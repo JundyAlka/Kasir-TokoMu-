@@ -1492,14 +1492,14 @@ export function KasirView() {
                 <div className="mt-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">
                   <p className="font-semibold">Shift belum dibuka</p>
                   <p className="mt-0.5 text-xs text-muted-foreground dark:text-amber-300">
-                    Buka shift di menu Laporan (Harian & Shift) sebelum mulai transaksi kasir.
+                    Buka shift di menu Harian & Shift sebelum mulai transaksi kasir.
                   </p>
                   <Link
-                    href="/laporan?tab=harian_shift"
+                    href="/harian-shift"
                     className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
                   >
                     <WalletCards className="size-3.5" />
-                    Buka Shift di Laporan
+                    Buka Shift Kasir
                   </Link>
                 </div>
               ) : null}

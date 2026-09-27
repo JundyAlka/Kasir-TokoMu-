@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
               else 
                 coalesce(i.akad_type, 'murabahah_bil_wakalah')
             end as "akadType",
+            case when i.type = 'barang_titip_jual' then 'barang_titip_jual' else 'uang' end as "type",
             p.period_start as "periodStart",
             p.period_end as "periodEnd",
             p.base_profit as "baseAmount",
@@ -65,7 +66,13 @@ export async function GET(request: NextRequest) {
             p.paid_at as "paidAt",
             p.note,
             p.created_at as "createdAt",
-            p.updated_at as "updatedAt"
+            p.updated_at as "updatedAt",
+            i.product_id as "productId",
+            p_prod.name as "productName",
+            coalesce(p_prod.stock, 0)::int as "currentStock",
+            i.amount as "capitalAmount",
+            i.unit_cost as "unitCost",
+            p_prod.sell_price as "unitPrice"
           from investor_payouts p
           left join investors inv
             on inv.id = p.investor_id
@@ -73,6 +80,9 @@ export async function GET(request: NextRequest) {
           left join investments i
             on i.id = p.investment_id
             and i.workspace_owner_id = p.workspace_owner_id
+          left join products p_prod
+            on p_prod.id = i.product_id
+            and p_prod.user_id = p.workspace_owner_id
           where p.workspace_owner_id = $1
             and p.period_start = $2::timestamptz
             and p.period_end = $3::timestamptz
@@ -94,6 +104,7 @@ export async function GET(request: NextRequest) {
               else 
                 coalesce(i.akad_type, 'murabahah_bil_wakalah')
             end as "akadType",
+            case when i.type = 'barang_titip_jual' then 'barang_titip_jual' else 'uang' end as "type",
             p.period_start as "periodStart",
             p.period_end as "periodEnd",
             p.base_profit as "baseAmount",
@@ -105,7 +116,13 @@ export async function GET(request: NextRequest) {
             p.paid_at as "paidAt",
             p.note,
             p.created_at as "createdAt",
-            p.updated_at as "updatedAt"
+            p.updated_at as "updatedAt",
+            i.product_id as "productId",
+            p_prod.name as "productName",
+            coalesce(p_prod.stock, 0)::int as "currentStock",
+            i.amount as "capitalAmount",
+            i.unit_cost as "unitCost",
+            p_prod.sell_price as "unitPrice"
           from investor_payouts p
           left join investors inv
             on inv.id = p.investor_id
@@ -113,6 +130,9 @@ export async function GET(request: NextRequest) {
           left join investments i
             on i.id = p.investment_id
             and i.workspace_owner_id = p.workspace_owner_id
+          left join products p_prod
+            on p_prod.id = i.product_id
+            and p_prod.user_id = p.workspace_owner_id
           where p.workspace_owner_id = $1
           order by p.period_start desc, inv.name asc, p.created_at asc
         `,

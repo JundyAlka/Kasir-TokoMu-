@@ -336,9 +336,9 @@ export async function getBootstrapState(userId: string): Promise<AppState> {
   const [profile, productRows, transactionRows, debtRows, expenseRows] = await Promise.all([
     q.storeProfile(),
     q.productList(),
-    q.transactionList(50),
+    q.transactionList(500),
     q.debtList(),
-    q.expenseList(50),
+    q.expenseList(500),
   ]);
 
   if (!profile) {

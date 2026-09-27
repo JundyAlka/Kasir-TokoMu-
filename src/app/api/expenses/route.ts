@@ -41,13 +41,13 @@ export async function GET(request: NextRequest) {
   try {
     const { workspaceOwnerId } = await requireRoutePolicy("/api/expenses", "GET");
     
-    // Fetch last 50 expenses
+    // Fetch recent expenses (up to 500)
     const list = await db
       .select()
       .from(expenses)
       .where(eq(expenses.userId, workspaceOwnerId))
       .orderBy(desc(expenses.createdAt))
-      .limit(50);
+      .limit(500);
 
     return NextResponse.json({ expenses: list });
   } catch (error) {

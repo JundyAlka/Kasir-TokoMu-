@@ -83,3 +83,21 @@ export async function PATCH(request: NextRequest) {
     return handleRouteError(error, "Gagal mengupdate rencana restok.");
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    await requireRoutePolicy("/api/restock-plans", "DELETE");
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "ID rencana restok wajib diisi." }, { status: 400 });
+    const { workspaceOwnerId } = await getRequestUser();
+
+    await db
+      .delete(restockPlans)
+      .where(and(eq(restockPlans.id, id), eq(restockPlans.workspaceOwnerId, workspaceOwnerId)));
+
+    return NextResponse.json({ ok: true, id });
+  } catch (error) {
+    return handleRouteError(error, "Gagal menghapus rencana restok.");
+  }
+}

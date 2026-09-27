@@ -36,6 +36,31 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeProvider({ children, defaultTheme = "dark" }: ThemeProviderProps) {
+  useEffect(() => {
+    // Intercept and strip browser extension injected attributes (e.g. Bitdefender bis_skin_checked)
+    const cleanupExtensionAttrs = () => {
+      document.querySelectorAll("[bis_skin_checked], [bis_register], [bis_size]").forEach((el) => {
+        el.removeAttribute("bis_skin_checked");
+        el.removeAttribute("bis_register");
+        el.removeAttribute("bis_size");
+      });
+    };
+    cleanupExtensionAttrs();
+
+    // Suppress extension hydration warnings in console
+    const origError = console.error;
+    console.error = (...args: unknown[]) => {
+      const msg = typeof args[0] === "string" ? args[0] : "";
+      if (msg.includes("bis_skin_checked") || msg.includes("bis_register") || msg.includes("bis_size")) {
+        return;
+      }
+      origError.apply(console, args);
+    };
+
+    return () => {
+      console.error = origError;
+    };
+  }, []);
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === "undefined") {
       return defaultTheme;

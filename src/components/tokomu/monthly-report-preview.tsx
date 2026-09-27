@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  ArrowLeft,
   Download,
   Eye,
   EyeOff,
@@ -131,6 +132,7 @@ export function MonthlyReportPreview() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [previewVersion, setPreviewVersion] = useState(0);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [tabletView, setTabletView] = useState<"list" | "pdf">("list");
 
   const selectedReport = useMemo(
     () => reports.find((report) => report.id === selectedId) ?? reports[0] ?? null,
@@ -401,18 +403,53 @@ export function MonthlyReportPreview() {
         </CardHeader>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.9fr)]">
-        <Card className="border-border/60 bg-card/80">
+      {/* Tablet / Mobile View Switcher Tabs */}
+      <div className="flex 2xl:hidden items-center justify-between gap-1.5 p-1 bg-muted/60 border border-border/70 rounded-2xl">
+        <button
+          type="button"
+          onClick={() => setTabletView("list")}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-2 py-2 px-3 sm:px-4 rounded-xl text-xs font-semibold transition-all cursor-pointer",
+            tabletView === "list"
+              ? "bg-primary text-primary-foreground dark:text-amber-950 font-bold shadow-xs"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <FileText className="size-4 shrink-0" />
+          <span>Daftar Laporan ({reports.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setTabletView("pdf");
+            setShowPdfPreview(true);
+          }}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-2 py-2 px-3 sm:px-4 rounded-xl text-xs font-semibold transition-all cursor-pointer",
+            tabletView === "pdf"
+              ? "bg-primary text-primary-foreground dark:text-amber-950 font-bold shadow-xs"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Eye className="size-4 shrink-0" />
+          <span className="truncate">
+            Preview PDF {selectedReport ? `(${periodLabel(selectedReport.periodYear, selectedReport.periodMonth)})` : ""}
+          </span>
+        </button>
+      </div>
+
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.15fr)_minmax(480px,0.85fr)]">
+        <Card className={cn("border-border/60 bg-card/80", tabletView === "pdf" && "hidden 2xl:block")}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileText className="size-5" />
+              <FileText className="size-5 text-primary shrink-0" />
               Daftar laporan
             </CardTitle>
             <CardDescription>
               Draft dapat diedit. Laporan final bisa dibuka kembali bila perlu dikoreksi.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3.5">
             {reports.map((report) => {
               const metrics = getReportMetrics(report);
               const isSelected = selectedReport?.id === report.id;
@@ -457,29 +494,38 @@ export function MonthlyReportPreview() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="rounded-xl bg-muted/55 p-3">
-                      <p className="text-[11px] text-muted-foreground">Laba Kotor</p>
-                      <p className="mt-1 font-semibold tabular-nums text-sm">{formatCurrency(metrics.grossProfit)}</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-2 min-[1680px]:grid-cols-4 gap-2 sm:gap-2.5">
+                    <div className="rounded-xl bg-muted/55 p-2.5 sm:p-3">
+                      <p className="text-[11px] text-muted-foreground font-medium">Laba Kotor</p>
+                      <p className="mt-1 font-semibold tabular-nums text-xs sm:text-sm whitespace-nowrap">{formatCurrency(metrics.grossProfit)}</p>
                     </div>
-                    <div className="rounded-xl bg-muted/55 p-3">
-                      <p className="text-[11px] text-muted-foreground">Biaya Operasional</p>
-                      <p className="mt-1 font-semibold text-rose-500 tabular-nums text-sm">-{formatCurrency(metrics.expenses || 0)}</p>
+                    <div className="rounded-xl bg-muted/55 p-2.5 sm:p-3">
+                      <p className="text-[11px] text-muted-foreground font-medium">Biaya Operasional</p>
+                      <p className="mt-1 font-semibold text-rose-500 tabular-nums text-xs sm:text-sm whitespace-nowrap">-{formatCurrency(metrics.expenses || 0)}</p>
                     </div>
-                    <div className="rounded-xl bg-muted/55 p-3">
-                      <p className="text-[11px] text-muted-foreground">Gaji Karyawan</p>
-                      <p className="mt-1 font-semibold text-rose-500 tabular-nums text-sm">-{formatCurrency(metrics.salaries || 0)}</p>
+                    <div className="rounded-xl bg-muted/55 p-2.5 sm:p-3">
+                      <p className="text-[11px] text-muted-foreground font-medium">Gaji Karyawan</p>
+                      <p className="mt-1 font-semibold text-rose-500 tabular-nums text-xs sm:text-sm whitespace-nowrap">-{formatCurrency(metrics.salaries || 0)}</p>
                     </div>
-                    <div className="rounded-xl bg-primary/10 border border-primary/20 p-3">
+                    <div className="rounded-xl bg-primary/10 border border-primary/20 p-2.5 sm:p-3">
                       <p className="text-[11px] font-medium text-primary">Laba Bersih</p>
-                      <p className="mt-1 font-bold text-primary tabular-nums text-sm">{formatCurrency(metrics.netProfit)}</p>
+                      <p className="mt-1 font-bold text-primary tabular-nums text-xs sm:text-sm whitespace-nowrap">{formatCurrency(metrics.netProfit)}</p>
                     </div>
                   </div>
 
-                  <div className="grid gap-2 rounded-xl border border-border/60 p-3 text-sm sm:grid-cols-3">
-                    <div><span className="text-muted-foreground">Bagi Hasil PCM</span><p className="font-medium tabular-nums">{formatCurrency(metrics.pcmShare)}</p></div>
-                    <div><span className="text-muted-foreground">Dana Cadangan</span><p className="font-medium tabular-nums">{formatCurrency(metrics.reserveShare)}</p></div>
-                    <div><span className="text-muted-foreground">Bagi Hasil Investor</span><p className="font-medium tabular-nums">{formatCurrency(metrics.investorPayout)}</p></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-xl border border-border/60 p-2.5 sm:p-3 text-xs sm:text-sm">
+                    <div>
+                      <span className="text-muted-foreground text-[11px] sm:text-xs">Bagi Hasil PCM</span>
+                      <p className="font-semibold tabular-nums whitespace-nowrap mt-0.5">{formatCurrency(metrics.pcmShare)}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground text-[11px] sm:text-xs">Dana Cadangan</span>
+                      <p className="font-semibold tabular-nums whitespace-nowrap mt-0.5">{formatCurrency(metrics.reserveShare)}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground text-[11px] sm:text-xs">Bagi Hasil Investor</span>
+                      <p className="font-semibold tabular-nums whitespace-nowrap mt-0.5">{formatCurrency(metrics.investorPayout)}</p>
+                    </div>
                   </div>
 
                   {asSnapshot(report.data).note ? (
@@ -492,13 +538,14 @@ export function MonthlyReportPreview() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="rounded-full"
+                      className="rounded-full gap-1.5"
                       onClick={() => {
                         setSelectedId(report.id);
                         setShowPdfPreview(true);
+                        setTabletView("pdf");
                       }}
                     >
-                      <Eye className="size-4" />
+                      <Eye className="size-3.5" />
                       Preview
                     </Button>
                     <a
@@ -578,19 +625,30 @@ export function MonthlyReportPreview() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/60 bg-card/80">
+        <Card className={cn("border-border/60 bg-card/80", tabletView === "list" && "hidden 2xl:block")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle className="font-heading text-xl">Preview PDF</CardTitle>
-              <CardDescription className="mt-1">
-                Tampilan dokumen resmi yang akan diunduh atau dicetak.
-              </CardDescription>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="2xl:hidden rounded-xl text-xs gap-1.5 text-muted-foreground hover:text-foreground cursor-pointer -ml-2 mr-1"
+                onClick={() => setTabletView("list")}
+              >
+                <ArrowLeft className="size-4" />
+                <span>Daftar</span>
+              </Button>
+              <div>
+                <CardTitle className="font-heading text-lg sm:text-xl">Preview PDF</CardTitle>
+                <CardDescription className="mt-1">
+                  Tampilan dokumen resmi yang akan diunduh atau dicetak.
+                </CardDescription>
+              </div>
             </div>
             {selectedReport && showPdfPreview ? (
               <Button
                 variant="ghost"
                 size="sm"
-                className="rounded-xl text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+                className="rounded-xl text-xs gap-1.5 text-muted-foreground hover:text-foreground cursor-pointer"
                 onClick={() => setShowPdfPreview(false)}
               >
                 <EyeOff className="size-4" />

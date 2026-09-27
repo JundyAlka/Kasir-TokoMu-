@@ -145,14 +145,14 @@ const styles = StyleSheet.create({
   header: {
     borderBottomWidth: 1.5,
     borderBottomColor: "#0f172a",
-    paddingBottom: 8,
-    marginBottom: 12,
+    paddingBottom: 10,
+    marginBottom: 14,
   },
   eyebrowRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 2,
+    marginBottom: 4,
   },
   eyebrow: {
     fontSize: 7.5,
@@ -166,22 +166,31 @@ const styles = StyleSheet.create({
     color: "#64748b",
   },
   title: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: "Helvetica-Bold",
     textTransform: "uppercase",
     color: "#0f172a",
     letterSpacing: 0.3,
+    lineHeight: 1.25,
+    marginBottom: 3.5,
   },
   storeName: {
-    marginTop: 1.5,
-    fontSize: 10.5,
+    fontSize: 10,
     fontFamily: "Helvetica-Bold",
     color: "#334155",
+    lineHeight: 1.25,
+    marginBottom: 3.5,
   },
   subtitle: {
-    marginTop: 1.5,
     fontSize: 8,
     color: "#475569",
+    lineHeight: 1.3,
+    marginBottom: 2.5,
+  },
+  subtitleMeta: {
+    fontSize: 7.5,
+    color: "#64748b",
+    lineHeight: 1.3,
   },
   section: {
     marginBottom: 10,
@@ -454,7 +463,7 @@ export function ProfitLossReportDocument({
         {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.eyebrowRow}>
-            <Text style={styles.eyebrow}>TokoMu &bull; Dokumen Resmi Laporan Keuangan &amp; Neraca Pembukuan</Text>
+            <Text style={styles.eyebrow}>TokoMu • Dokumen Resmi Laporan Keuangan &amp; Neraca Pembukuan</Text>
             <Text style={styles.printDate}>Dicetak: {formatDate(data.generatedAt)}</Text>
           </View>
           <Text style={styles.title}>Laporan Keuangan &amp; Neraca Laba / Rugi Bulanan</Text>
@@ -462,8 +471,8 @@ export function ProfitLossReportDocument({
           <Text style={styles.subtitle}>
             Periode: {data.period.label} ({formatDate(data.period.start)} s.d. {formatDate(data.period.end)})
           </Text>
-          <Text style={styles.subtitle}>
-            {[data.identity.storeTagline, data.identity.storeAddress, data.identity.city].filter(Boolean).join(" &bull; ")}
+          <Text style={styles.subtitleMeta}>
+            {[data.identity.storeTagline, data.identity.storeAddress, data.identity.city].filter(Boolean).join(" • ")}
           </Text>
         </View>
 
@@ -778,7 +787,7 @@ export function ProfitLossReportDocument({
           {data.ownerNotes.length > 0 ? (
             data.ownerNotes.map((note, index) => (
               <View key={`${note}-${index}`} style={styles.noteBox}>
-                <Text>&bull; {note}</Text>
+                <Text>• {note}</Text>
               </View>
             ))
           ) : (
@@ -804,7 +813,7 @@ export function ProfitLossReportDocument({
 
         {/* FOOTER */}
         <View style={styles.footer} fixed>
-          <Text>{data.identity.storeName} &bull; Dokumen Laporan Resmi</Text>
+          <Text>{data.identity.storeName} • Dokumen Laporan Resmi</Text>
           <Text>Halaman dicetak otomatis dari sistem TokoMu</Text>
         </View>
       </Page>

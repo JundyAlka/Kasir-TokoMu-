@@ -41,6 +41,13 @@ export type PayoutPreview = {
   amount: number;
   note: string;
   quantitySold?: number;
+  productId?: string | null;
+  productName?: string | null;
+  currentStock?: number | null;
+  unitCost?: number | null;
+  unitPrice?: number | null;
+  capitalAmount?: number | null;
+  initialStock?: number | null;
 };
 
 export type PayoutCalculation = PeriodProfit & {
@@ -70,6 +77,9 @@ type InvestmentRow = {
   profitSharePct: number | null;
   productId: string | null;
   productName: string | null;
+  currentStock: number | null;
+  sellPrice: number | null;
+  unitCount: number | null;
   unitCost: number | null;
   profitSharePerUnitPct: number | null;
   profitSharePerUnitAmount: number | null;
@@ -271,6 +281,7 @@ function calculatePayoutForInvestment(
       shareMode: "percentage",
       amount: roundCurrency(baseAmount * (ratePct / 100)),
       note: `Murabahah fixed-rate ${ratePct}% per bulan dari modal.`,
+      capitalAmount: baseAmount,
     };
   }
 
@@ -291,6 +302,7 @@ function calculatePayoutForInvestment(
       shareMode: "percentage",
       amount: roundCurrency(baseAmount * (ratePct / 100)),
       note: `${akadType === "mudharabah" ? "Mudharabah" : "Musyarakah"} ${ratePct}% dari laba bersih periode.`,
+      capitalAmount: investment.amount ?? 0,
     };
   }
 
@@ -313,6 +325,10 @@ function calculatePayoutForInvestment(
       ? `Titipan ${investment.productName ?? "produk"} terjual ${quantitySold} pcs (Bagi hasil Rp ${perUnit.toLocaleString("id-ID")}/pcs).`
       : `Titipan ${investment.productName ?? "produk"} menggunakan bagi hasil ${isNominal ? `Rp ${perUnit.toLocaleString("id-ID")}/pcs` : `${ratePct}% margin`}.`;
 
+    const soldCount = quantitySold ?? 0;
+    const currStock = investment.currentStock ?? 0;
+    const initialTotal = Math.max(soldCount + currStock, investment.unitCount ?? 0);
+
     return {
       investmentId: investment.id,
       investorId: investment.investorId,
@@ -327,7 +343,13 @@ function calculatePayoutForInvestment(
       ...(quantitySold && quantitySold > 0 ? { perUnitAmount: perUnit } : {}),
       amount,
       note,
-      quantitySold,
+      quantitySold: soldCount,
+      productId: investment.productId,
+      productName: investment.productName,
+      currentStock: currStock,
+      unitCost: investment.unitCost,
+      unitPrice: investment.sellPrice,
+      initialStock: initialTotal,
     };
   }
 
@@ -344,6 +366,7 @@ function calculatePayoutForInvestment(
     shareMode: "percentage",
     amount: 0,
     note: "Pinjaman qardh tidak menghasilkan payout bagi hasil.",
+    capitalAmount: investment.amount ?? 0,
   };
 }
 
@@ -373,7 +396,10 @@ export async function calculatePayouts(
           i.profit_share_pct as "profitSharePct",
           i.product_id as "productId",
           p.name as "productName",
-          i.unit_cost as "unitCost",
+          coalesce(p.stock, 0)::int as "currentStock",
+          p.sell_price as "sellPrice",
+          i.unit_count as "unitCount",
+          coalesce(i.unit_cost, p.buy_price, 0)::int as "unitCost",
           i.profit_share_per_unit_pct as "profitSharePerUnitPct",
           i.profit_share_per_unit_amount as "profitSharePerUnitAmount",
           i.start_date as "startDate",

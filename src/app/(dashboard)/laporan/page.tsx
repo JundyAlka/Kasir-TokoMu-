@@ -20,11 +20,17 @@ export default async function LaporanPage({
 
   const canManageImports = role === "pimpinan" || role === "pengelola_keuangan";
   const params = searchParams ? await searchParams : {};
+
+  if (params?.tab === "harian_shift") {
+    redirect("/harian-shift");
+  }
+  if (params?.tab === "restok_pengeluaran") {
+    redirect("/pengeluaran");
+  }
+
   const allowedTabs = [
     "laba_rugi",
-    "harian_shift",
     "aset_modal",
-    "restok_pengeluaran",
     ...(canManageImports ? ["impor_transaksi"] : []),
   ];
   const initialTab =

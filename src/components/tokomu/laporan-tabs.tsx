@@ -20,16 +20,8 @@ const LaporanView = dynamic(
   () => import("@/components/warung/laporan-view").then((m) => m.LaporanView),
   { ssr: false, loading: TabLoadingFallback }
 );
-const DailyShiftPanel = dynamic(
-  () => import("@/components/warung/laporan-view").then((m) => m.DailyShiftPanel),
-  { ssr: false, loading: TabLoadingFallback }
-);
 const LaporanAsetView = dynamic(
   () => import("@/components/warung/laporan-aset-view").then((m) => m.LaporanAsetView),
-  { ssr: false, loading: TabLoadingFallback }
-);
-const PengeluaranRestokView = dynamic(
-  () => import("@/components/warung/pengeluaran-restok-view").then((m) => m.PengeluaranRestokView),
   { ssr: false, loading: TabLoadingFallback }
 );
 const TransactionImportPanel = dynamic(
@@ -59,20 +51,23 @@ export function LaporanTabs({
     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
       <div className="mb-6 overflow-x-auto pb-2 scrollbar-hide">
         <TabsList className="bg-muted/70 p-1.5 border border-border/70 rounded-2xl min-w-max shadow-inner">
-          <TabsTrigger value="laba_rugi" className="rounded-xl px-6 py-2.5 font-semibold transition-all">
+          <TabsTrigger
+            value="laba_rugi"
+            className="rounded-xl px-6 py-2.5 font-semibold transition-all data-[state=active]:text-primary-foreground dark:data-[state=active]:text-amber-950 dark:data-[state=active]:font-bold data-selected:text-primary-foreground dark:data-selected:text-amber-950"
+          >
             Laba Rugi & Omzet
           </TabsTrigger>
-          <TabsTrigger value="harian_shift" className="rounded-xl px-6 py-2.5 font-semibold transition-all">
-            Harian & Shift
-          </TabsTrigger>
-          <TabsTrigger value="aset_modal" className="rounded-xl px-6 py-2.5 font-semibold transition-all">
+          <TabsTrigger
+            value="aset_modal"
+            className="rounded-xl px-6 py-2.5 font-semibold transition-all data-[state=active]:text-primary-foreground dark:data-[state=active]:text-amber-950 dark:data-[state=active]:font-bold data-selected:text-primary-foreground dark:data-selected:text-amber-950"
+          >
             Aset & Modal Awal
           </TabsTrigger>
-          <TabsTrigger value="restok_pengeluaran" className="rounded-xl px-6 py-2.5 font-semibold transition-all">
-            Pengeluaran & Restok
-          </TabsTrigger>
           {canManageImports ? (
-            <TabsTrigger value="impor_transaksi" className="rounded-xl px-6 py-2.5 font-semibold transition-all">
+            <TabsTrigger
+              value="impor_transaksi"
+              className="rounded-xl px-6 py-2.5 font-semibold transition-all data-[state=active]:text-primary-foreground dark:data-[state=active]:text-amber-950 dark:data-[state=active]:font-bold data-selected:text-primary-foreground dark:data-selected:text-amber-950"
+            >
               Impor Transaksi
             </TabsTrigger>
           ) : null}
@@ -83,16 +78,8 @@ export function LaporanTabs({
         {visitedTabs["laba_rugi"] ? <LaporanView /> : null}
       </TabsContent>
 
-      <TabsContent value="harian_shift" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-        {visitedTabs["harian_shift"] ? <DailyShiftPanel /> : null}
-      </TabsContent>
-
       <TabsContent value="aset_modal" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
         {visitedTabs["aset_modal"] ? <LaporanAsetView /> : null}
-      </TabsContent>
-
-      <TabsContent value="restok_pengeluaran" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-        {visitedTabs["restok_pengeluaran"] ? <PengeluaranRestokView /> : null}
       </TabsContent>
 
       {canManageImports ? (

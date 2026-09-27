@@ -101,6 +101,35 @@ async function getInvestmentCapital(workspaceOwnerId: string, investmentIds: str
   return new Map(result.rows.map((row) => [row.id, row.capital]));
 }
 
+async function getExpenseCategories(workspaceOwnerId: string, periodStart: string, periodEnd: string) {
+  const result = await pool.query<{
+    category: string;
+    amount: string;
+  }>(
+    `
+      select category, coalesce(sum(amount), 0)::text as amount
+      from expenses
+      where user_id = $1
+        and created_at >= $2::timestamptz
+        and created_at < $3::timestamptz
+      group by category
+      order by sum(amount) desc, category asc
+    `,
+    [workspaceOwnerId, periodStart, periodEnd]
+  );
+
+  const total = result.rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+
+  return result.rows.map((r) => {
+    const amt = Number(r.amount || 0);
+    return {
+      category: r.category || "Operasional Umum",
+      amount: amt,
+      percentage: total > 0 ? `${((amt / total) * 100).toFixed(1)}%` : "0%",
+    };
+  });
+}
+
 async function buildReportData(
   workspaceOwnerId: string,
   periodYear: number,
@@ -108,10 +137,10 @@ async function buildReportData(
   note: string,
   range: { start: string; end: string }
 ): Promise<PcmMonthlyReportData> {
-  const [profileRows, calculation, topProducts] = await Promise.all([
+  const [profileRows, calculation, expenseCategories] = await Promise.all([
     db.select().from(storeProfiles).where(eq(storeProfiles.userId, workspaceOwnerId)).limit(1),
     calculatePayouts(workspaceOwnerId, range.start, range.end),
-    getTopProductsForPeriod(workspaceOwnerId, range.start, range.end, 5),
+    getExpenseCategories(workspaceOwnerId, range.start, range.end),
   ]);
   const profile = profileRows[0];
   const capitalByInvestment = await getInvestmentCapital(
@@ -163,7 +192,7 @@ async function buildReportData(
       ...payout,
       capital: capitalByInvestment.get(payout.investmentId) ?? payout.baseProfit,
     })),
-    topProducts,
+    expenseCategories,
   };
 }
 
