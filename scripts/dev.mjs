@@ -44,7 +44,7 @@ function startChild(command, args) {
       ...process.env,
       NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --dns-result-order=ipv4first`.trim(),
     },
-    stdio: "inherit",
+    stdio: ["ignore", "inherit", "inherit"],
   });
   children.add(child);
   child.once("exit", () => children.delete(child));
@@ -128,8 +128,12 @@ const nextProcess = startChild(process.execPath, [
   ...parsedArgs,
 ]);
 
-nextProcess.once("exit", (code) => {
-  if (!shuttingDown) {
-    shutdown(code ?? 0);
-  }
+await new Promise((resolve) => {
+  nextProcess.once("exit", (code) => {
+    if (!shuttingDown) {
+      console.log(`Next.js process exited with code ${code ?? 0}`);
+      shutdown(code ?? 0);
+    }
+    resolve();
+  });
 });

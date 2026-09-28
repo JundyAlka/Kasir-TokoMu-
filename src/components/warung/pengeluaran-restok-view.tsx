@@ -153,16 +153,50 @@ export function ExpenseRecordDialog({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title || !amount) {
-      toast.error("Mohon isi semua data yang wajib.");
+    const cleanTitle = title.trim();
+    const numAmount = parseInt(amount, 10);
+
+    if (!cleanTitle) {
+      toast.error("Keterangan pengeluaran wajib diisi.");
       return;
+    }
+    if (!amount || isNaN(numAmount) || numAmount <= 0) {
+      toast.error("Jumlah nominal pengeluaran harus lebih dari Rp 0.");
+      return;
+    }
+
+    if (category === "bagi_hasil_investor" && !investorId) {
+      toast.error("Investor pemodal wajib dipilih.");
+      return;
+    }
+
+    if (category === "sales_titipan") {
+      if (!investorId) {
+        toast.error("Mitra titipan wajib dipilih.");
+        return;
+      }
+      if (settleIntakeIds.length === 0) {
+        toast.error("Pilih minimal satu barang titipan yang dilunasi.");
+        return;
+      }
+    }
+
+    if (category === "sales_toko" && restockEnabled) {
+      if (!restockProductId) {
+        toast.error("Pilih produk yang ingin direstok.");
+        return;
+      }
+      if (!restockQuantity || Number(restockQuantity) <= 0) {
+        toast.error("Jumlah unit restok harus lebih dari 0.");
+        return;
+      }
     }
 
     setIsSubmitting(true);
     try {
       const payload = {
-        title,
-        amount: parseInt(amount, 10),
+        title: cleanTitle,
+        amount: numAmount,
         expenseType: category,
         investorId: investorId || undefined,
         settleIntakeIds,
@@ -209,8 +243,8 @@ export function ExpenseRecordDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl md:max-w-2xl w-full rounded-2xl border border-border/80 bg-card p-6 sm:p-7 shadow-2xl overflow-hidden">
-        <DialogHeader className="pb-4 border-b border-border/50">
+      <DialogContent className="sm:max-w-xl md:max-w-2xl w-full max-h-[92vh] sm:max-h-[88vh] rounded-2xl border border-border/80 bg-card p-0 gap-0 shadow-2xl flex flex-col overflow-hidden">
+        <DialogHeader className="p-5 sm:p-6 pb-4 border-b border-border/60 shrink-0 bg-card text-left">
           <div className="flex items-center gap-3.5">
             <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shrink-0">
               <BanknoteArrowDown className="size-5" />
@@ -226,274 +260,286 @@ export function ExpenseRecordDialog({
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5 pt-3">
-          {/* Kategori Pengeluaran */}
-          <div className="space-y-1.5">
-            <label className="text-xs sm:text-sm font-semibold text-foreground flex items-center justify-between">
-              <span>Kategori Pengeluaran <span className="text-destructive">*</span></span>
-              <span className="text-[11px] font-normal text-muted-foreground">Pilih jenis alokasi kas</span>
-            </label>
-            <Select value={category} onValueChange={(val) => setCategory(val || "operasional")}>
-              <SelectTrigger className="w-full h-11 sm:h-12 rounded-xl border border-input bg-background/90 px-3.5 cursor-pointer hover:bg-accent/40 transition-colors">
-                <div className="flex items-center gap-2.5 truncate text-left w-full">
-                  <CategoryIcon className="size-4.5 text-primary shrink-0" />
-                  <span className="font-semibold text-xs sm:text-sm text-foreground truncate">
-                    {selectedCategoryMeta.label}
-                  </span>
-                  <span className="ml-auto mr-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border/50 shrink-0 hidden sm:inline-block">
-                    {selectedCategoryMeta.badge}
-                  </span>
-                </div>
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border border-border/80 bg-popover p-1.5 shadow-2xl max-h-72 w-[calc(100vw-2.5rem)] sm:w-[420px]">
-                {EXPENSE_CATEGORIES.filter((cat) => !cat.adminOnly || !isCashier).map((cat) => {
-                  const CatIcon = cat.icon;
-                  return (
-                    <SelectItem
-                      key={cat.value}
-                      value={cat.value}
-                      className="py-2.5 px-3 rounded-lg cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-start gap-3 w-full py-0.5">
-                        <CatIcon className="size-4.5 text-primary mt-0.5 shrink-0" />
-                        <div className="flex flex-col min-w-0 text-left">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-xs sm:text-sm text-foreground">
-                              {cat.label}
-                            </span>
-                            <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-muted text-muted-foreground border border-border/50">
-                              {cat.badge}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="overflow-y-auto px-5 sm:px-6 py-4 space-y-4 sm:space-y-4.5 flex-1 min-h-0">
+            {/* Kategori Pengeluaran */}
+            <div className="space-y-1.5">
+              <label className="text-xs sm:text-sm font-semibold text-foreground flex items-center justify-between">
+                <span>Kategori Pengeluaran <span className="text-destructive">*</span></span>
+                <span className="text-[11px] font-normal text-muted-foreground">Pilih jenis alokasi kas</span>
+              </label>
+              <Select value={category} onValueChange={(val) => setCategory(val || "operasional")}>
+                <SelectTrigger className="w-full h-11 sm:h-12 rounded-xl border border-input bg-background/90 px-3.5 cursor-pointer hover:bg-accent/40 transition-colors">
+                  <div className="flex items-center gap-2.5 truncate text-left w-full">
+                    <CategoryIcon className="size-4.5 text-primary shrink-0" />
+                    <span className="font-semibold text-xs sm:text-sm text-foreground truncate">
+                      {selectedCategoryMeta.label}
+                    </span>
+                    <span className="ml-auto mr-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border/50 shrink-0 hidden sm:inline-block">
+                      {selectedCategoryMeta.badge}
+                    </span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border border-border/80 bg-popover p-1.5 shadow-2xl max-h-72 w-[calc(100vw-2.5rem)] sm:w-[420px]">
+                  {EXPENSE_CATEGORIES.filter((cat) => !cat.adminOnly || !isCashier).map((cat) => {
+                    const CatIcon = cat.icon;
+                    return (
+                      <SelectItem
+                        key={cat.value}
+                        value={cat.value}
+                        className="py-2.5 px-3 rounded-lg cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-start gap-3 w-full py-0.5">
+                          <CatIcon className="size-4.5 text-primary mt-0.5 shrink-0" />
+                          <div className="flex flex-col min-w-0 text-left">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-xs sm:text-sm text-foreground">
+                                {cat.label}
+                              </span>
+                              <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-muted text-muted-foreground border border-border/50">
+                                {cat.badge}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1 leading-tight">
+                              {cat.desc}
                             </span>
                           </div>
-                          <span className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1 leading-tight">
-                            {cat.desc}
-                          </span>
                         </div>
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-            <p className="text-[11px] text-muted-foreground pl-0.5">
-              {selectedCategoryMeta.desc}
-            </p>
-          </div>
-
-          {/* Keterangan / Keperluan */}
-          <div className="space-y-1.5">
-            <label className="text-xs sm:text-sm font-semibold text-foreground">
-              Keterangan / Keperluan Pengeluaran <span className="text-destructive">*</span>
-            </label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Contoh: Token Listrik PLN, Beli Lakban & Plastik, Galon Toko"
-              className="h-11 rounded-xl border border-input bg-background/90 text-sm font-medium px-3.5 focus-visible:ring-2 focus-visible:ring-primary/20"
-            />
-          </div>
-
-          {/* Kolom Harga / Jumlah Nominal (Hero Section) */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs sm:text-sm font-semibold text-foreground">
-                Jumlah Nominal Pengeluaran <span className="text-destructive">*</span>
-              </label>
-              <span className="text-[11px] text-muted-foreground font-medium">Potong kas laci shift</span>
-            </div>
-            <div className="relative flex h-13 sm:h-14 items-center rounded-xl border-2 border-border/80 bg-background/95 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15 transition-all shadow-xs overflow-hidden">
-              <div className="flex h-full items-center justify-center px-4 bg-primary/10 border-r border-border/70 text-primary font-bold text-sm sm:text-base select-none shrink-0">
-                Rp
-              </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={amount ? new Intl.NumberFormat("id-ID").format(Number(amount)) : ""}
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/\D/g, "");
-                  setAmount(digits);
-                }}
-                placeholder="0"
-                className="w-full h-full px-4 bg-transparent text-xl sm:text-2xl font-extrabold tracking-tight tabular-nums text-foreground outline-none placeholder:text-muted-foreground/30"
-              />
-              {amount && Number(amount) > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setAmount("")}
-                  className="mr-3 p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
-                  title="Hapus nominal"
-                >
-                  <X className="size-4" />
-                </button>
-              ) : null}
-            </div>
-
-            {/* Tombol Pilihan Nominal Cepat */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              <span className="text-[11px] font-medium text-muted-foreground mr-1">Pilihan Cepat:</span>
-              {[10000, 20000, 50000, 100000, 200000, 500000].map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => {
-                    const current = Number(amount || 0);
-                    setAmount(String(current + preset));
-                  }}
-                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-muted/70 hover:bg-muted text-foreground border border-border/60 hover:border-primary/50 transition-all active:scale-95 cursor-pointer"
-                >
-                  +{new Intl.NumberFormat("id-ID").format(preset)}
-                </button>
-              ))}
-              {amount && Number(amount) > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setAmount("")}
-                  className="px-2.5 py-1 rounded-lg text-xs font-semibold text-destructive hover:bg-destructive/10 border border-transparent transition-all cursor-pointer"
-                >
-                  Reset
-                </button>
-              ) : null}
-            </div>
-
-            {amount && Number(amount) > 0 ? (
-              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-lg border border-border/40">
-                <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span>Terbilang: <strong className="text-foreground">{formatCurrency(Number(amount))}</strong> akan dipotong dari kas laci shift aktif.</span>
-              </div>
-            ) : null}
-          </div>
-
-          {/* Conditional helper message based on category */}
-          {category === "setoran_tabungan" && (
-            <div className="flex items-start gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-3.5 text-xs text-blue-900 dark:text-blue-200">
-              <Landmark className="size-4.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-              <div className="space-y-0.5">
-                <p className="font-semibold text-xs sm:text-sm">Mutasi Kas / Setor Tabungan</p>
-                <p className="text-muted-foreground dark:text-blue-300/80 leading-relaxed">
-                  Pengeluaran ini berstatus <strong>Non-Beban</strong>. Tidak akan mengurangi laba bersih usaha warung, melainkan memindahkan fisik kas laci kasir ke rekening bank/tabungan toko.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {(category === "bagi_hasil_investor" || category === "sales_titipan") && (
-            <div className="space-y-2.5 rounded-xl border border-border/70 bg-muted/20 p-4">
-              <label className="text-xs sm:text-sm font-semibold text-foreground">
-                {category === "sales_titipan" ? "Pilih Mitra Titipan (Konsinyasi)" : "Pilih Investor Pemodal"} <span className="text-destructive">*</span>
-              </label>
-              <Select value={investorId} onValueChange={(value) => setInvestorId(value ?? "")}>
-                <SelectTrigger className="h-10.5 rounded-xl bg-background border-border/80 text-xs font-medium">
-                  <SelectValue placeholder={category === "sales_titipan" ? "Pilih mitra titip jual..." : "Pilih nama investor pemodal..."} />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  {partners
-                    .filter((partner) => category !== "sales_titipan" || partner.partnerType === "titipan_bagihasil" || partner.partnerType === "sales_harian")
-                    .map((partner) => (
-                      <SelectItem key={partner.id} value={partner.id}>
-                        {partner.name}
                       </SelectItem>
-                    ))}
+                    );
+                  })}
                 </SelectContent>
               </Select>
-              {category === "bagi_hasil_investor" && (
-                <p className="text-[11px] text-muted-foreground pt-0.5">
-                  Penyaluran bagi hasil dihitung sebagai distribusi laba usaha ke pemodal (bukan beban operasional warung).
-                </p>
-              )}
+              <p className="text-[11px] text-muted-foreground pl-0.5">
+                {selectedCategoryMeta.desc}
+              </p>
             </div>
-          )}
 
-          {category === "sales_titipan" && investorId && (
-            <div className="space-y-2.5 rounded-xl border border-border/70 bg-muted/20 p-4">
-              <p className="text-xs sm:text-sm font-semibold text-foreground">Daftar Barang Titipan Belum Disetor</p>
-              {intakes.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">Tidak ada barang titipan yang perlu dilunasi untuk mitra ini.</p>
-              ) : (
-                <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-                  {intakes.map((intake) => (
-                    <label key={intake.id} className="flex items-center gap-2.5 text-xs text-foreground bg-background/80 p-2.5 rounded-xl border border-border/60 cursor-pointer hover:bg-accent/40 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={settleIntakeIds.includes(intake.id)}
-                        onChange={(event) =>
-                          setSettleIntakeIds((current) =>
-                            event.target.checked ? [...current, intake.id] : current.filter((id) => id !== intake.id)
-                          )
-                        }
-                        className="rounded border-border size-4 accent-primary"
-                      />
-                      <span className="flex-1 truncate">
-                        <strong>{intake.productName ?? "Barang titipan"}</strong>
-                        <span className="text-muted-foreground ml-1.5">({intake.qtySold} terjual)</span>
-                      </span>
-                      <span className="font-bold tabular-nums text-primary shrink-0">
-                        {formatCurrency(intake.settledAmount || intake.qtySold * intake.unitCost)}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {category === "sales_toko" && (
-            <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4">
-              <label className="flex items-center gap-2.5 text-xs font-semibold text-foreground cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={restockEnabled}
-                  onChange={(event) => setRestockEnabled(event.target.checked)}
-                  className="rounded border-border size-4 accent-primary"
-                />
-                <span>Sekalian catat sebagai restok barang ke inventaris toko</span>
+            {/* Keterangan / Keperluan */}
+            <div className="space-y-1.5">
+              <label className="text-xs sm:text-sm font-semibold text-foreground">
+                Keterangan / Keperluan Pengeluaran <span className="text-destructive">*</span>
               </label>
-              {restockEnabled && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-muted-foreground">Pilih Produk Toko</label>
-                    <Select value={restockProductId} onValueChange={(value) => setRestockProductId(value ?? "")}>
-                      <SelectTrigger className="h-10 rounded-xl bg-background border-border/80 text-xs font-medium">
-                        <SelectValue placeholder="Pilih Produk" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl max-h-56">
-                        {products.map((product) => (
-                          <SelectItem key={product.id} value={product.id}>
-                            {product.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-muted-foreground">Jumlah Unit (pcs)</label>
-                    <Input
-                      type="number"
-                      value={restockQuantity}
-                      onChange={(event) => setRestockQuantity(event.target.value)}
-                      placeholder="Contoh: 10"
-                      className="h-10 rounded-xl bg-background border-border/80 text-xs font-medium"
-                    />
-                  </div>
-                </div>
-              )}
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Contoh: Token Listrik PLN, Beli Lakban & Plastik, Galon Toko"
+                className="h-11 rounded-xl border border-input bg-background/90 text-sm font-medium px-3.5 focus-visible:ring-2 focus-visible:ring-primary/20"
+              />
             </div>
-          )}
 
-          <DialogFooter className="pt-4 border-t border-border/40 flex flex-col-reverse sm:flex-row items-center gap-2.5 sm:gap-3">
+            {/* Kolom Harga / Jumlah Nominal (Hero Section) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs sm:text-sm font-semibold text-foreground">
+                  Jumlah Nominal Pengeluaran <span className="text-destructive">*</span>
+                </label>
+                <span className="text-[11px] text-muted-foreground font-medium">Potong kas laci shift</span>
+              </div>
+              <div className="relative flex h-13 sm:h-14 items-center rounded-xl border-2 border-border/80 bg-background/95 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15 transition-all shadow-xs overflow-hidden">
+                <div className="flex h-full items-center justify-center px-4 bg-primary/10 border-r border-border/70 text-primary font-bold text-sm sm:text-base select-none shrink-0">
+                  Rp
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={amount ? new Intl.NumberFormat("id-ID").format(Number(amount)) : ""}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, "");
+                    setAmount(digits);
+                  }}
+                  placeholder="0"
+                  className="w-full h-full px-4 bg-transparent text-xl sm:text-2xl font-extrabold tracking-tight tabular-nums text-foreground outline-none placeholder:text-muted-foreground/30"
+                />
+                {amount && Number(amount) > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setAmount("")}
+                    className="mr-3 p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                    title="Hapus nominal"
+                  >
+                    <X className="size-4" />
+                  </button>
+                ) : null}
+              </div>
+
+              {/* Tombol Pilihan Nominal Cepat */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[11px] font-medium text-muted-foreground mr-1">Pilihan Cepat:</span>
+                {[10000, 20000, 50000, 100000, 200000, 500000].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => {
+                      const current = Number(amount || 0);
+                      setAmount(String(current + preset));
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-muted/70 hover:bg-muted text-foreground border border-border/60 hover:border-primary/50 transition-all active:scale-95 cursor-pointer"
+                  >
+                    +{new Intl.NumberFormat("id-ID").format(preset)}
+                  </button>
+                ))}
+                {amount && Number(amount) > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setAmount("")}
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold text-destructive hover:bg-destructive/10 border border-transparent transition-all cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                ) : null}
+              </div>
+
+              {amount && Number(amount) > 0 ? (
+                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-lg border border-border/40">
+                  <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span>Terbilang: <strong className="text-foreground">{formatCurrency(Number(amount))}</strong> akan dipotong dari kas laci shift aktif.</span>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Conditional helper message based on category */}
+            {category === "setoran_tabungan" && (
+              <div className="flex items-start gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-3.5 text-xs text-blue-900 dark:text-blue-200">
+                <Landmark className="size-4.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-xs sm:text-sm">Mutasi Kas / Setor Tabungan</p>
+                  <p className="text-muted-foreground dark:text-blue-300/80 leading-relaxed">
+                    Pengeluaran ini berstatus <strong>Non-Beban</strong>. Tidak akan mengurangi laba bersih usaha warung, melainkan memindahkan fisik kas laci kasir ke rekening bank/tabungan toko.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {(category === "bagi_hasil_investor" || category === "sales_titipan") && (
+              <div className="space-y-2.5 rounded-xl border border-border/70 bg-muted/20 p-4">
+                <label className="text-xs sm:text-sm font-semibold text-foreground">
+                  {category === "sales_titipan" ? "Pilih Mitra Titipan (Konsinyasi)" : "Pilih Investor Pemodal"} <span className="text-destructive">*</span>
+                </label>
+                <Select value={investorId} onValueChange={(value) => setInvestorId(value ?? "")}>
+                  <SelectTrigger className="h-10.5 rounded-xl bg-background border-border/80 text-xs font-medium">
+                    <SelectValue placeholder={category === "sales_titipan" ? "Pilih mitra titip jual..." : "Pilih nama investor pemodal..."} />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {partners
+                      .filter((partner) => category !== "sales_titipan" || partner.partnerType === "titipan_bagihasil" || partner.partnerType === "sales_harian")
+                      .map((partner) => (
+                        <SelectItem key={partner.id} value={partner.id}>
+                          {partner.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {category === "bagi_hasil_investor" && (
+                  <p className="text-[11px] text-muted-foreground pt-0.5">
+                    Penyaluran bagi hasil dihitung sebagai distribusi laba usaha ke pemodal (bukan beban operasional warung).
+                  </p>
+                )}
+              </div>
+            )}
+
+            {category === "sales_titipan" && investorId && (
+              <div className="space-y-2.5 rounded-xl border border-border/70 bg-muted/20 p-4">
+                <p className="text-xs sm:text-sm font-semibold text-foreground">Daftar Barang Titipan Belum Disetor</p>
+                {intakes.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Tidak ada barang titipan yang perlu dilunasi untuk mitra ini.</p>
+                ) : (
+                  <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                    {intakes.map((intake) => (
+                      <label key={intake.id} className="flex items-center gap-2.5 text-xs text-foreground bg-background/80 p-2.5 rounded-xl border border-border/60 cursor-pointer hover:bg-accent/40 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={settleIntakeIds.includes(intake.id)}
+                          onChange={(event) =>
+                            setSettleIntakeIds((current) =>
+                              event.target.checked ? [...current, intake.id] : current.filter((id) => id !== intake.id)
+                            )
+                          }
+                          className="rounded border-border size-4 accent-primary"
+                        />
+                        <span className="flex-1 truncate">
+                          <strong>{intake.productName ?? "Barang titipan"}</strong>
+                          <span className="text-muted-foreground ml-1.5">({intake.qtySold} terjual)</span>
+                        </span>
+                        <span className="font-bold tabular-nums text-primary shrink-0">
+                          {formatCurrency(intake.settledAmount || intake.qtySold * intake.unitCost)}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {category === "sales_toko" && (
+              <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4">
+                <label className="flex items-center gap-2.5 text-xs font-semibold text-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={restockEnabled}
+                    onChange={(event) => setRestockEnabled(event.target.checked)}
+                    className="rounded border-border size-4 accent-primary"
+                  />
+                  <span>Sekalian catat sebagai restok barang ke inventaris toko</span>
+                </label>
+                {restockEnabled && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-medium text-muted-foreground">Pilih Produk Toko</label>
+                      <Select value={restockProductId} onValueChange={(value) => setRestockProductId(value ?? "")}>
+                        <SelectTrigger className="h-10 rounded-xl bg-background border-border/80 text-xs font-medium">
+                          <SelectValue placeholder="Pilih Produk" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl max-h-56">
+                          {products.map((product) => (
+                            <SelectItem key={product.id} value={product.id}>
+                              {product.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-medium text-muted-foreground">Jumlah Unit (pcs)</label>
+                      <Input
+                        type="number"
+                        value={restockQuantity}
+                        onChange={(event) => setRestockQuantity(event.target.value)}
+                        placeholder="Contoh: 10"
+                        className="h-10 rounded-xl bg-background border-border/80 text-xs font-medium"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="p-4 sm:p-5 border-t border-border/60 bg-muted/20 shrink-0 flex flex-col-reverse sm:flex-row items-center gap-2.5 sm:gap-3">
             <Button
               type="button"
               variant="outline"
-              className="h-11 rounded-xl px-5 font-medium border-border/80 w-full sm:w-auto hover:bg-muted"
+              className="h-11 rounded-xl px-5 font-medium border-border/80 w-full sm:w-auto hover:bg-muted cursor-pointer"
               onClick={() => onOpenChange(false)}
             >
               Batal
             </Button>
             <Button
               type="submit"
-              className="h-11 rounded-xl px-6 font-bold shadow-md w-full sm:flex-1 bg-primary text-primary-foreground hover:bg-primary/95"
+              className="h-11 rounded-xl px-6 font-bold shadow-md w-full sm:flex-1 bg-primary text-primary-foreground hover:bg-primary/95 cursor-pointer disabled:opacity-60"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Menyimpan..." : "Simpan Pengeluaran"}
+              {isSubmitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="size-4 animate-spin" />
+                  Menyimpan...
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  <Check className="size-4" />
+                  Simpan Pengeluaran
+                </span>
+              )}
             </Button>
           </DialogFooter>
         </form>
