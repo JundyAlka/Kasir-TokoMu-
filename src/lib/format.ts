@@ -46,6 +46,12 @@ function parseDateSafely(date: unknown): Date | null {
     if (!Number.isNaN(dExcel.getTime())) return dExcel;
   }
 
+  // YYYY-MM-DD (e.g. "2026-10-15") - parse at noon UTC so no local timezone shifts the date
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str);
+  if (ymd) {
+    return new Date(Date.UTC(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 12));
+  }
+
   // Direct parse test
   let d = new Date(str);
   if (!Number.isNaN(d.getTime())) return d;

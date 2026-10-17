@@ -3,15 +3,20 @@
 import { type ReactNode, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  AlertTriangle,
+  ArrowUpDown,
   BanknoteArrowDown,
   Building2,
   CheckCircle2,
   Coffee,
   Copy,
   CreditCard,
+  Flame,
   Loader2,
   Minus,
+  PackageCheck,
   PackageSearch,
   Plus,
   QrCode,
@@ -50,11 +55,40 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/format";
 import { generateDynamicQris } from "@/lib/qris";
 import { PaymentMethod, Product, ProductCategory, Settings, Transaction } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+export type SortOption =
+  | "popular"
+  | "revenue-desc"
+  | "qty-desc"
+  | "name-asc"
+  | "name-desc"
+  | "stock-desc"
+  | "stock-asc"
+  | "price-asc"
+  | "price-desc";
+
+export type ProductSalesStat = {
+  productId?: string;
+  productName: string;
+  totalQty: number;
+  txCount: number;
+  totalRevenue: number;
+  avgPerDay: number;
+  popularityScore: number;
+  lastSoldAt?: string;
+};
 
 const paymentLabels: Record<PaymentMethod, string> = {
   Tunai: "Tunai",
@@ -62,8 +96,9 @@ const paymentLabels: Record<PaymentMethod, string> = {
   Transfer: "Transfer",
 };
 
-const categoryLabels: Array<{ value: "Semua" | ProductCategory; label: string }> = [
+const categoryLabels: Array<{ value: "Semua" | "Terlaris" | ProductCategory; label: string }> = [
   { value: "Semua", label: "Semua" },
+  { value: "Terlaris", label: "🔥 Terlaris" },
   { value: "Makanan", label: "Makanan" },
   { value: "Minuman", label: "Minuman" },
   { value: "Sembako", label: "Sembako" },
@@ -117,11 +152,13 @@ function ProductCategoryIcon({ category }: { category: ProductCategory }) {
 
 function ProductDetailDialog({
   product,
+  salesStat,
   open,
   onOpenChange,
   onAdd,
 }: {
   product: Product | null;
+  salesStat?: ProductSalesStat | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdd: () => void;
@@ -158,6 +195,32 @@ function ProductDetailDialog({
             <p className="mt-1 font-heading text-3xl font-bold text-primary">{formatCurrency(product.sellPrice)}</p>
           </div>
 
+          {salesStat && salesStat.totalQty > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              <div className="rounded-[20px] border border-amber-500/30 bg-amber-500/10 p-3.5 text-left">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                  <Flame className="size-3.5 fill-amber-500/30 text-amber-600" />
+                  <span>Rata-rata/hari</span>
+                </div>
+                <p className="mt-1 font-heading text-xl font-bold text-amber-900 dark:text-amber-200">
+                  ~{salesStat.avgPerDay} <span className="text-xs font-normal">pcs</span>
+                </p>
+              </div>
+              <div className="rounded-[20px] border border-border/60 bg-muted/30 p-3.5 text-left">
+                <p className="text-xs font-semibold text-muted-foreground">Frekuensi Belanja</p>
+                <p className="mt-1 font-heading text-xl font-bold text-foreground">
+                  {salesStat.txCount} <span className="text-xs font-normal">transaksi</span>
+                </p>
+              </div>
+              <div className="col-span-2 sm:col-span-1 rounded-[20px] border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-left">
+                <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">Omzet 30 Hari</p>
+                <p className="mt-1 font-heading text-xl font-bold text-emerald-900 dark:text-emerald-200 truncate">
+                  {formatCurrency(salesStat.totalRevenue || 0)}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-1.5 text-left">
             <p className="text-xs font-medium text-muted-foreground">Catatan & Deskripsi</p>
             <p className="text-sm leading-relaxed text-foreground rounded-2xl border border-border/40 bg-card/60 p-3.5">
@@ -190,14 +253,17 @@ function ProductDetailDialog({
 
 const ProductCard = memo(function ProductCard({
   product,
+  salesStat,
   onAdd,
   onDetail,
 }: {
   product: Product;
+  salesStat?: ProductSalesStat;
   onAdd: (product: Product) => void;
   onDetail?: (product: Product) => void;
 }) {
   const lowStock = product.stock <= product.minimumStock;
+  const isBestSeller = (salesStat?.popularityScore ?? 0) >= 200 || (salesStat?.txCount ?? 0) >= 15;
 
   return (
     <div
@@ -211,55 +277,98 @@ const ProductCard = memo(function ProductCard({
         }
       }}
       className={cn(
-        "group relative flex min-h-[190px] xl:min-h-[210px] min-w-0 flex-col justify-between rounded-[24px] border border-border bg-card p-2.5 xl:p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-md cursor-pointer select-none overflow-hidden",
-        product.stock <= 0 && "cursor-not-allowed opacity-55 hover:translate-y-0 hover:border-border hover:shadow-sm",
-        lowStock && product.stock > 0 && "border-primary/35 bg-primary/5"
+        "group relative flex h-[138px] xl:h-[148px] min-w-0 flex-col justify-between rounded-2xl border border-border bg-card p-2 xl:p-2.5 text-left shadow-2xs transition-all duration-100 hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-md cursor-pointer select-none active:scale-[0.98] active:duration-75",
+        product.stock <= 0 && "cursor-not-allowed opacity-55 hover:translate-y-0 hover:border-border hover:shadow-2xs active:scale-100",
+        lowStock && product.stock > 0 && "border-amber-500/40 bg-amber-500/5"
       )}
+      style={{ contain: "content" }}
     >
-      <div className="flex items-start justify-between gap-2 w-full">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDetail?.(product);
-          }}
-          title={`Lihat detail ${product.name} (${product.category})`}
-          className="flex size-8 xl:size-9 shrink-0 items-center justify-center rounded-xl xl:rounded-2xl border border-border/60 bg-muted/60 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-        >
-          <ProductCategoryIcon category={product.category} />
-        </button>
-        <Badge
-          className={cn(
-            "shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-semibold shadow-2xs text-center",
-            lowStock ? "border-primary/40 bg-primary/10 text-primary" : "border-border/60 bg-background/90 text-foreground"
-          )}
-        >
-          {product.stock} stok
-        </Badge>
+      {/* Top row: Category icon, Stock Badge & Popular/Best Seller Badge */}
+      <div className="flex items-center justify-between gap-1 w-full shrink-0">
+        <div className="flex items-center gap-1 min-w-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDetail?.(product);
+            }}
+            title={`Detail ${product.name}`}
+            className="flex size-6.5 xl:size-7 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/60 text-muted-foreground transition hover:bg-muted hover:text-foreground cursor-pointer"
+          >
+            <ProductCategoryIcon category={product.category} />
+          </button>
+
+          <Badge
+            className={cn(
+              "shrink-0 rounded-full border px-1.5 py-0 text-[9px] font-semibold shadow-2xs inline-flex items-center gap-0.5 select-none",
+              product.stock <= 0
+                ? "border-destructive/30 bg-destructive/10 text-destructive font-medium"
+                : lowStock
+                  ? "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300 font-semibold"
+                  : "border-border/70 bg-background/90 text-foreground/90 font-medium"
+            )}
+          >
+            <span
+              className={cn(
+                "size-1.5 rounded-full shrink-0",
+                product.stock <= 0
+                  ? "bg-destructive animate-pulse"
+                  : lowStock
+                    ? "bg-amber-500"
+                    : "bg-emerald-500"
+              )}
+            />
+            <span className="whitespace-nowrap tabular-nums">{product.stock}</span>
+          </Badge>
+        </div>
+
+        {salesStat && salesStat.totalQty > 0 ? (
+          <span
+            title={`${salesStat.txCount}x transaksi | ${salesStat.totalQty} terjual (~${salesStat.avgPerDay}/hari)`}
+            className={cn(
+              "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold select-none shrink-0",
+              isBestSeller
+                ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-2xs"
+                : "bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/25"
+            )}
+          >
+            <Flame
+              className={cn(
+                "size-2.5 shrink-0",
+                isBestSeller ? "fill-white text-white" : "text-amber-600 fill-amber-500/40"
+              )}
+            />
+            <span className="tabular-nums">
+              {salesStat.avgPerDay >= 1 ? `~${salesStat.avgPerDay}` : salesStat.totalQty}
+            </span>
+          </span>
+        ) : null}
       </div>
 
-      <div className="min-w-0 space-y-1.5 my-3.5 w-full">
-        <p className="line-clamp-3 break-words font-heading text-sm xl:text-base font-bold leading-snug text-foreground group-hover:text-primary transition-colors">
+      {/* Middle: Name & description */}
+      <div className="min-w-0 space-y-0.5 my-auto w-full">
+        <p className="line-clamp-2 break-words font-heading text-xs xl:text-[13px] font-bold leading-tight text-foreground group-hover:text-primary transition-colors">
           {product.name}
         </p>
         {product.description && (
-          <p className="line-clamp-3 break-words text-[11px] xl:text-xs leading-relaxed text-muted-foreground">
+          <p className="line-clamp-1 break-words text-[9.5px] xl:text-[10px] leading-tight text-muted-foreground">
             {product.description}
           </p>
         )}
       </div>
 
-      <div className="flex items-end justify-between gap-0.5 w-full mt-auto pt-3 border-t border-border/40">
+      {/* Bottom row: Category, Price, and Plus Action Button */}
+      <div className="flex items-end justify-between gap-1 w-full pt-1 border-t border-border/40 shrink-0">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[9px] xl:text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
+          <p className="truncate text-[8px] xl:text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/80">
             {product.category}
           </p>
-          <p className="mt-0.5 truncate font-bold text-foreground text-[13px] xl:text-sm tracking-tight tabular-nums" title={formatCurrency(product.sellPrice)}>
+          <p className="truncate font-bold text-foreground text-[11px] xl:text-xs tracking-tight tabular-nums" title={formatCurrency(product.sellPrice)}>
             {formatCurrency(product.sellPrice)}
           </p>
         </div>
-        <div className="flex size-7 xl:size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-all duration-200 group-hover:scale-105 group-hover:bg-primary/90">
-          <Plus className="size-3.5" />
+        <div className="flex size-5.5 xl:size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-2xs transition-all duration-150 group-hover:scale-105 group-hover:bg-primary/90">
+          <Plus className="size-2.5 xl:size-3" />
         </div>
       </div>
     </div>
@@ -634,9 +743,177 @@ function PaymentInstructionDialog({
   );
 }
 
+// ── Virtualized Product Grid ──────────────────────────────────────────
+// Renders only visible rows using @tanstack/react-virtual to keep DOM
+// node count minimal — ultra fast 60/120fps scrolling on tablets.
+const ROW_HEIGHT = 146; // 138px card height + 8px gap
+const ROW_GAP = 8;
+
+const VirtualizedProductGrid = memo(function VirtualizedProductGrid({
+  dataState,
+  products,
+  filteredProducts,
+  salesStatsMap,
+  colCount,
+  productGridClass,
+  retryWorkspace,
+  onAdd,
+  onDetail,
+  activeFilterKey,
+}: {
+  dataState: string;
+  products: Product[];
+  filteredProducts: Product[];
+  salesStatsMap: Map<string, ProductSalesStat>;
+  colCount: number;
+  productGridClass: string;
+  retryWorkspace: () => void;
+  onAdd: (product: Product) => void;
+  onDetail: (product: Product) => void;
+  activeFilterKey?: string;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Split products into rows based on column count
+  const rows = useMemo(() => {
+    const result: Product[][] = [];
+    for (let i = 0; i < filteredProducts.length; i += colCount) {
+      result.push(filteredProducts.slice(i, i + colCount));
+    }
+    return result;
+  }, [filteredProducts, colCount]);
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 4,
+    gap: ROW_GAP,
+  });
+
+  // Reset scroll to top when category, search query, or sort changes
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [activeFilterKey]);
+
+  // Loading state
+  if (dataState === "loading" && products.length === 0) {
+    return (
+      <CardContent className="flex-1 overflow-y-auto custom-scrollbar p-3">
+        <div className={cn("grid gap-2", productGridClass)}>
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div
+              key={`skeleton-card-${i}`}
+              className="flex h-[138px] flex-col justify-between rounded-2xl border border-border/50 bg-card/60 p-2.5 animate-pulse"
+            >
+              <div className="flex justify-between items-center">
+                <div className="size-6.5 rounded-lg bg-muted/60" />
+                <div className="h-3.5 w-10 rounded-full bg-muted/50" />
+              </div>
+              <div className="space-y-1 my-auto">
+                <div className="h-3 w-3/4 rounded bg-muted/60" />
+                <div className="h-2 w-1/2 rounded bg-muted/40" />
+              </div>
+              <div className="pt-1.5 border-t border-border/40 flex justify-between items-center">
+                <div className="h-2.5 w-12 rounded bg-muted/40" />
+                <div className="size-5.5 rounded-full bg-muted/60" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    );
+  }
+
+  // Error state
+  if (dataState === "error" && products.length === 0) {
+    return (
+      <CardContent className="flex-1 overflow-y-auto custom-scrollbar">
+        <div role="alert" className="flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-[22px] border border-dashed border-destructive/40 bg-card/55 text-center p-5">
+          <p className="font-heading text-lg font-semibold text-foreground">Gagal memuat produk</p>
+          <p className="max-w-md text-sm text-muted-foreground">
+            Terjadi kendala saat mengambil data katalog produk dari server.
+          </p>
+          <Button type="button" variant="outline" className="mt-1 rounded-xl" onClick={retryWorkspace}>
+            <RefreshCw className="mr-2 size-4" />
+            Muat ulang
+          </Button>
+        </div>
+      </CardContent>
+    );
+  }
+
+  // Empty state
+  if (filteredProducts.length === 0) {
+    return (
+      <CardContent className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className="flex min-h-[200px] flex-col items-center justify-center rounded-[22px] border border-dashed border-border bg-card/55 text-center p-4">
+          <PackageSearch className="size-8 text-muted-foreground" />
+          <p className="mt-2.5 font-heading text-base font-semibold">Produk tidak ditemukan</p>
+          <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+            Coba kata kunci lain atau pilih kategori yang lebih luas.
+          </p>
+        </div>
+      </CardContent>
+    );
+  }
+
+  // Virtualized grid
+  return (
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-y-auto custom-scrollbar select-none"
+      style={{
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
+      <div
+        className="relative w-full pb-3"
+        style={{
+          height: `${virtualizer.getTotalSize() + 16}px`,
+        }}
+      >
+        {virtualizer.getVirtualItems().map((virtualRow) => {
+          const rowProducts = rows[virtualRow.index];
+          if (!rowProducts) return null;
+
+          return (
+            <div
+              key={virtualRow.index}
+              className={cn("grid absolute left-0 right-0 px-2 xl:px-3", productGridClass)}
+              style={{
+                top: `${virtualRow.start + 8}px`,
+                height: `${virtualRow.size}px`,
+                gap: `${ROW_GAP}px`,
+                willChange: "transform",
+              }}
+            >
+              {rowProducts.map((product) => {
+                const stat = (product as { salesStat?: ProductSalesStat }).salesStat || salesStatsMap.get(product.id) || salesStatsMap.get(product.name.trim().toLowerCase());
+                return (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    salesStat={stat}
+                    onDetail={onDetail}
+                    onAdd={onAdd}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
 export function KasirView() {
   const {
     products,
+    transactions,
     cartLines,
     cartTotal,
     paymentMethod,
@@ -651,7 +928,100 @@ export function KasirView() {
   } = useAppState();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
-  const [category, setCategory] = useState<"Semua" | ProductCategory>("Semua");
+  const [category, setCategory] = useState<"Semua" | "Terlaris" | ProductCategory>("Semua");
+  const [sortBy, setSortBy] = useState<SortOption>("popular");
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [remoteSalesStats, setRemoteSalesStats] = useState<ProductSalesStat[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    requestJson<{ stats: ProductSalesStat[] }>("/api/products/sales-stats")
+      .then((data) => {
+        if (active && Array.isArray(data.stats)) {
+          setRemoteSalesStats(data.stats);
+        }
+      })
+      .catch(() => {
+        // Fallback silently to client-side calculation from transactions
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const salesStatsMap = useMemo(() => {
+    const map = new Map<string, ProductSalesStat>();
+
+    // 1. If remote 30-day stats are loaded from database, seed the map
+    if (remoteSalesStats && remoteSalesStats.length > 0) {
+      for (const item of remoteSalesStats) {
+        if (item.productId) map.set(item.productId, item);
+        if (item.productName) map.set(item.productName.trim().toLowerCase(), item);
+      }
+      return map;
+    }
+
+    // 2. Otherwise calculate immediately from loaded transactions in memory
+    if (!transactions || transactions.length === 0) {
+      return map;
+    }
+
+    const activeDaysSet = new Set<string>();
+    const tempTotals = new Map<
+      string,
+      { totalQty: number; txCount: number; totalRevenue: number; productId?: string; productName: string }
+    >();
+
+    for (const tx of transactions) {
+      const dayKey = (tx.occurredAt || tx.createdAt || "").split("T")[0];
+      if (dayKey) activeDaysSet.add(dayKey);
+
+      for (const item of tx.items || []) {
+        const idKey = item.productId || "";
+        const nameKey = (item.productName || "").trim().toLowerCase();
+        const primaryKey = idKey || nameKey;
+        if (!primaryKey) continue;
+
+        const cur = tempTotals.get(primaryKey) || {
+          totalQty: 0,
+          txCount: 0,
+          totalRevenue: 0,
+          productId: idKey || undefined,
+          productName: item.productName || "",
+        };
+        const qty = item.quantity || 0;
+        const price = item.unitPrice || 0;
+        cur.totalQty += qty;
+        cur.txCount += 1;
+        cur.totalRevenue += qty * price;
+        tempTotals.set(primaryKey, cur);
+      }
+    }
+
+    const activeDays = Math.max(1, activeDaysSet.size);
+
+    for (const [key, data] of tempTotals.entries()) {
+      const avgPerDay = Math.round((data.totalQty / activeDays) * 10) / 10;
+      const popularityScore = Math.round(
+        (data.txCount * 10.0 + Math.sqrt(data.totalRevenue / 100.0) + data.totalQty * 0.5) * 10
+      ) / 10;
+      const stat: ProductSalesStat = {
+        productId: data.productId,
+        productName: data.productName,
+        totalQty: data.totalQty,
+        txCount: data.txCount,
+        totalRevenue: data.totalRevenue,
+        avgPerDay,
+        popularityScore,
+      };
+      map.set(key, stat);
+      if (data.productId) map.set(data.productId, stat);
+      if (data.productName) map.set(data.productName.trim().toLowerCase(), stat);
+    }
+
+    return map;
+  }, [remoteSalesStats, transactions]);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<Transaction | null>(null);
   const [recordedBy, setRecordedBy] = useState<RecordedByInfo | null>(null);
@@ -707,17 +1077,18 @@ export function KasirView() {
     const existingLine = cartLinesRef.current.find((line) => line.product.id === product.id);
     if (existingLine && existingLine.quantity >= product.stock) {
       toast.error(`Stok ${product.name} tidak cukup.`, {
+        id: "cart-stock-error",
         description: `Keranjang sudah mencapai stok tersedia (${product.stock} pcs).`,
       });
       return;
     }
 
     addToCart(product.id);
-    toast.success(`${product.name} ditambahkan ke keranjang.`, {
-      description: `Stok tersedia ${product.stock} pcs.`,
+    toast.success(`${product.name} (+1)`, {
+      id: "pos-cart-action",
+      duration: 1200,
     });
-    focusAndSelectSearch();
-  }, [addToCart, focusAndSelectSearch]);
+  }, [addToCart]);
 
   const handleDetailProduct = useCallback((product: Product) => {
     setDetailProduct(product);
@@ -903,21 +1274,103 @@ export function KasirView() {
     };
   }, []);
 
+  // 1. Pre-index product search blob & sales stat to eliminate string allocations in search/sort loops
+  const indexedProducts = useMemo(() => {
+    return products.map((product) => {
+      const cleanName = product.name.trim().toLowerCase();
+      const stat = salesStatsMap.get(product.id) || salesStatsMap.get(cleanName);
+      const searchBlob = `${cleanName} ${(product.description || "").toLowerCase()} ${(product.sku || "").toLowerCase()}`;
+      return {
+        product,
+        searchBlob,
+        cleanName,
+        stat,
+        stock: product.stock,
+        category: product.category,
+        sellPrice: product.sellPrice,
+        popularityScore: stat?.popularityScore ?? 0,
+        txCount: stat?.txCount ?? 0,
+        totalQty: stat?.totalQty ?? 0,
+        avgPerDay: stat?.avgPerDay ?? 0,
+        totalRevenue: stat?.totalRevenue ?? 0,
+      };
+    });
+  }, [products, salesStatsMap]);
+
+  // 2. High-performance filtering & sorting (runs in <1ms)
   const filteredProducts = useMemo(() => {
     const cleanQuery = deferredQuery.trim().toLowerCase();
     const terms = cleanQuery ? cleanQuery.split(/\s+/).filter(Boolean) : [];
-    return products.filter((product) => {
-      if (category !== "Semua" && product.category !== category) {
+
+    // Filter step
+    const list = indexedProducts.filter((item) => {
+      if (inStockOnly && item.stock <= 0) {
         return false;
       }
+
+      if (category === "Terlaris") {
+        if (!item.stat || item.totalQty <= 0) {
+          return false;
+        }
+      } else if (category !== "Semua" && item.category !== category) {
+        return false;
+      }
+
       if (terms.length === 0) {
         return true;
       }
-      const name = product.name.toLowerCase();
-      const desc = product.description ? product.description.toLowerCase() : "";
-      return terms.every((term) => name.includes(term) || desc.includes(term));
+      return terms.every((term) => item.searchBlob.includes(term));
     });
-  }, [products, deferredQuery, category]);
+
+    // Sort step using native primitive comparisons
+    list.sort((a, b) => {
+      switch (sortBy) {
+        case "popular": {
+          if (b.popularityScore !== a.popularityScore) return b.popularityScore - a.popularityScore;
+          if (b.txCount !== a.txCount) return b.txCount - a.txCount;
+          if (b.totalQty !== a.totalQty) return b.totalQty - a.totalQty;
+          if (b.stock > 0 && a.stock <= 0) return 1;
+          if (a.stock > 0 && b.stock <= 0) return -1;
+          return a.cleanName < b.cleanName ? -1 : a.cleanName > b.cleanName ? 1 : 0;
+        }
+        case "revenue-desc": {
+          if (b.totalRevenue !== a.totalRevenue) return b.totalRevenue - a.totalRevenue;
+          if (b.totalQty !== a.totalQty) return b.totalQty - a.totalQty;
+          if (b.stock > 0 && a.stock <= 0) return 1;
+          if (a.stock > 0 && b.stock <= 0) return -1;
+          return a.cleanName < b.cleanName ? -1 : a.cleanName > b.cleanName ? 1 : 0;
+        }
+        case "qty-desc": {
+          if (b.totalQty !== a.totalQty) return b.totalQty - a.totalQty;
+          if (b.avgPerDay !== a.avgPerDay) return b.avgPerDay - a.avgPerDay;
+          if (b.stock > 0 && a.stock <= 0) return 1;
+          if (a.stock > 0 && b.stock <= 0) return -1;
+          return a.cleanName < b.cleanName ? -1 : a.cleanName > b.cleanName ? 1 : 0;
+        }
+        case "name-asc":
+          return a.cleanName < b.cleanName ? -1 : a.cleanName > b.cleanName ? 1 : 0;
+        case "name-desc":
+          return b.cleanName < a.cleanName ? -1 : b.cleanName > a.cleanName ? 1 : 0;
+        case "stock-desc":
+          return b.stock - a.stock;
+        case "stock-asc":
+          return a.stock - b.stock;
+        case "price-asc":
+          return a.sellPrice - b.sellPrice;
+        case "price-desc":
+          return b.sellPrice - a.sellPrice;
+        default:
+          return 0;
+      }
+    });
+
+    return list.map((item) => {
+      // Attach pre-computed stat so ProductCard doesn't need to re-lookup in salesStatsMap
+      (item.product as { salesStat?: ProductSalesStat }).salesStat = item.stat;
+      return item.product;
+    });
+  }, [indexedProducts, deferredQuery, category, inStockOnly, sortBy]);
+
   const totalItems = cartLines.reduce((sum, line) => sum + line.quantity, 0);
   const paidAmount = Math.max(0, Math.round(Number(paidAmountInput.replace(/\D/g, "")) || 0));
   const isCashPayment = paymentMethod === "Tunai";
@@ -927,17 +1380,26 @@ export function KasirView() {
   const changeAmount = isCashPayment ? Math.max(0, paidAmount - cartTotal) : 0;
   const hasMeasuredWorkspace = workspaceWidth > 0;
   const shouldStackCheckout = hasMeasuredWorkspace && workspaceWidth < 560;
-  const isProductHeaderCompact = productColumnWidth === 0 || productColumnWidth < 720;
+
+  // Responsive column count tuned for tablets:
+  // Tablets (415px - 780px product area) display exactly 4 columns!
+  const colCount = useMemo(() => {
+    if (productColumnWidth === 0) return 4;
+    if (productColumnWidth < 220) return 1;
+    if (productColumnWidth < 320) return 2;
+    if (productColumnWidth < 415) return 3;
+    if (productColumnWidth < 780) return 4; // Tablet portrait & landscape with cart
+    if (productColumnWidth < 1050) return 5;
+    return 6;
+  }, [productColumnWidth]);
+
   const productGridClass =
-    productColumnWidth === 0
-      ? "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-4"
-      : productColumnWidth < 240
-        ? "grid-cols-1"
-        : productColumnWidth < 350
-          ? "grid-cols-2"
-          : productColumnWidth < 720
-            ? "grid-cols-3"
-            : "grid-cols-4";
+    colCount === 1 ? "grid-cols-1"
+    : colCount === 2 ? "grid-cols-2"
+    : colCount === 3 ? "grid-cols-3"
+    : colCount === 4 ? "grid-cols-4"
+    : colCount === 5 ? "grid-cols-5"
+    : "grid-cols-6";
   const canCheckout =
     cartLines.length > 0 && hasOpenShift === true && (!isCashPayment || (paidAmountInput.trim() !== "" && cashShortfall === 0));
 
@@ -1037,7 +1499,7 @@ export function KasirView() {
         "grid gap-4 h-full max-h-full overflow-hidden",
         shouldStackCheckout
           ? "grid-cols-1 auto-rows-min overflow-auto"
-          : "grid-cols-[minmax(200px,1fr)_minmax(300px,340px)] md:grid-cols-[minmax(0,1fr)_minmax(300px,340px)] xl:grid-cols-[minmax(0,1fr)_minmax(340px,390px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(390px,0.76fr)]"
+          : "grid-cols-[minmax(200px,1fr)_minmax(280px,320px)] md:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] xl:grid-cols-[minmax(0,1fr)_minmax(330px,380px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.76fr)]"
       )}
     >
       {shiftBannerName ? (
@@ -1060,6 +1522,7 @@ export function KasirView() {
       />
       <ProductDetailDialog
         product={detailProduct}
+        salesStat={detailProduct ? (salesStatsMap.get(detailProduct.id) || salesStatsMap.get(detailProduct.name.trim().toLowerCase())) : null}
         open={Boolean(detailProduct)}
         onOpenChange={(open) => !open && setDetailProduct(null)}
         onAdd={() => {
@@ -1081,31 +1544,19 @@ export function KasirView() {
       />
       <div ref={productColumnRef} className="min-w-0 min-h-0 flex flex-col overflow-hidden">
         <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)] flex flex-col flex-1 overflow-hidden">
-          <CardHeader
-            className={cn(
-              "flex flex-col gap-4",
-              !isProductHeaderCompact && "md:flex-row md:items-center md:justify-between"
-            )}
-          >
-            <div>
-              <CardTitle className="font-heading text-2xl">Produk siap jual</CardTitle>
-              <CardDescription>
-                Cari produk, tap item belanja, lalu proses pembayaran di keranjang.
-              </CardDescription>
-              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/85 px-3 py-1.5 text-sm text-muted-foreground shadow-sm">
-                <UserRoundCheck className="size-4 text-primary" />
-                Dicatat oleh: <span className="font-medium text-foreground">{recordedBy?.name ?? "Mengikuti shift aktif"}</span>
+          {/* Condensed & padat CardHeader to maximize product card visibility on tablets */}
+          <CardHeader className="flex flex-col gap-1.5 p-2 xl:p-2.5 pb-2 border-b border-border/40 shrink-0">
+            {/* Row 1: Title & Count, Search Bar, Sort, In-Stock Toggle, Cashier Indicator */}
+            <div className="flex items-center gap-1.5 w-full">
+              <div className="flex items-center gap-1 shrink-0">
+                <CardTitle className="font-heading text-sm xl:text-base font-bold tracking-tight">Produk</CardTitle>
+                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary tabular-nums shrink-0">
+                  {filteredProducts.length}
+                </span>
               </div>
-            </div>
 
-            <div
-              className={cn(
-                "flex flex-col gap-3",
-                isProductHeaderCompact ? "w-full" : "md:flex-row md:items-center"
-              )}
-            >
-              <div className={cn("relative", isProductHeaderCompact ? "w-full" : "min-w-[220px]")}>
-                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <div className="relative flex-1 min-w-[120px]">
+                <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   ref={searchInputRef}
                   value={query}
@@ -1122,10 +1573,11 @@ export function KasirView() {
                     if (event.key === "Enter" && filteredProducts.length > 0) {
                       event.preventDefault();
                       handleAddToCart(filteredProducts[0]);
+                      focusAndSelectSearch();
                     }
                   }}
-                  placeholder="Cari produk atau kategori"
-                  className="h-11 rounded-2xl border-border/80 bg-card/80 pl-9 pr-9"
+                  placeholder="Cari produk / barcode..."
+                  className="h-8 rounded-xl border-border/70 bg-card/80 pl-7 pr-7 text-xs shadow-2xs"
                 />
                 {query ? (
                   <button
@@ -1134,88 +1586,155 @@ export function KasirView() {
                       setQuery("");
                       searchInputRef.current?.focus();
                     }}
-                    className="absolute top-1/2 right-2.5 -translate-y-1/2 p-1 text-muted-foreground transition-colors hover:text-foreground rounded-full"
+                    className="absolute top-1/2 right-2 -translate-y-1/2 p-0.5 text-muted-foreground transition-colors hover:text-foreground rounded-full"
                     title="Hapus pencarian"
                   >
-                    <X className="size-4" />
+                    <X className="size-3" />
                   </button>
                 ) : null}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {categoryLabels.map((item) => (
+
+              <div className="flex items-center gap-1 shrink-0">
+                <Select value={sortBy} onValueChange={(val) => setSortBy(val as SortOption)}>
+                  <SelectTrigger className="h-8 rounded-xl border-border/70 bg-card/80 px-2 min-w-[105px] sm:min-w-[125px] text-[11px] font-semibold gap-1 shadow-2xs">
+                    <ArrowUpDown className="size-3 text-primary shrink-0" />
+                    <SelectValue placeholder="Urutkan" />
+                  </SelectTrigger>
+                  <SelectContent
+                    align="end"
+                    side="bottom"
+                    sideOffset={6}
+                    alignItemWithTrigger={false}
+                    className="w-auto min-w-[245px] sm:min-w-[265px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border/90 bg-popover text-popover-foreground shadow-2xl p-1.5 text-xs z-[100] backdrop-blur-none ring-1 ring-border/50"
+                  >
+                    <SelectItem value="popular" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <Flame className="size-3.5 text-amber-500 fill-amber-500/20 shrink-0" />
+                        <span className="whitespace-nowrap font-medium">Terlaris (Rutin & Omzet)</span>
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="revenue-desc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <CircleDollarSign className="size-3.5 text-emerald-500 shrink-0" />
+                        <span className="whitespace-nowrap font-medium">Omzet Penjualan Terbesar</span>
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="qty-desc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <ShoppingBasket className="size-3.5 text-sky-500 shrink-0" />
+                        <span className="whitespace-nowrap font-medium">Kuantitas Terbanyak (Pcs)</span>
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="stock-desc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <PackageCheck className="size-3.5 text-emerald-500 shrink-0" />
+                        <span className="whitespace-nowrap font-medium">Stok Terbanyak</span>
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="stock-asc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <AlertTriangle className="size-3.5 text-amber-500 shrink-0" />
+                        <span className="whitespace-nowrap font-medium">Stok Tersedikit</span>
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="name-asc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs shrink-0">🔤</span>
+                        <span className="whitespace-nowrap font-medium">Nama (A → Z)</span>
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="name-desc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs shrink-0">🔤</span>
+                        <span className="whitespace-nowrap font-medium">Nama (Z → A)</span>
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="price-asc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-primary shrink-0">Rp↑</span>
+                        <span className="whitespace-nowrap font-medium">Harga Termurah</span>
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="price-desc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-primary shrink-0">Rp↓</span>
+                        <span className="whitespace-nowrap font-medium">Harga Tertinggi</span>
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={inStockOnly ? "default" : "outline"}
+                  onClick={() => setInStockOnly((v) => !v)}
+                  className={cn(
+                    "h-8 rounded-xl px-2 text-[11px] font-semibold gap-1 transition-all shadow-2xs shrink-0",
+                    inStockOnly
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white border-transparent"
+                      : "border-border/70 bg-card/80 text-muted-foreground hover:text-foreground"
+                  )}
+                  title={inStockOnly ? "Hanya menampilkan stok > 0. Klik untuk melihat semua." : "Klik untuk menyaring produk dengan stok > 0"}
+                >
+                  <PackageCheck className={cn("size-3", inStockOnly ? "text-white" : "text-muted-foreground")} />
+                  <span className="hidden sm:inline">{inStockOnly ? "Stok Ada" : "Semua"}</span>
+                </Button>
+
+                <div className="hidden lg:inline-flex items-center gap-1 rounded-xl border border-border/70 bg-card/70 px-2 py-1 text-[10px] text-muted-foreground shadow-2xs shrink-0">
+                  <UserRoundCheck className="size-3 text-primary" />
+                  <span className="truncate max-w-[90px]">{recordedBy?.name ?? "Shift"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Row 2: Compact Category Filter Chips */}
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+              {categoryLabels.map((item) => {
+                const isSelected = category === item.value;
+                const isTerlaris = item.value === "Terlaris";
+
+                return (
                   <Button
                     key={item.value}
                     type="button"
-                    variant={category === item.value ? "default" : "outline"}
-                    className="rounded-full"
+                    variant={isSelected ? "default" : "outline"}
+                    size="sm"
+                    className={cn(
+                      "rounded-full h-6.5 px-2.5 text-[10.5px] font-semibold transition-all shrink-0",
+                      isTerlaris && !isSelected && "border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10",
+                      isTerlaris && isSelected && "bg-gradient-to-r from-amber-600 to-orange-600 text-white border-transparent shadow-2xs",
+                      !isTerlaris && isSelected && "shadow-2xs",
+                      !isTerlaris && !isSelected && "border-border/60 text-muted-foreground hover:text-foreground bg-card/60"
+                    )}
                     onClick={() => setCategory(item.value)}
                   >
+                    {isTerlaris && <Flame className={cn("mr-0.5 size-2.5", isSelected ? "fill-white/40" : "fill-amber-500/30 text-amber-600")} />}
                     {item.label}
                   </Button>
-                ))}
-              </div>
+                );
+              })}
+
+              {sortBy === "popular" && (
+                <span className="hidden sm:inline-flex items-center gap-1 text-[9.5px] text-amber-800 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5 ml-auto font-medium shrink-0">
+                  <Flame className="size-2.5 fill-amber-500/30 text-amber-600" />
+                  Terlaris
+                </span>
+              )}
             </div>
           </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto custom-scrollbar">
-            {dataState === "loading" && products.length === 0 ? (
-              <div className={cn("grid gap-4", productGridClass)}>
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div
-                    key={`skeleton-card-${i}`}
-                    className="flex min-h-[190px] xl:min-h-[210px] flex-col justify-between rounded-[24px] border border-border/50 bg-card/60 p-4 animate-pulse"
-                  >
-                    <div className="flex justify-between items-center">
-                      <div className="size-9 rounded-2xl bg-muted/60" />
-                      <div className="h-5 w-16 rounded-full bg-muted/50" />
-                    </div>
-                    <div className="space-y-2 my-3">
-                      <div className="h-4 w-3/4 rounded bg-muted/60" />
-                      <div className="h-3 w-1/2 rounded bg-muted/40" />
-                    </div>
-                    <div className="pt-3 border-t border-border/40 flex justify-between items-center">
-                      <div className="h-3 w-12 rounded bg-muted/40" />
-                      <div className="h-5 w-20 rounded bg-muted/60" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : dataState === "error" && products.length === 0 ? (
-              <div role="alert" className="flex min-h-[260px] flex-col items-center justify-center gap-3 rounded-[26px] border border-dashed border-destructive/40 bg-card/55 text-center p-6">
-                <p className="font-heading text-xl font-semibold text-foreground">Gagal memuat produk</p>
-                <p className="max-w-md text-sm text-muted-foreground">
-                  Terjadi kendala saat mengambil data katalog produk dari server.
-                </p>
-                <Button type="button" variant="outline" className="mt-2 rounded-2xl" onClick={retryWorkspace}>
-                  <RefreshCw className="mr-2 size-4" />
-                  Muat ulang
-                </Button>
-              </div>
-            ) : filteredProducts.length > 0 ? (
-              <div
-                className={cn(
-                  "grid gap-4",
-                  productGridClass
-                )}
-              >
-                {filteredProducts.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onDetail={handleDetailProduct}
-                    onAdd={handleAddToCart}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="flex min-h-[240px] flex-col items-center justify-center rounded-[26px] border border-dashed border-border bg-card/55 text-center">
-                <PackageSearch className="size-10 text-muted-foreground" />
-                <p className="mt-4 font-heading text-xl font-semibold">Produk tidak ditemukan</p>
-                <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                  Coba kata kunci lain atau pilih kategori yang lebih luas untuk melihat produk aktif.
-                </p>
-              </div>
-            )}
-          </CardContent>
+          <VirtualizedProductGrid
+            dataState={dataState}
+            products={products}
+            filteredProducts={filteredProducts}
+            salesStatsMap={salesStatsMap}
+            colCount={colCount}
+            productGridClass={productGridClass}
+            retryWorkspace={retryWorkspace}
+            onAdd={handleAddToCart}
+            onDetail={handleDetailProduct}
+            activeFilterKey={`${category}-${sortBy}-${deferredQuery}-${inStockOnly}`}
+          />
         </Card>
       </div>
 

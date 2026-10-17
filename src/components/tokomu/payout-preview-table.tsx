@@ -40,6 +40,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { AkadType } from "@/lib/server/profit-sharing";
 
 type PayoutStatus = "draft" | "disetujui" | "dibayar";
@@ -492,17 +493,18 @@ export function BagiHasilClient() {
   return (
     <div className="space-y-5">
       {/* Header Card */}
-      <Card className="rounded-2xl border-border/60 bg-card shadow-sm overflow-hidden">
+      <Card className="rounded-[26px] border border-border/70 bg-card/85 shadow-xs overflow-hidden">
         <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between pb-6">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
-              <CardTitle className="font-heading text-2xl font-bold">
+              <CardTitle className="font-heading text-xl md:text-2xl font-bold tracking-tight text-foreground">
                 Distribusi Bagi Hasil Periode
               </CardTitle>
               {/* Real-time Indicator Pill */}
-              <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-3 py-1 text-xs font-medium text-muted-foreground">
-                <span className="relative flex size-1.5">
-                  <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-60" />
+                  <span className="relative inline-flex size-2 rounded-full bg-primary" />
                 </span>
                 <span>Realtime</span>
                 {calculatedAt ? (
@@ -512,7 +514,7 @@ export function BagiHasilClient() {
                 ) : null}
               </div>
             </div>
-            <CardDescription className="text-sm">
+            <CardDescription className="text-xs md:text-sm text-muted-foreground">
               Perhitungan hak investor otomatis tersinkron langsung dari transaksi kasir TokoMu tanpa perlu hitung ulang manual.
             </CardDescription>
           </div>
@@ -529,12 +531,18 @@ export function BagiHasilClient() {
                   setSavedRows([]);
                 }}
               >
-                <SelectTrigger id="period-month" className="h-10 rounded-2xl bg-card border-border/70">
+                <SelectTrigger id="period-month" className="h-10 rounded-full bg-background/80 border-border/80 text-xs sm:text-sm font-medium px-4">
                   <SelectValue placeholder="Pilih bulan" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent
+                  align="start"
+                  side="bottom"
+                  sideOffset={6}
+                  alignItemWithTrigger={false}
+                  className="rounded-2xl border border-border/90 bg-popover text-popover-foreground shadow-2xl p-1.5 text-xs sm:text-sm z-[100] backdrop-blur-none"
+                >
                   {getRecentMonths().map((m) => (
-                    <SelectItem key={m.value} value={m.value}>
+                    <SelectItem key={m.value} value={m.value} className="rounded-xl py-2 cursor-pointer font-medium">
                       {m.label}
                     </SelectItem>
                   ))}
@@ -544,21 +552,21 @@ export function BagiHasilClient() {
 
             <Button
               variant="outline"
-              className="h-10 rounded-2xl border-border/70 hover:bg-primary/10 gap-1.5"
+              className="h-10 rounded-full border-border/80 bg-background/80 hover:bg-muted font-medium text-xs sm:text-sm px-4 gap-1.5 cursor-pointer shadow-2xs"
               onClick={() => void handleManualRefresh()}
               disabled={isLoading || isRefreshing}
             >
-              <RefreshCw className={`size-4 ${isLoading || isRefreshing ? "animate-spin text-primary" : ""}`} />
+              <RefreshCw className={`size-3.5 ${isLoading || isRefreshing ? "animate-spin text-primary" : ""}`} />
               <span>Segarkan</span>
             </Button>
 
             {calculation && !hasSavedDraft && (
               <Button
-                className="h-10 rounded-2xl gap-1.5 shadow-sm"
+                className="h-10 rounded-full gap-1.5 px-5 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-xs sm:text-sm shadow-xs cursor-pointer"
                 onClick={() => void handleSaveDraft()}
                 disabled={isSaving}
               >
-                {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                {isSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
                 <span>Simpan Draft</span>
               </Button>
             )}
@@ -578,65 +586,70 @@ export function BagiHasilClient() {
         const displayStore = calculation?.storeShare;
 
         return (
-          <section className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-            <Card className="rounded-2xl border-border/60 bg-card shadow-sm">
-              <CardHeader className="pb-3">
-                <CardDescription className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <TrendingUp className="size-3.5" />
-                  Laba Bersih Periode
-                </CardDescription>
-                <CardTitle className="text-xl font-bold tracking-tight">
-                  {displayProfit !== undefined ? formatCurrency(displayProfit) : "-"}
-                </CardTitle>
-              </CardHeader>
-            </Card>
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-[24px] border border-border/70 bg-card/90 p-4 xl:p-5 shadow-xs transition-all hover:border-primary/30">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-muted-foreground">Laba Bersih Periode</span>
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <TrendingUp className="size-4" />
+                </div>
+              </div>
+              <p className={cn(
+                "font-heading text-xl xl:text-2xl font-bold tracking-tight mt-2 tabular-nums",
+                displayProfit !== undefined && displayProfit >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"
+              )}>
+                {displayProfit !== undefined ? formatCurrency(displayProfit) : "-"}
+              </p>
+            </div>
 
-            <Card className="rounded-2xl border-border/60 bg-card shadow-sm">
-              <CardHeader className="pb-3">
-                <CardDescription className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <Coins className="size-3.5" />
-                  Total Bagi Hasil Investor
-                </CardDescription>
-                <CardTitle className="text-xl font-bold tracking-tight">
-                  {displayTotalPayout !== undefined ? formatCurrency(displayTotalPayout) : "-"}
-                </CardTitle>
-              </CardHeader>
-            </Card>
+            <div className="rounded-[24px] border border-border/70 bg-card/90 p-4 xl:p-5 shadow-xs transition-all hover:border-primary/30">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-muted-foreground">Total Bagi Hasil Investor</span>
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Coins className="size-4" />
+                </div>
+              </div>
+              <p className="font-heading text-xl xl:text-2xl font-bold tracking-tight mt-2 text-foreground tabular-nums">
+                {displayTotalPayout !== undefined ? formatCurrency(displayTotalPayout) : "-"}
+              </p>
+            </div>
 
-            <Card className="rounded-2xl border-border/60 bg-card shadow-sm">
-              <CardHeader className="pb-3">
-                <CardDescription className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <Store className="size-3.5" />
-                  Bagian PCM (30%)
-                </CardDescription>
-                <CardTitle className="text-xl font-bold tracking-tight">
-                  {displayPcm !== undefined ? formatCurrency(displayPcm) : "-"}
-                </CardTitle>
-              </CardHeader>
-            </Card>
+            <div className="rounded-[24px] border border-border/70 bg-card/90 p-4 xl:p-5 shadow-xs transition-all hover:border-primary/30">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-muted-foreground">Bagian PCM (30%)</span>
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                  <Store className="size-4" />
+                </div>
+              </div>
+              <p className="font-heading text-xl xl:text-2xl font-bold tracking-tight mt-2 text-foreground tabular-nums">
+                {displayPcm !== undefined ? formatCurrency(displayPcm) : "-"}
+              </p>
+            </div>
 
-            <Card className="rounded-2xl border-border/60 bg-card shadow-sm">
-              <CardHeader className="pb-3">
-                <CardDescription className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <Store className="size-3.5" />
-                  Bagian Toko (70%)
-                </CardDescription>
-                <CardTitle className="text-xl font-bold tracking-tight">
-                  {displayStore !== undefined ? formatCurrency(displayStore) : "-"}
-                </CardTitle>
-              </CardHeader>
-            </Card>
+            <div className="rounded-[24px] border border-border/70 bg-card/90 p-4 xl:p-5 shadow-xs transition-all hover:border-primary/30">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-muted-foreground">Bagian Toko (70%)</span>
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                  <Store className="size-4" />
+                </div>
+              </div>
+              <p className="font-heading text-xl xl:text-2xl font-bold tracking-tight mt-2 text-foreground tabular-nums">
+                {displayStore !== undefined ? formatCurrency(displayStore) : "-"}
+              </p>
+            </div>
           </section>
         );
       })()}
 
       {/* Main Section: Switch Tabs & Visualization */}
-      <Card className="rounded-2xl border-border/60 bg-card shadow-sm overflow-hidden">
+      <Card className="rounded-[26px] border border-border/70 bg-card/85 shadow-xs overflow-hidden">
         <CardHeader className="flex flex-col gap-4 border-b border-border/40 pb-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-2">
-              <WalletCards className="size-5 text-foreground" />
-              <CardTitle className="text-lg font-bold">
+              <div className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
+                <WalletCards className="size-4" />
+              </div>
+              <CardTitle className="font-heading text-base sm:text-lg font-bold text-foreground">
                 {viewSource === "draft" && hasSavedDraft
                   ? `Draft Payout Tersimpan (${selectedMonthLabel})`
                   : `Preview Bagi Hasil Realtime (${selectedMonthLabel})`}
@@ -645,25 +658,27 @@ export function BagiHasilClient() {
 
             {/* Source Switcher if draft exists */}
             {hasSavedDraft && (
-              <div className="flex items-center rounded-2xl border border-border/60 bg-muted/50 p-1 text-xs">
+              <div className="inline-flex items-center p-1 rounded-full border border-border/60 bg-muted/50 gap-1 text-xs">
                 <button
                   type="button"
-                  className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
+                  className={cn(
+                    "px-3 py-1.5 rounded-full font-semibold transition-all cursor-pointer",
                     viewSource === "live"
-                      ? "bg-card text-foreground shadow-sm"
+                      ? "bg-card text-foreground shadow-xs"
                       : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  )}
                   onClick={() => setViewSource("live")}
                 >
                   Real-time
                 </button>
                 <button
                   type="button"
-                  className={`px-3 py-1.5 rounded-xl font-semibold transition-all ${
+                  className={cn(
+                    "px-3 py-1.5 rounded-full font-semibold transition-all cursor-pointer",
                     viewSource === "draft"
-                      ? "bg-card text-foreground shadow-sm"
+                      ? "bg-card text-foreground shadow-xs"
                       : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  )}
                   onClick={() => setViewSource("draft")}
                 >
                   Draft ({savedRows.length})
@@ -674,64 +689,77 @@ export function BagiHasilClient() {
 
           {/* Filtering Switch Bar: Titip Jual vs Titip Modal */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-2">
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer border",
                   filterTab === "all"
-                    ? "bg-foreground text-background shadow-sm"
-                    : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
+                    ? "border-primary bg-primary text-primary-foreground font-semibold shadow-xs"
+                    : "border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
                 onClick={() => setFilterTab("all")}
               >
                 <span>Semua</span>
-                <span className="opacity-60 text-[11px]">
+                <span className={cn(
+                  "rounded-full px-1.5 py-0.2 text-[10px] font-bold",
+                  filterTab === "all" ? "bg-white text-primary font-extrabold shadow-2xs" : "bg-background text-muted-foreground"
+                )}>
                   {rawVisibleRows.length}
                 </span>
               </button>
 
               <button
                 type="button"
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer border",
                   filterTab === "titip_jual"
-                    ? "bg-foreground text-background shadow-sm"
-                    : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
+                    ? "border-primary bg-primary text-primary-foreground font-semibold shadow-xs"
+                    : "border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
                 onClick={() => setFilterTab("titip_jual")}
               >
                 <Package className="size-3.5" />
                 <span>Konsinyasi</span>
-                <span className="opacity-60 text-[11px]">
+                <span className={cn(
+                  "rounded-full px-1.5 py-0.2 text-[10px] font-bold",
+                  filterTab === "titip_jual" ? "bg-white text-primary font-extrabold shadow-2xs" : "bg-background text-muted-foreground"
+                )}>
                   {titipJualCount}
                 </span>
               </button>
 
               <button
                 type="button"
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer border",
                   filterTab === "titip_modal"
-                    ? "bg-foreground text-background shadow-sm"
-                    : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
+                    ? "border-primary bg-primary text-primary-foreground font-semibold shadow-xs"
+                    : "border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
                 onClick={() => setFilterTab("titip_modal")}
               >
                 <Coins className="size-3.5" />
                 <span>Titip Modal</span>
-                <span className="opacity-60 text-[11px]">
+                <span className={cn(
+                  "rounded-full px-1.5 py-0.2 text-[10px] font-bold",
+                  filterTab === "titip_modal" ? "bg-white text-primary font-extrabold shadow-2xs" : "bg-background text-muted-foreground"
+                )}>
                   {titipModalCount}
                 </span>
               </button>
             </div>
 
             {/* Layout Switcher (Cards vs Table) */}
-            <div className="flex items-center rounded-2xl border border-border/60 bg-muted/40 p-1 self-start md:self-auto">
+            <div className="inline-flex items-center p-1 rounded-full border border-border/60 bg-muted/50 gap-1 self-start md:self-auto">
               <button
                 type="button"
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-medium transition-all ${
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer",
                   layoutMode === "cards"
-                    ? "bg-card text-foreground shadow-sm"
+                    ? "bg-card text-foreground shadow-xs font-semibold"
                     : "text-muted-foreground hover:text-foreground"
-                }`}
+                )}
                 onClick={() => setLayoutMode("cards")}
               >
                 <LayoutGrid className="size-3.5" />
@@ -739,11 +767,12 @@ export function BagiHasilClient() {
               </button>
               <button
                 type="button"
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-medium transition-all ${
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer",
                   layoutMode === "table"
-                    ? "bg-card text-foreground shadow-sm"
+                    ? "bg-card text-foreground shadow-xs font-semibold"
                     : "text-muted-foreground hover:text-foreground"
-                }`}
+                )}
                 onClick={() => setLayoutMode("table")}
               >
                 <TableIcon className="size-3.5" />
@@ -760,11 +789,13 @@ export function BagiHasilClient() {
               <p className="text-sm">Menghitung pembagian bagi hasil realtime...</p>
             </div>
           ) : visibleRows.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/70 p-12 text-center text-muted-foreground">
-              <Boxes className="size-10 mx-auto mb-3 opacity-40" />
-              <p className="font-semibold text-foreground">Tidak ada data investor untuk kategori ini</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Silakan ganti kategori filter atau pilih periode bulan lainnya.
+            <div className="rounded-[24px] border border-dashed border-border/70 bg-card/50 p-12 text-center text-muted-foreground">
+              <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <Boxes className="size-6" />
+              </div>
+              <p className="font-heading font-semibold text-foreground text-sm sm:text-base">Tidak ada data investor untuk kategori ini</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                Silakan ganti kategori filter di atas atau pilih periode bulan lainnya untuk melihat pembagian bagi hasil.
               </p>
             </div>
           ) : layoutMode === "table" ? (
@@ -790,7 +821,7 @@ export function BagiHasilClient() {
                 return (
                   <div
                     key={row.id ?? row.investmentId}
-                    className="flex flex-col justify-between rounded-2xl border border-border/70 bg-card p-5 shadow-sm hover:shadow-md transition-all space-y-4"
+                    className="flex flex-col justify-between rounded-[22px] border border-border/70 bg-card/90 p-5 shadow-xs hover:shadow-sm hover:border-primary/40 transition-all space-y-4"
                   >
                     {/* Card Header */}
                     <div className="flex items-start justify-between gap-3">

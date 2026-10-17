@@ -1017,28 +1017,29 @@ export function PengeluaranRestokView() {
         onValueChange={(val) => setActiveMainTab(String(val))}
         className="w-full space-y-4"
       >
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/40 pb-3">
-          <div>
-            <h3 className="font-heading text-lg font-semibold text-foreground">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-border/40 pb-4">
+          <div className="space-y-1">
+            <h3 className="font-heading text-lg font-semibold text-foreground tracking-tight">
               Riwayat Pengeluaran & Rencana Belanja
             </h3>
             <p className="text-xs text-muted-foreground">
               Gunakan tab di bawah untuk melihat rincian pengeluaran operasional toko atau rencana belanja restok barang.
             </p>
           </div>
-          <TabsList className="grid grid-cols-2 w-full sm:w-[450px] h-11 p-1 bg-muted/70 rounded-xl border border-border/60">
+          <TabsList className="grid grid-cols-2 sm:inline-flex w-full sm:w-auto group-data-horizontal/tabs:h-auto p-1.5 bg-muted/60 dark:bg-muted/40 rounded-full border border-border/70 shadow-2xs shrink-0 gap-1.5 overflow-hidden">
             <TabsTrigger
               value="pengeluaran"
-              className="rounded-lg text-xs sm:text-sm font-semibold h-9 flex items-center justify-center gap-2 transition-all"
+              className="rounded-full text-xs sm:text-sm font-semibold h-10 px-3 sm:px-5 flex items-center justify-center gap-1.5 sm:gap-2 transition-all cursor-pointer hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground dark:data-[state=active]:bg-primary dark:data-[state=active]:text-amber-950 data-[state=active]:shadow-xs"
             >
               <BanknoteArrowDown className="size-4 shrink-0" />
-              <span>Riwayat Pengeluaran</span>
+              <span className="hidden sm:inline">Riwayat Pengeluaran</span>
+              <span className="sm:hidden">Pengeluaran</span>
               {expenses.length > 0 && (
                 <span
                   className={cn(
-                    "ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-bold tabular-nums transition-colors shadow-2xs",
+                    "ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-bold tabular-nums shrink-0 transition-colors shadow-2xs",
                     activeMainTab === "pengeluaran"
-                      ? "bg-white text-primary dark:bg-amber-950 dark:text-amber-100 font-extrabold"
+                      ? "bg-white text-primary dark:bg-amber-100 dark:text-amber-950 font-extrabold shadow-xs"
                       : "bg-background text-foreground/80 border border-border/70 font-semibold"
                   )}
                 >
@@ -1048,16 +1049,17 @@ export function PengeluaranRestokView() {
             </TabsTrigger>
             <TabsTrigger
               value="restok"
-              className="rounded-lg text-xs sm:text-sm font-semibold h-9 flex items-center justify-center gap-2 transition-all"
+              className="rounded-full text-xs sm:text-sm font-semibold h-10 px-3 sm:px-5 flex items-center justify-center gap-1.5 sm:gap-2 transition-all cursor-pointer hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground dark:data-[state=active]:bg-primary dark:data-[state=active]:text-amber-950 data-[state=active]:shadow-xs"
             >
               <ShoppingBag className="size-4 shrink-0" />
-              <span>Rencana Belanja Restok</span>
+              <span className="hidden sm:inline">Rencana Belanja Restok</span>
+              <span className="sm:hidden">Rencana Restok</span>
               {pendingPlans.length > 0 && (
                 <span
                   className={cn(
-                    "ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-bold tabular-nums transition-colors shadow-2xs",
+                    "ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[11px] font-bold tabular-nums shrink-0 transition-colors shadow-2xs",
                     activeMainTab === "restok"
-                      ? "bg-white text-primary dark:bg-amber-950 dark:text-amber-100 font-extrabold"
+                      ? "bg-white text-primary dark:bg-amber-100 dark:text-amber-950 font-extrabold shadow-xs"
                       : "bg-background text-foreground/80 border border-border/70 font-semibold"
                   )}
                 >

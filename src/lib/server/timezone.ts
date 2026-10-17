@@ -1,9 +1,6 @@
-import { addDays } from "date-fns";
-import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
-
 export const JAKARTA_TIME_ZONE = "Asia/Jakarta";
 
-type DateRange = {
+export type DateRange = {
   start: string;
   end: string;
 };
@@ -12,27 +9,30 @@ function pad2(value: number) {
   return String(value).padStart(2, "0");
 }
 
-function wallClockMidnightUtc(day: string) {
-  return fromZonedTime(`${day}T00:00:00.000`, JAKARTA_TIME_ZONE);
-}
-
-function jakartaDayKey(date: Date) {
-  return formatInTimeZone(date, JAKARTA_TIME_ZONE, "yyyy-MM-dd");
+export function getJakartaDateKey(dateInput: Date | string | number = new Date()): string {
+  if (typeof dateInput === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+    return dateInput;
+  }
+  const d = typeof dateInput === "string" || typeof dateInput === "number" ? new Date(dateInput) : dateInput;
+  if (isNaN(d.getTime())) return "";
+  // Asia/Jakarta is strictly UTC+7 with no daylight saving time (DST).
+  const wib = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+  return `${wib.getUTCFullYear()}-${pad2(wib.getUTCMonth() + 1)}-${pad2(wib.getUTCDate())}`;
 }
 
 export function jakartaNow() {
-  return toZonedTime(new Date(), JAKARTA_TIME_ZONE);
+  return new Date(Date.now() + 7 * 60 * 60 * 1000);
 }
 
-export function getJakartaDayRange(date: Date = new Date()): DateRange {
-  const day = jakartaDayKey(date);
-  const start = wallClockMidnightUtc(day);
-  const endDay = formatInTimeZone(addDays(toZonedTime(start, JAKARTA_TIME_ZONE), 1), JAKARTA_TIME_ZONE, "yyyy-MM-dd");
-  const end = wallClockMidnightUtc(endDay);
+export function getJakartaDayRange(dateInput: Date | string = new Date()): DateRange {
+  const day = getJakartaDateKey(dateInput);
+  const [y, m, d] = day.split("-").map(Number);
+  const nextDate = new Date(Date.UTC(y, m - 1, d + 1));
+  const nextDay = `${nextDate.getUTCFullYear()}-${pad2(nextDate.getUTCMonth() + 1)}-${pad2(nextDate.getUTCDate())}`;
 
   return {
-    start: start.toISOString(),
-    end: end.toISOString(),
+    start: new Date(`${day}T00:00:00.000+07:00`).toISOString(),
+    end: new Date(`${nextDay}T00:00:00.000+07:00`).toISOString(),
   };
 }
 
@@ -51,23 +51,25 @@ export function getJakartaMonthRange(year: number, month: number): DateRange {
   const endMonth = `${nextMonthYear}-${pad2(nextMonth)}-01`;
 
   return {
-    start: wallClockMidnightUtc(startMonth).toISOString(),
-    end: wallClockMidnightUtc(endMonth).toISOString(),
+    start: new Date(`${startMonth}T00:00:00.000+07:00`).toISOString(),
+    end: new Date(`${endMonth}T00:00:00.000+07:00`).toISOString(),
   };
 }
 
-export function getJakartaWeekRange(date: Date = new Date()): DateRange {
-  const zoned = toZonedTime(date, JAKARTA_TIME_ZONE);
-  const day = zoned.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  const monday = addDays(zoned, -diff);
-  const mondayKey = formatInTimeZone(monday, JAKARTA_TIME_ZONE, "yyyy-MM-dd");
-  const start = wallClockMidnightUtc(mondayKey);
-  const endKey = formatInTimeZone(addDays(toZonedTime(start, JAKARTA_TIME_ZONE), 7), JAKARTA_TIME_ZONE, "yyyy-MM-dd");
+export function getJakartaWeekRange(dateInput: Date | string = new Date()): DateRange {
+  const dayKey = getJakartaDateKey(dateInput);
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const utcDate = new Date(Date.UTC(y, m - 1, d));
+  const dayOfWeek = utcDate.getUTCDay(); // 0 is Sunday, 1 is Monday...
+  const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const mondayUtc = new Date(Date.UTC(y, m - 1, d - diffToMonday));
+  const mondayKey = `${mondayUtc.getUTCFullYear()}-${pad2(mondayUtc.getUTCMonth() + 1)}-${pad2(mondayUtc.getUTCDate())}`;
+  const nextMondayUtc = new Date(Date.UTC(mondayUtc.getUTCFullYear(), mondayUtc.getUTCMonth(), mondayUtc.getUTCDate() + 7));
+  const nextMondayKey = `${nextMondayUtc.getUTCFullYear()}-${pad2(nextMondayUtc.getUTCMonth() + 1)}-${pad2(nextMondayUtc.getUTCDate())}`;
 
   return {
-    start: start.toISOString(),
-    end: wallClockMidnightUtc(endKey).toISOString(),
+    start: new Date(`${mondayKey}T00:00:00.000+07:00`).toISOString(),
+    end: new Date(`${nextMondayKey}T00:00:00.000+07:00`).toISOString(),
   };
 }
 

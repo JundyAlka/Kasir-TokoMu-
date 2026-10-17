@@ -1,6 +1,6 @@
 import { pool } from "@/db/client";
 import { createScopedQuery } from "@/lib/server/scoped-query";
-import { getJakartaDayRange } from "@/lib/server/timezone";
+import { getJakartaDayRange, getJakartaDateKey } from "@/lib/server/timezone";
 
 export type DailyReportSummary = {
   id: string;
@@ -34,7 +34,7 @@ function asNumber(value: number | string | null | undefined) {
 
 function getRange(reportDate: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) throw new Error("Tanggal laporan tidak valid.");
-  return getJakartaDayRange(new Date(`${reportDate}T12:00:00.000Z`));
+  return getJakartaDayRange(reportDate);
 }
 
 function scopedWorkspace(workspaceOwnerId: string) {
@@ -45,7 +45,7 @@ function mapRow(row: Record<string, unknown>): DailyReportSummary {
   return {
     id: String(row.id),
     userId: String(row.userId),
-    reportDate: String(row.reportDate),
+    reportDate: typeof row.reportDate === "string" ? row.reportDate.slice(0, 10) : getJakartaDateKey(row.reportDate as Date),
     openingTotal: asNumber(row.openingTotal as number | string | null),
     revenue: asNumber(row.revenue as number | string | null),
     cogs: asNumber(row.cogs as number | string | null),
@@ -62,7 +62,11 @@ function mapRow(row: Record<string, unknown>): DailyReportSummary {
 }
 
 /** Build one workspace-scoped report. Any number of shifts (including one) may belong to the day. */
-export async function buildDailyReport(workspaceOwnerId: string, reportDate: string): Promise<DailyReportSummary> {
+export async function buildDailyReport(
+  workspaceOwnerId: string,
+  reportDate: string,
+  options?: { overwriteLocked?: boolean }
+): Promise<DailyReportSummary> {
   const ownerId = scopedWorkspace(workspaceOwnerId);
   const range = getRange(reportDate);
   const [openingResult, closingResult, salesResult, cogsResult, expenseResult] = await Promise.all([
@@ -133,6 +137,8 @@ export async function buildDailyReport(workspaceOwnerId: string, reportDate: str
   const netProfit = grossProfit - expenseTotal;
   const transactionCount = asNumber(salesResult.rows[0]?.transactionCount);
   const timestamp = nowIso();
+  const allowLocked = Boolean(options?.overwriteLocked);
+
   const saved = await pool.query<Record<string, unknown>>(
     `insert into daily_reports (
        id, user_id, report_date, opening_total, revenue, cogs, expense_total, gross_profit, net_profit,
@@ -143,12 +149,12 @@ export async function buildDailyReport(workspaceOwnerId: string, reportDate: str
        expense_total = excluded.expense_total, gross_profit = excluded.gross_profit, net_profit = excluded.net_profit,
        closing_total = excluded.closing_total, transaction_count = excluded.transaction_count,
        profit_distribution = excluded.profit_distribution, updated_at = excluded.updated_at
-     where daily_reports.status = 'draft'
+     where daily_reports.status = 'draft' or $15::boolean = true
      returning id, user_id as "userId", report_date as "reportDate", opening_total as "openingTotal",
        revenue, cogs, expense_total as "expenseTotal", gross_profit as "grossProfit", net_profit as "netProfit",
        closing_total as "closingTotal", transaction_count as "transactionCount",
        profit_distribution as "profitDistribution", status, locked_at as "lockedAt", locked_by_user_id as "lockedByUserId"`,
-    [createId(), ownerId, reportDate, openingTotal, revenue, cogs, expenseTotal, grossProfit, netProfit, closingTotal, transactionCount, profitDistribution, timestamp, timestamp]
+    [createId(), ownerId, reportDate, openingTotal, revenue, cogs, expenseTotal, grossProfit, netProfit, closingTotal, transactionCount, profitDistribution, timestamp, timestamp, allowLocked]
   );
   if (saved.rows[0]) return mapRow(saved.rows[0]);
 
@@ -173,9 +179,9 @@ export async function lockDailyReport(workspaceOwnerId: string, reportDate: stri
     [ownerId, range.start, range.end]
   );
   if (open.rows[0]) throw new Error("Tidak dapat mengunci laporan selama masih ada shift terbuka.");
-  await buildDailyReport(ownerId, reportDate);
+  await buildDailyReport(ownerId, reportDate, { overwriteLocked: true });
   const locked = await pool.query<Record<string, unknown>>(
-    `update daily_reports set status = 'locked', locked_at = $3::timestamptz, locked_by_user_id = $4, updated_at = $3::timestamptz
+    `update daily_reports set status = 'locked', locked_at = coalesce(locked_at, $3::timestamptz), locked_by_user_id = coalesce(locked_by_user_id, $4), updated_at = $3::timestamptz
      where user_id = $1 and report_date = $2::date
      returning id, user_id as "userId", report_date as "reportDate", opening_total as "openingTotal",
        revenue, cogs, expense_total as "expenseTotal", gross_profit as "grossProfit", net_profit as "netProfit",
@@ -251,30 +257,69 @@ export async function updateDailyReport(
 
 export async function listDailyReports(workspaceOwnerId: string, range: { start: string; end: string }) {
   const ownerId = scopedWorkspace(workspaceOwnerId);
+  const startDate = range.start.slice(0, 10);
+  const endDate = range.end.slice(0, 10);
+  const today = getJakartaDateKey(new Date());
+
   try {
     const activeDates = await pool.query<{ reportDate: string }>(
       `select distinct to_char(coalesce(t.occurred_at, t.created_at) at time zone 'Asia/Jakarta', 'YYYY-MM-DD') as "reportDate"
        from transactions t
        where t.user_id = $1
-         and coalesce(t.occurred_at, t.created_at) >= $2::timestamptz
-         and coalesce(t.occurred_at, t.created_at) < $3::timestamptz
+         and to_char(coalesce(t.occurred_at, t.created_at) at time zone 'Asia/Jakarta', 'YYYY-MM-DD') >= $2
+         and to_char(coalesce(t.occurred_at, t.created_at) at time zone 'Asia/Jakarta', 'YYYY-MM-DD') <= $3
        union
        select distinct to_char(coalesce(ss.opened_at, ss.started_at) at time zone 'Asia/Jakarta', 'YYYY-MM-DD') as "reportDate"
        from shift_sessions ss
        where ss.workspace_owner_id = $1
-         and coalesce(ss.opened_at, ss.started_at) >= $2::timestamptz
-         and coalesce(ss.opened_at, ss.started_at) < $3::timestamptz`,
-      [ownerId, range.start, range.end]
+         and to_char(coalesce(ss.opened_at, ss.started_at) at time zone 'Asia/Jakarta', 'YYYY-MM-DD') >= $2
+         and to_char(coalesce(ss.opened_at, ss.started_at) at time zone 'Asia/Jakarta', 'YYYY-MM-DD') <= $3
+       union
+       select distinct to_char(coalesce(e.created_at, e.created_at) at time zone 'Asia/Jakarta', 'YYYY-MM-DD') as "reportDate"
+       from expenses e
+       where e.user_id = $1
+         and to_char(coalesce(e.created_at, e.created_at) at time zone 'Asia/Jakarta', 'YYYY-MM-DD') >= $2
+         and to_char(coalesce(e.created_at, e.created_at) at time zone 'Asia/Jakarta', 'YYYY-MM-DD') <= $3
+       union
+       select distinct to_char(report_date, 'YYYY-MM-DD') as "reportDate"
+       from daily_reports
+       where user_id = $1
+         and report_date >= $2::date
+         and report_date <= $3::date`,
+      [ownerId, startDate, endDate]
     );
 
     for (const row of activeDates.rows) {
       if (row.reportDate) {
-        const check = await pool.query<{ status: string }>(
-          `select status from daily_reports where user_id = $1 and report_date = $2::date`,
+        const check = await pool.query<{ status: string; revenue: number | string }>(
+          `select status, revenue from daily_reports where user_id = $1 and report_date = $2::date`,
           [ownerId, row.reportDate]
         );
-        if (!check.rows[0] || check.rows[0].status === "draft") {
-          await buildDailyReport(ownerId, row.reportDate);
+        const existingStatus = check.rows[0]?.status;
+        const existingRevenue = Number(check.rows[0]?.revenue ?? 0);
+
+        // Always re-build if missing, draft, or stale 0-value report from previous buggy calculation
+        if (!existingStatus || existingStatus === "draft" || (row.reportDate < today && existingRevenue === 0)) {
+          await buildDailyReport(ownerId, row.reportDate, { overwriteLocked: existingRevenue === 0 });
+        }
+
+        // Auto-lock past days if no open shift sessions exist for that day
+        if (row.reportDate < today) {
+          const dayRange = getRange(row.reportDate);
+          const openCheck = await pool.query<{ id: string }>(
+            `select id from shift_sessions
+             where workspace_owner_id = $1 and status = 'open'
+               and coalesce(opened_at, started_at) >= $2::timestamptz
+               and coalesce(opened_at, started_at) < $3::timestamptz limit 1`,
+            [ownerId, dayRange.start, dayRange.end]
+          );
+          if (!openCheck.rows[0]) {
+            await pool.query(
+              `update daily_reports set status = 'locked', locked_at = coalesce(locked_at, $3::timestamptz), updated_at = $3::timestamptz
+               where user_id = $1 and report_date = $2::date and status <> 'locked'`,
+              [ownerId, row.reportDate, nowIso()]
+            );
+          }
         }
       }
     }
@@ -290,7 +335,7 @@ export async function listDailyReports(workspaceOwnerId: string, range: { start:
      from daily_reports
      where user_id = $1 and report_date >= $2::date and report_date <= $3::date
      order by report_date desc`,
-    [ownerId, range.start, range.end]
+    [ownerId, startDate, endDate]
   );
   return rows.rows.map(mapRow);
 }

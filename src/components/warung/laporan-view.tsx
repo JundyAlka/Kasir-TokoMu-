@@ -194,6 +194,9 @@ function dateFromKey(key: string) {
 }
 
 function getJakartaDateKey(value: string | Date) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
   const parts = jakartaDateFormatter.formatToParts(new Date(value));
   const year = Number(parts.find((part) => part.type === "year")?.value ?? 0);
   const month = Number(parts.find((part) => part.type === "month")?.value ?? 0);

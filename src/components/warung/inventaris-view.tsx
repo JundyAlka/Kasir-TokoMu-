@@ -4,14 +4,27 @@ import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   Camera,
+  Check,
+  CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  ChevronUp,
+  ClipboardCheck,
+  Loader2,
+  Minus,
+  PackageCheck,
   PackagePlus,
   PencilLine,
+  Plus,
   Search,
+  SlidersHorizontal,
   Trash2,
   Warehouse,
 } from "lucide-react";
@@ -39,6 +52,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ProductForm } from "@/components/warung/product-form";
 import { FIELD_HELP } from "@/lib/field-help";
@@ -51,6 +71,23 @@ import {
 import { generateSku } from "@/lib/sku";
 import { Product, ProductDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+export type InventorySortOption =
+  | "name-asc"
+  | "name-desc"
+  | "stock-desc"
+  | "stock-asc"
+  | "price-asc"
+  | "price-desc"
+  | "category"
+  | "recent";
+
+type RowAuditState = {
+  stock: number;
+  sellPrice: number;
+  buyPrice: number;
+  status: "idle" | "saving" | "saved" | "error";
+};
 
 const emptyDraft: ProductDraft = {
   sku: "",
@@ -80,6 +117,15 @@ export function InventarisView() {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [isAuditMode, setIsAuditMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("tokomu_audit_mode") === "true";
+    }
+    return false;
+  });
+  const [sortBy, setSortBy] = useState<InventorySortOption>("name-asc");
+  const [rowDrafts, setRowDrafts] = useState<Record<string, RowAuditState>>({});
+  const saveTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(25);
   const [createOpen, setCreateOpen] = useState(false);
@@ -99,6 +145,20 @@ export function InventarisView() {
   const [isBulkActionPending, setIsBulkActionPending] = useState(false);
   const deleteTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const selectAllRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("tokomu_audit_mode", String(isAuditMode));
+    }
+  }, [isAuditMode]);
+
+  useEffect(() => {
+    const timers = saveTimersRef.current;
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
+    };
+  }, []);
 
   useEffect(() => {
     const timers = deleteTimersRef.current;
@@ -123,7 +183,7 @@ export function InventarisView() {
 
   const filteredProducts = useMemo(() => {
     const keyword = deferredQuery.toLowerCase().trim();
-    return visibleProducts.filter((product) => {
+    const list = visibleProducts.filter((product) => {
       if (selectedCategory === "low_stock") {
         if (product.stock > product.minimumStock) return false;
       } else if (selectedCategory !== "all") {
@@ -139,7 +199,34 @@ export function InventarisView() {
         product.description.toLowerCase().includes(keyword)
       );
     });
-  }, [visibleProducts, deferredQuery, selectedCategory]);
+
+    return list.slice().sort((a, b) => {
+      const stockA = rowDrafts[a.id]?.stock ?? a.stock;
+      const stockB = rowDrafts[b.id]?.stock ?? b.stock;
+      const sellA = rowDrafts[a.id]?.sellPrice ?? a.sellPrice;
+      const sellB = rowDrafts[b.id]?.sellPrice ?? b.sellPrice;
+
+      switch (sortBy) {
+        case "name-asc":
+          return a.name.localeCompare(b.name, "id");
+        case "name-desc":
+          return b.name.localeCompare(a.name, "id");
+        case "stock-desc":
+          return stockB - stockA;
+        case "stock-asc":
+          return stockA - stockB;
+        case "price-asc":
+          return sellA - sellB;
+        case "price-desc":
+          return sellB - sellA;
+        case "category":
+          return a.category.localeCompare(b.category, "id") || a.name.localeCompare(b.name, "id");
+        case "recent":
+        default:
+          return 0;
+      }
+    });
+  }, [visibleProducts, deferredQuery, selectedCategory, sortBy, rowDrafts]);
 
   const totalPages = pageSize === -1 ? 1 : Math.max(1, Math.ceil(filteredProducts.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -188,7 +275,90 @@ export function InventarisView() {
 
   useEffect(() => {
     setPage(1);
-  }, [query, selectedCategory]);
+  }, [query, selectedCategory, sortBy]);
+
+  const updateAuditField = (
+    productId: string,
+    field: "stock" | "sellPrice" | "buyPrice",
+    val: number
+  ) => {
+    const targetProduct = products.find((p) => p.id === productId);
+    if (!targetProduct) return;
+
+    const current = rowDrafts[productId] || {
+      stock: targetProduct.stock,
+      sellPrice: targetProduct.sellPrice,
+      buyPrice: targetProduct.buyPrice,
+      status: "idle",
+    };
+
+    const nextVal = Math.max(0, val);
+    const nextState: RowAuditState = {
+      ...current,
+      [field]: nextVal,
+      status: "idle",
+    };
+
+    setRowDrafts((prev) => ({
+      ...prev,
+      [productId]: nextState,
+    }));
+
+    // Debounce the save
+    const existingTimer = saveTimersRef.current.get(productId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(async () => {
+      saveTimersRef.current.delete(productId);
+      const p = products.find((item) => item.id === productId);
+      if (!p) return;
+
+      setRowDrafts((prev) => ({
+        ...prev,
+        [productId]: { ...nextState, status: "saving" },
+      }));
+
+      try {
+        await updateProduct(productId, {
+          sku: p.sku ?? "",
+          name: p.name,
+          category: p.category,
+          stock: Math.max(0, Math.round(nextState.stock)),
+          sellPrice: Math.max(1, Math.round(nextState.sellPrice)),
+          buyPrice: Math.max(0, Math.round(nextState.buyPrice)),
+          minimumStock: p.minimumStock,
+          description: p.description ?? "",
+        });
+
+        setRowDrafts((prev) => ({
+          ...prev,
+          [productId]: { ...nextState, status: "saved" },
+        }));
+
+        setTimeout(() => {
+          setRowDrafts((prev) => {
+            if (prev[productId]?.status === "saved") {
+              return {
+                ...prev,
+                [productId]: { ...prev[productId], status: "idle" },
+              };
+            }
+            return prev;
+          });
+        }, 2000);
+      } catch (err) {
+        setRowDrafts((prev) => ({
+          ...prev,
+          [productId]: { ...nextState, status: "error" },
+        }));
+        toast.error(`Gagal menyimpan perubahan untuk ${p.name}`);
+      }
+    }, 500);
+
+    saveTimersRef.current.set(productId, timer);
+  };
 
   function validateProduct(nextDraft: ProductDraft) {
     return (
@@ -413,23 +583,127 @@ export function InventarisView() {
             </div>
 
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="relative w-full min-w-[240px] flex-1 lg:w-auto">
+              <div className="relative w-full min-w-[220px] flex-1 lg:w-auto">
                 <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Cari nama, SKU, atau kategori..."
-                  className="h-11 w-full rounded-2xl bg-card/85 pl-9"
+                  className="h-11 w-full rounded-2xl bg-card/85 pl-9 text-xs xl:text-sm"
                 />
               </div>
-              {canMutateInventory ? (
-                <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+
+              {/* Sorting Dropdown */}
+              <Select value={sortBy} onValueChange={(val) => setSortBy(val as InventorySortOption)}>
+                <SelectTrigger className="h-11 rounded-2xl border-border/80 bg-card/85 px-3 min-w-[160px] text-xs font-semibold gap-1.5 shadow-2xs">
+                  <ArrowUpDown className="size-3.5 text-primary shrink-0" />
+                  <SelectValue placeholder="Urutkan" />
+                </SelectTrigger>
+                <SelectContent
+                  align="end"
+                  side="bottom"
+                  sideOffset={6}
+                  alignItemWithTrigger={false}
+                  className="w-auto min-w-[240px] sm:min-w-[260px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border/90 bg-popover text-popover-foreground shadow-2xl p-1.5 text-xs z-[100] backdrop-blur-none ring-1 ring-border/50"
+                >
+                  <SelectItem value="name-asc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs shrink-0">🔤</span>
+                      <span className="whitespace-nowrap font-medium">Nama (A → Z)</span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="name-desc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs shrink-0">🔤</span>
+                      <span className="whitespace-nowrap font-medium">Nama (Z → A)</span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="stock-desc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <PackageCheck className="size-3.5 text-emerald-500 shrink-0" />
+                      <span className="whitespace-nowrap font-medium">Stok Terbanyak</span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="stock-asc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <AlertTriangle className="size-3.5 text-amber-500 shrink-0" />
+                      <span className="whitespace-nowrap font-medium">Stok Tersedikit</span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="price-asc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-primary shrink-0">Rp↑</span>
+                      <span className="whitespace-nowrap font-medium">Harga Termurah</span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="price-desc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-primary shrink-0">Rp↓</span>
+                      <span className="whitespace-nowrap font-medium">Harga Tertinggi</span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="category" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs shrink-0">🏷️</span>
+                      <span className="whitespace-nowrap font-medium">Kategori Produk</span>
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Mode Cek Stok Switch Button */}
+              {canMutateInventory && (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isAuditMode}
+                  onClick={() => setIsAuditMode((prev) => !prev)}
+                  className={cn(
+                    "relative inline-flex h-11 items-center gap-2 rounded-2xl border px-3 text-xs font-semibold transition-all shadow-2xs cursor-pointer select-none shrink-0",
+                    isAuditMode
+                      ? "border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 ring-2 ring-emerald-500/20"
+                      : "border-border/80 bg-card/85 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                  title={isAuditMode ? "Klik untuk kembali ke mode tabel normal" : "Klik untuk beralih ke Mode Cek Stok (Ubah stok & harga langsung)"}
+                >
+                  <div
+                    className={cn(
+                      "flex size-6 items-center justify-center rounded-xl transition-colors",
+                      isAuditMode ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    <ClipboardCheck className="size-3.5" />
+                  </div>
+                  <div className="flex flex-col text-left">
+                    <span className="font-bold leading-tight">Mode Cek Stok</span>
+                    <span className="text-[10px] font-normal opacity-80">
+                      {isAuditMode ? "Aktif (Edit Cepat)" : "Non-aktif"}
+                    </span>
+                  </div>
+                  <div
+                    className={cn(
+                      "ml-1 h-5 w-9 rounded-full p-0.5 transition-colors duration-200 ease-in-out",
+                      isAuditMode ? "bg-emerald-600" : "bg-muted-foreground/30"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "size-4 rounded-full bg-white shadow-xs transition-transform duration-200 ease-in-out",
+                        isAuditMode ? "translate-x-4" : "translate-x-0"
+                      )}
+                    />
+                  </div>
+                </button>
+              )}
+
+              {canMutateInventory && !isAuditMode ? (
+                <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
                   <Button
                     render={<Link href="/inventaris/restok-ai" />}
                     nativeButton={false}
                     variant="outline"
                     size="lg"
-                    className="h-11 shrink-0 rounded-2xl"
+                    className="h-11 shrink-0 rounded-2xl text-xs xl:text-sm"
                   >
                     <Camera className="size-4" />
                     Restok via Scan Struk
@@ -455,7 +729,7 @@ export function InventarisView() {
                   }} />
                   <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                     <DialogTrigger
-                      render={<Button size="lg" className="h-11 shrink-0 rounded-2xl" />}
+                      render={<Button size="lg" className="h-11 shrink-0 rounded-2xl text-xs xl:text-sm" />}
                     >
                       <PackagePlus className="size-4" />
                       Tambah barang
@@ -552,7 +826,28 @@ export function InventarisView() {
           </div>
         </CardHeader>
         <CardContent>
-          {canMutateInventory && selectedProducts.length > 0 ? (
+          {isAuditMode && (
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs text-emerald-900 dark:text-emerald-200 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-7 items-center justify-center rounded-xl bg-emerald-600 text-white shrink-0">
+                  <ClipboardCheck className="size-4" />
+                </div>
+                <div>
+                  <p className="font-bold text-sm">Mode Cek Stok & Edit Cepat Aktif</p>
+                  <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80 mt-0.5">
+                    Ubah stok dan harga langsung pada tabel. Tombol panah [▲][▼] atau tombol [+]/[-] mempermudah perubahan tanpa membuka popup, otomatis tersimpan ke server.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                <Badge variant="outline" className="border-emerald-600/40 bg-emerald-600/20 text-emerald-800 dark:text-emerald-200 font-semibold px-2.5 py-1">
+                  Otomatis Tersimpan
+                </Badge>
+              </div>
+            </div>
+          )}
+
+          {canMutateInventory && !isAuditMode && selectedProducts.length > 0 ? (
             <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm font-medium">
                 {selectedProducts.length} produk terpilih
@@ -572,60 +867,87 @@ export function InventarisView() {
               </div>
             </div>
           ) : null}
-          <Table className="w-full">
+          <Table className={cn(isAuditMode ? "min-w-[940px]" : "min-w-[1040px]")}>
             <TableHeader>
-              <TableRow>
-                {canMutateInventory ? (
-                  <TableHead className="w-10 px-2">
-                    <input
-                      ref={selectAllRef}
-                      type="checkbox"
-                      checked={paginatedProductIds.length > 0 && allPaginatedProductsSelected}
-                      onChange={() => setSelectedProductIds((current) => toggleAllIds(current, paginatedProductIds))}
-                      aria-label="Pilih semua produk di halaman ini"
-                      className="size-4 cursor-pointer accent-primary"
-                    />
-                  </TableHead>
-                ) : null}
-                <TableHead className="w-28 px-2">
-                  <span className="inline-flex items-center gap-1.5 text-xs">
-                    SKU
-                    <InfoHint text={FIELD_HELP.sku} label="Penjelasan SKU" side="top" />
-                  </span>
-                </TableHead>
-                <TableHead className="min-w-[130px] max-w-[200px] px-2 text-xs">Produk</TableHead>
-                <TableHead className="w-24 px-2 text-xs">Kategori</TableHead>
-                {canMutateInventory ? (
-                  <TableHead className="w-24 px-2 text-right">
-                    <span className="inline-flex items-center justify-end gap-1 text-xs">
-                      Harga beli
+              {isAuditMode ? (
+                <TableRow className="bg-emerald-500/5">
+                  <TableHead className="w-24 px-2 text-xs">SKU</TableHead>
+                  <TableHead className="min-w-[140px] px-2 text-xs">Produk & Kategori</TableHead>
+                  <TableHead className="w-32 px-2 text-right text-xs">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      Harga Beli (Modal)
                       <InfoHint text={FIELD_HELP.costPrice} label="Penjelasan harga beli" side="top" />
                     </span>
                   </TableHead>
-                ) : null}
-                <TableHead className="w-24 px-2 text-right text-xs">Harga jual</TableHead>
-                {canMutateInventory ? (
-                  <TableHead className="w-20 px-2 text-right">
-                    <span className="inline-flex items-center justify-end gap-1 text-xs">
-                      Margin
-                      <InfoHint text={FIELD_HELP.margin} label="Penjelasan margin" side="top" />
+                  <TableHead className="w-36 px-2 text-right text-xs">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      Harga Jual
+                      <InfoHint text="Ketik harga baru atau klik panah [▲][▼]" label="Penjelasan harga jual" side="top" />
                     </span>
                   </TableHead>
-                ) : null}
-                <TableHead className="w-16 px-1.5 text-center text-xs">Stok</TableHead>
-                <TableHead className="w-16 px-1.5 text-center">
-                  <span className="inline-flex items-center justify-center gap-1 text-xs">
-                    Min
-                    <InfoHint text={FIELD_HELP.reorderPoint} label="Penjelasan stok minimum" side="top" />
-                  </span>
-                </TableHead>
-                {canMutateInventory ? <TableHead className="w-48 px-2 text-right text-xs">Aksi</TableHead> : null}
-              </TableRow>
+                  <TableHead className="w-48 px-2 text-center text-xs">
+                    <span className="inline-flex items-center justify-center gap-1">
+                      Stok Fisik
+                      <InfoHint text="Ketik stok baru atau klik tombol [-] / [+] / [▲][▼]" label="Penjelasan stok fisik" side="top" />
+                    </span>
+                  </TableHead>
+                  <TableHead className="w-14 px-1.5 text-center text-xs">Min</TableHead>
+                  <TableHead className="w-28 px-2 text-right text-xs">Status</TableHead>
+                </TableRow>
+              ) : (
+                <TableRow>
+                  {canMutateInventory ? (
+                    <TableHead className="w-10 px-2">
+                      <input
+                        ref={selectAllRef}
+                        type="checkbox"
+                        checked={paginatedProductIds.length > 0 && allPaginatedProductsSelected}
+                        onChange={() => setSelectedProductIds((current) => toggleAllIds(current, paginatedProductIds))}
+                        aria-label="Pilih semua produk di halaman ini"
+                        className="size-4 cursor-pointer accent-primary"
+                      />
+                    </TableHead>
+                  ) : null}
+                  <TableHead className="w-28 px-2">
+                    <span className="inline-flex items-center gap-1.5 text-xs">
+                      SKU
+                      <InfoHint text={FIELD_HELP.sku} label="Penjelasan SKU" side="top" />
+                    </span>
+                  </TableHead>
+                  <TableHead className="min-w-[130px] max-w-[200px] px-2 text-xs">Produk</TableHead>
+                  <TableHead className="w-24 px-2 text-xs">Kategori</TableHead>
+                  {canMutateInventory ? (
+                    <TableHead className="w-24 px-2 text-right">
+                      <span className="inline-flex items-center justify-end gap-1 text-xs">
+                        Harga beli
+                        <InfoHint text={FIELD_HELP.costPrice} label="Penjelasan harga beli" side="top" />
+                      </span>
+                    </TableHead>
+                  ) : null}
+                  <TableHead className="w-24 px-2 text-right text-xs">Harga jual</TableHead>
+                  {canMutateInventory ? (
+                    <TableHead className="w-20 px-2 text-right">
+                      <span className="inline-flex items-center justify-end gap-1 text-xs">
+                        Margin
+                        <InfoHint text={FIELD_HELP.margin} label="Penjelasan margin" side="top" />
+                      </span>
+                    </TableHead>
+                  ) : null}
+                  <TableHead className="w-16 px-1.5 text-center text-xs">Stok</TableHead>
+                  <TableHead className="w-16 px-1.5 text-center">
+                    <span className="inline-flex items-center justify-center gap-1 text-xs">
+                      Min
+                      <InfoHint text={FIELD_HELP.reorderPoint} label="Penjelasan stok minimum" side="top" />
+                    </span>
+                  </TableHead>
+                  {canMutateInventory ? <TableHead className="min-w-[170px] w-48 px-2 text-right text-xs">Aksi</TableHead> : null}
+                </TableRow>
+              )}
             </TableHeader>
             <TableBody>
               {dataState === "error" ? (
                 <TableRow>
-                  <TableCell colSpan={10}>
+                  <TableCell colSpan={isAuditMode ? 7 : 10}>
                     <div role="alert" className="flex min-h-44 flex-col items-center justify-center gap-3 text-center">
                       <p className="font-medium">Gagal memuat data, coba lagi</p>
                       <Button type="button" variant="outline" onClick={retryWorkspace}>Muat ulang</Button>
@@ -635,7 +957,7 @@ export function InventarisView() {
               ) : (dataState === "loading" && visibleProducts.length === 0) ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={`skeleton-${i}`} className="animate-pulse">
-                    {canMutateInventory && (
+                    {canMutateInventory && !isAuditMode && (
                       <TableCell className="w-10 px-2">
                         <div className="size-4 rounded bg-muted/60" />
                       </TableCell>
@@ -660,7 +982,7 @@ export function InventarisView() {
                     <TableCell className="w-24 px-2 text-right">
                       <div className="h-4 w-16 ml-auto rounded bg-muted/50" />
                     </TableCell>
-                    {canMutateInventory && (
+                    {canMutateInventory && !isAuditMode && (
                       <TableCell className="w-20 px-2 text-right">
                         <div className="h-4 w-12 ml-auto rounded bg-muted/50" />
                       </TableCell>
@@ -684,7 +1006,7 @@ export function InventarisView() {
                 ))
               ) : filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="h-44 text-center text-muted-foreground">
+                  <TableCell colSpan={isAuditMode ? 7 : 10} className="h-44 text-center text-muted-foreground">
                     {query || selectedCategory !== "all"
                       ? "Tidak ada produk yang sesuai dengan filter pencarian."
                       : "Belum ada produk di inventaris."}
@@ -692,120 +1014,384 @@ export function InventarisView() {
                 </TableRow>
               ) : (
                 paginatedProducts.map((product) => {
-                const lowStock = product.stock <= product.minimumStock;
-                const sku = product.sku || generateSku(product.name, product.category);
-                const margin = Math.max(0, product.sellPrice - product.buyPrice);
-                const marginPct = product.sellPrice > 0 ? Math.round((margin / product.sellPrice) * 100) : 0;
+                  const currentStock = rowDrafts[product.id]?.stock ?? product.stock;
+                  const currentSellPrice = rowDrafts[product.id]?.sellPrice ?? product.sellPrice;
+                  const currentBuyPrice = rowDrafts[product.id]?.buyPrice ?? product.buyPrice;
+                  const auditStatus = rowDrafts[product.id]?.status ?? "idle";
 
-                return (
-                  <TableRow 
-                    key={product.id} 
-                    className={cn(
-                      lowStock && "bg-primary/6",
-                      newlyAddedIds.includes(product.id) && "bg-emerald-500/15 transition-colors duration-1000 dark:bg-emerald-500/20"
-                    )}
-                  >
-                    {canMutateInventory ? (
-                      <TableCell className="w-10 px-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedProductIds.has(product.id)}
-                          onChange={() =>
-                            setSelectedProductIds((current) => toggleSelectedId(current, product.id))
-                          }
-                          aria-label={`Pilih ${product.name}`}
-                          className="size-4 cursor-pointer accent-primary"
-                        />
+                  const lowStock = currentStock <= product.minimumStock;
+                  const sku = product.sku || generateSku(product.name, product.category);
+                  const margin = Math.max(0, currentSellPrice - currentBuyPrice);
+                  const marginPct = currentSellPrice > 0 ? Math.round((margin / currentSellPrice) * 100) : 0;
+
+                  // MODE CEK STOK (AUDIT MODE)
+                  if (isAuditMode) {
+                    return (
+                      <TableRow
+                        key={product.id}
+                        className={cn(
+                          "transition-colors",
+                          auditStatus === "saved" && "bg-emerald-500/10 dark:bg-emerald-500/15",
+                          auditStatus === "saving" && "bg-amber-500/5",
+                          auditStatus === "error" && "bg-destructive/10",
+                          lowStock && auditStatus === "idle" && "bg-primary/5"
+                        )}
+                      >
+                        {/* SKU */}
+                        <TableCell className="w-24 px-2 font-mono text-xs text-muted-foreground truncate">
+                          {sku}
+                        </TableCell>
+
+                        {/* Produk & Kategori */}
+                        <TableCell className="min-w-[140px] px-2">
+                          <div>
+                            <p className="font-semibold text-foreground text-xs sm:text-sm leading-snug">{product.name}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="rounded-full bg-muted px-2 py-0.2 text-[10px] font-medium text-muted-foreground">
+                                {product.category}
+                              </span>
+                              {lowStock && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-700 dark:text-amber-400 font-semibold">
+                                  <AlertTriangle className="size-2.5" />
+                                  Menipis
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        {/* Harga Beli (Modal) */}
+                        <TableCell className="w-32 px-2 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <div className="relative">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground pointer-events-none">
+                                Rp
+                              </span>
+                              <Input
+                                type="number"
+                                min={0}
+                                step={500}
+                                value={currentBuyPrice}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  updateAuditField(product.id, "buyPrice", isNaN(val) ? 0 : val);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "ArrowUp") {
+                                    e.preventDefault();
+                                    updateAuditField(product.id, "buyPrice", currentBuyPrice + 500);
+                                  } else if (e.key === "ArrowDown") {
+                                    e.preventDefault();
+                                    updateAuditField(product.id, "buyPrice", Math.max(0, currentBuyPrice - 500));
+                                  } else if (e.key === "Enter") {
+                                    e.currentTarget.blur();
+                                  }
+                                }}
+                                className="h-8 w-24 rounded-xl pl-6 pr-1 font-medium text-xs bg-background border-border/80 text-right tabular-nums text-muted-foreground focus:text-foreground"
+                              />
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        {/* Harga Jual */}
+                        <TableCell className="w-36 px-2 text-right">
+                          <div className="flex flex-col items-end">
+                            <div className="flex items-center justify-end gap-1">
+                              <div className="relative">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground pointer-events-none">
+                                  Rp
+                                </span>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  step={500}
+                                  value={currentSellPrice}
+                                  onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    updateAuditField(product.id, "sellPrice", isNaN(val) ? 0 : val);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "ArrowUp") {
+                                      e.preventDefault();
+                                      updateAuditField(product.id, "sellPrice", currentSellPrice + 500);
+                                    } else if (e.key === "ArrowDown") {
+                                      e.preventDefault();
+                                      updateAuditField(product.id, "sellPrice", Math.max(1, currentSellPrice - 500));
+                                    } else if (e.key === "Enter") {
+                                      e.currentTarget.blur();
+                                    }
+                                  }}
+                                  className="h-8 w-28 rounded-xl pl-6 pr-6 font-bold text-xs bg-background border-border/80 text-right tabular-nums text-foreground"
+                                />
+                                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex flex-col -space-y-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAuditField(product.id, "sellPrice", currentSellPrice + 500)}
+                                    className="p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                                    title="Tambah Rp 500"
+                                  >
+                                    <ChevronUp className="size-2.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAuditField(product.id, "sellPrice", Math.max(1, currentSellPrice - 500))}
+                                    className="p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                                    title="Kurangi Rp 500"
+                                  >
+                                    <ChevronDown className="size-2.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground mt-0.5">
+                              Margin: {formatCurrency(margin)} ({marginPct}%)
+                            </span>
+                          </div>
+                        </TableCell>
+
+                        {/* Stok Fisik */}
+                        <TableCell className="w-48 px-2 text-center">
+                          <div className="flex flex-col items-center">
+                            <div className="flex items-center gap-1.5 justify-center">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="size-8 p-0 rounded-xl hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 shrink-0 cursor-pointer"
+                                onClick={() => updateAuditField(product.id, "stock", Math.max(0, currentStock - 1))}
+                                disabled={currentStock <= 0}
+                                title="Kurangi 1 stok"
+                              >
+                                <Minus className="size-3.5" />
+                              </Button>
+
+                              <div className="relative">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={currentStock}
+                                  onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    updateAuditField(product.id, "stock", isNaN(val) ? 0 : val);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "ArrowUp") {
+                                      e.preventDefault();
+                                      updateAuditField(product.id, "stock", currentStock + 1);
+                                    } else if (e.key === "ArrowDown") {
+                                      e.preventDefault();
+                                      updateAuditField(product.id, "stock", Math.max(0, currentStock - 1));
+                                    } else if (e.key === "Enter") {
+                                      e.currentTarget.blur();
+                                    }
+                                  }}
+                                  className="h-8 w-16 rounded-xl px-1 text-center font-bold text-sm bg-background border-border/80 pr-5"
+                                />
+                                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex flex-col -space-y-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAuditField(product.id, "stock", currentStock + 1)}
+                                    className="p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                                    title="Tambah 1 (Panah Atas)"
+                                  >
+                                    <ChevronUp className="size-2.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAuditField(product.id, "stock", Math.max(0, currentStock - 1))}
+                                    className="p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                                    title="Kurang 1 (Panah Bawah)"
+                                  >
+                                    <ChevronDown className="size-2.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="size-8 p-0 rounded-xl hover:bg-emerald-500/10 hover:text-emerald-600 hover:border-emerald-500/30 shrink-0 cursor-pointer"
+                                onClick={() => updateAuditField(product.id, "stock", currentStock + 1)}
+                                title="Tambah 1 stok"
+                              >
+                                <Plus className="size-3.5" />
+                              </Button>
+                            </div>
+
+                            <div className="flex items-center gap-1 mt-1">
+                              <button
+                                type="button"
+                                onClick={() => updateAuditField(product.id, "stock", currentStock + 1)}
+                                className="text-[10px] px-1.5 py-0.2 rounded bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-medium transition cursor-pointer"
+                                title="Tambah 1"
+                              >
+                                +1
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateAuditField(product.id, "stock", currentStock + 5)}
+                                className="text-[10px] px-1.5 py-0.2 rounded bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-medium transition cursor-pointer"
+                                title="Tambah 5"
+                              >
+                                +5
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateAuditField(product.id, "stock", currentStock + 10)}
+                                className="text-[10px] px-1.5 py-0.2 rounded bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-medium transition cursor-pointer"
+                                title="Tambah 10"
+                              >
+                                +10
+                              </button>
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        {/* Min Stock */}
+                        <TableCell className="w-14 px-1.5 text-center text-xs text-muted-foreground tabular-nums">
+                          {product.minimumStock}
+                        </TableCell>
+
+                        {/* Status */}
+                        <TableCell className="w-28 px-2 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {auditStatus === "saving" ? (
+                              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[10px] gap-1 px-2 py-0.5 font-medium shrink-0">
+                                <Loader2 className="size-3 animate-spin" />
+                                <span>Menyimpan</span>
+                              </Badge>
+                            ) : auditStatus === "saved" ? (
+                              <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] gap-1 px-2 py-0.5 font-semibold shrink-0 animate-pulse">
+                                <Check className="size-3 text-emerald-600" />
+                                <span>Tersimpan</span>
+                              </Badge>
+                            ) : auditStatus === "error" ? (
+                              <Badge variant="destructive" className="text-[10px] gap-1 px-2 py-0.5 font-medium shrink-0">
+                                <span>Gagal</span>
+                              </Badge>
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground/60 inline-flex items-center gap-1 font-medium">
+                                <CheckCircle2 className="size-3 text-muted-foreground/40" />
+                                <span>Sesuai</span>
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+
+                  // STANDARD NORMAL MODE ROW
+                  return (
+                    <TableRow 
+                      key={product.id} 
+                      className={cn(
+                        lowStock && "bg-primary/6",
+                        newlyAddedIds.includes(product.id) && "bg-emerald-500/15 transition-colors duration-1000 dark:bg-emerald-500/20"
+                      )}
+                    >
+                      {canMutateInventory ? (
+                        <TableCell className="w-10 px-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedProductIds.has(product.id)}
+                            onChange={() =>
+                              setSelectedProductIds((current) => toggleSelectedId(current, product.id))
+                            }
+                            aria-label={`Pilih ${product.name}`}
+                            className="size-4 cursor-pointer accent-primary"
+                          />
+                        </TableCell>
+                      ) : null}
+                      <TableCell className="w-28 px-2 font-mono text-xs font-medium text-muted-foreground truncate">
+                        {sku}
                       </TableCell>
-                    ) : null}
-                    <TableCell className="w-28 px-2 font-mono text-xs font-medium text-muted-foreground truncate">
-                      {sku}
-                    </TableCell>
-                    <TableCell className="min-w-[130px] max-w-[200px] px-2 whitespace-normal">
-                      <div className="min-w-0">
-                        <p className="font-medium text-foreground truncate text-xs sm:text-sm">{product.name}</p>
-                        {product.description ? (
-                          <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{product.description}</p>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="w-24 px-2 text-xs">{product.category}</TableCell>
-                    {canMutateInventory ? (
-                      <TableCell className="w-24 px-2 text-right text-xs tabular-nums">{formatCurrency(product.buyPrice)}</TableCell>
-                    ) : null}
-                    <TableCell className="w-24 px-2 text-right text-xs font-medium tabular-nums">{formatCurrency(product.sellPrice)}</TableCell>
-                    {canMutateInventory ? (
-                      <TableCell className="w-20 px-2 text-right text-xs">
-                        <span className="font-medium tabular-nums">{formatCurrency(margin)}</span>
-                        <span className="ml-1 text-[10px] text-muted-foreground">({marginPct}%)</span>
-                      </TableCell>
-                    ) : null}
-                    <TableCell className="w-16 px-1.5 text-center">
-                      <div className="inline-flex items-center gap-1 justify-center">
-                        <Badge
-                          className={cn(
-                            "rounded-full border-0 text-[11px] px-2 py-0.2",
-                            lowStock ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
-                          )}
-                        >
-                          {product.stock}
-                        </Badge>
-                        {lowStock ? <AlertTriangle className="size-3 text-primary shrink-0" /> : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="w-16 px-1.5 text-center text-xs text-muted-foreground tabular-nums">{product.minimumStock}</TableCell>
-                    {canMutateInventory ? (
-                      <TableCell className="w-48 px-2 text-right">
-                        <div className="flex justify-end gap-1.5">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 rounded-full px-2.5 text-xs gap-1"
-                            onClick={() => {
-                              setEditingProduct(product);
-                              setEditDraft({
-                                sku: product.sku ?? "",
-                                name: product.name,
-                                category: product.category,
-                                buyPrice: product.buyPrice,
-                                sellPrice: product.sellPrice,
-                                stock: product.stock,
-                                minimumStock: product.minimumStock,
-                                description: product.description,
-                              });
-                            }}
-                          >
-                            <PencilLine className="size-3" />
-                            Edit
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="h-7 rounded-full px-2.5 text-xs gap-1"
-                            onClick={() => setRestockTarget(product)}
-                          >
-                            <Warehouse className="size-3" />
-                            Restok
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 rounded-full px-2 text-xs text-destructive hover:bg-destructive/10"
-                            onClick={() => handleDeleteProduct(product)}
-                            aria-label={`Hapus ${product.name}`}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
+                      <TableCell className="min-w-[130px] max-w-[200px] px-2 whitespace-normal">
+                        <div className="min-w-0">
+                          <p className="font-medium text-foreground truncate text-xs sm:text-sm">{product.name}</p>
+                          {product.description ? (
+                            <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{product.description}</p>
+                          ) : null}
                         </div>
                       </TableCell>
-                    ) : null}
-                  </TableRow>
-                );
-              })
-            )}
+                      <TableCell className="w-24 px-2 text-xs">{product.category}</TableCell>
+                      {canMutateInventory ? (
+                        <TableCell className="w-24 px-2 text-right text-xs tabular-nums">{formatCurrency(product.buyPrice)}</TableCell>
+                      ) : null}
+                      <TableCell className="w-24 px-2 text-right text-xs font-medium tabular-nums">{formatCurrency(product.sellPrice)}</TableCell>
+                      {canMutateInventory ? (
+                        <TableCell className="w-20 px-2 text-right text-xs">
+                          <span className="font-medium tabular-nums">{formatCurrency(margin)}</span>
+                          <span className="ml-1 text-[10px] text-muted-foreground">({marginPct}%)</span>
+                        </TableCell>
+                      ) : null}
+                      <TableCell className="w-16 px-1.5 text-center">
+                        <div className="inline-flex items-center gap-1 justify-center">
+                          <Badge
+                            className={cn(
+                              "rounded-full border-0 text-[11px] px-2 py-0.2",
+                              lowStock ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
+                            )}
+                          >
+                            {product.stock}
+                          </Badge>
+                          {lowStock ? <AlertTriangle className="size-3 text-primary shrink-0" /> : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="w-16 px-1.5 text-center text-xs text-muted-foreground tabular-nums">{product.minimumStock}</TableCell>
+                      {canMutateInventory ? (
+                        <TableCell className="min-w-[170px] w-48 px-2 text-right">
+                          <div className="flex justify-end gap-1.5 shrink-0">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 rounded-full px-2.5 text-xs gap-1"
+                              onClick={() => {
+                                setEditingProduct(product);
+                                setEditDraft({
+                                  sku: product.sku ?? "",
+                                  name: product.name,
+                                  category: product.category,
+                                  buyPrice: product.buyPrice,
+                                  sellPrice: product.sellPrice,
+                                  stock: product.stock,
+                                  minimumStock: product.minimumStock,
+                                  description: product.description,
+                                });
+                              }}
+                            >
+                              <PencilLine className="size-3" />
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              className="h-7 rounded-full px-2.5 text-xs gap-1"
+                              onClick={() => setRestockTarget(product)}
+                            >
+                              <Warehouse className="size-3" />
+                              Restok
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 rounded-full px-2 text-xs text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteProduct(product)}
+                              aria-label={`Hapus ${product.name}`}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      ) : null}
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
 

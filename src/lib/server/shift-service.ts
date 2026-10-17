@@ -4,7 +4,8 @@ import { db, pool } from "@/db/client";
 import { shiftSessions, shifts } from "@/db/schema";
 import { notFoundError } from "@/lib/server/route-error";
 import { createScopedQuery } from "@/lib/server/scoped-query";
-import { JAKARTA_TIME_ZONE } from "@/lib/server/timezone";
+import { JAKARTA_TIME_ZONE, getJakartaDateKey, getJakartaDayRange } from "@/lib/server/timezone";
+import { buildDailyReport } from "@/lib/server/daily-report-service";
 
 export type ShiftDraft = {
   name: string;
@@ -341,6 +342,19 @@ export async function openShift(
   }).returning();
   const created = await sessionById(ownerId, session.id);
   if (!created) throw new Error("Gagal membuka shift.");
+
+  // If daily report for this day was locked, return to draft so new shift activities can be accumulated
+  try {
+    const shiftDate = getJakartaDateKey(openedAt);
+    await pool.query(
+      `update daily_reports set status = 'draft', locked_at = null, locked_by_user_id = null, updated_at = $3::timestamptz
+       where user_id = $1 and report_date = $2::date and status = 'locked'`,
+      [ownerId, shiftDate, nowIso()]
+    );
+  } catch (err) {
+    console.warn("[shift-service] Revert daily report to draft on shift open warning:", err);
+  }
+
   return created;
 }
 
@@ -374,6 +388,30 @@ export async function closeShift(
   }).where(and(eq(shiftSessions.id, sessionId), eq(shiftSessions.workspaceOwnerId, ownerId), eq(shiftSessions.status, "open")));
   const closed = await sessionById(ownerId, sessionId);
   if (!closed) throw new Error("Gagal menutup shift.");
+
+  // Auto-recap and auto-lock daily report when shift closes, provided no other shifts remain open today
+  try {
+    const shiftDate = getJakartaDateKey(closed.startedAt);
+    const dayRange = getJakartaDayRange(shiftDate);
+    const openCheck = await pool.query<{ id: string }>(
+      `select id from shift_sessions
+       where workspace_owner_id = $1 and status = 'open'
+         and coalesce(opened_at, started_at) >= $2::timestamptz
+         and coalesce(opened_at, started_at) < $3::timestamptz limit 1`,
+      [ownerId, dayRange.start, dayRange.end]
+    );
+    if (!openCheck.rows[0]) {
+      await buildDailyReport(ownerId, shiftDate, { overwriteLocked: true });
+      await pool.query(
+        `update daily_reports set status = 'locked', locked_at = coalesce(locked_at, $3::timestamptz), locked_by_user_id = coalesce(locked_by_user_id, $4), updated_at = $3::timestamptz
+         where user_id = $1 and report_date = $2::date`,
+        [ownerId, shiftDate, nowIso(), closedByUserId || session.cashierUserId]
+      );
+    }
+  } catch (err) {
+    console.warn("[shift-service] Auto-lock daily report on shift closure warning:", err);
+  }
+
   return closed;
 }
 
@@ -555,6 +593,30 @@ export async function updateShiftSession(
 
   const updated = await sessionById(ownerId, sessionId);
   if (!updated) throw new Error("Gagal memperbarui data shift.");
+
+  // Auto-lock daily report if all shifts for this day are closed
+  try {
+    const shiftDate = getJakartaDateKey(updated.startedAt);
+    const dayRange = getJakartaDayRange(shiftDate);
+    const openCheck = await pool.query<{ id: string }>(
+      `select id from shift_sessions
+       where workspace_owner_id = $1 and status = 'open'
+         and coalesce(opened_at, started_at) >= $2::timestamptz
+         and coalesce(opened_at, started_at) < $3::timestamptz limit 1`,
+      [ownerId, dayRange.start, dayRange.end]
+    );
+    if (!openCheck.rows[0]) {
+      await buildDailyReport(ownerId, shiftDate, { overwriteLocked: true });
+      await pool.query(
+        `update daily_reports set status = 'locked', locked_at = coalesce(locked_at, $3::timestamptz), locked_by_user_id = coalesce(locked_by_user_id, $4), updated_at = $3::timestamptz
+         where user_id = $1 and report_date = $2::date`,
+        [ownerId, shiftDate, new Date().toISOString(), actorUserId || updated.cashierUserId]
+      );
+    }
+  } catch (err) {
+    console.warn("[shift-service] Auto-lock daily report on updateShiftSession warning:", err);
+  }
+
   return updated;
 }
 
