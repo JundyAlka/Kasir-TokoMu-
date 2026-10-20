@@ -573,29 +573,29 @@ export function InventarisView() {
       </section>
 
       <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
-        <CardHeader className="flex flex-col gap-3.5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle className="font-heading text-2xl">Inventaris barang jadi</CardTitle>
-              <CardDescription>
-                Semua perubahan di layar ini langsung mengubah state mock yang dipakai POS dan laporan.
+        <CardHeader className="flex flex-col gap-2.5 sm:gap-3 p-3.5 sm:p-5 sm:pb-4">
+          <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
+            <div className="space-y-0.5">
+              <CardTitle className="font-heading text-lg sm:text-xl lg:text-2xl leading-tight">Inventaris barang jadi</CardTitle>
+              <CardDescription className="text-xs sm:text-sm text-muted-foreground/90 line-clamp-1 sm:line-clamp-none">
+                Semua perubahan di layar ini langsung mengubah stok dan harga di POS dan laporan.
               </CardDescription>
             </div>
 
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="relative w-full min-w-[220px] flex-1 lg:w-auto">
-                <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+              <div className="relative min-w-[180px] flex-1 sm:flex-initial sm:w-64 lg:w-72">
+                <Search className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Cari nama, SKU, atau kategori..."
-                  className="h-11 w-full rounded-2xl bg-card/85 pl-9 text-xs xl:text-sm"
+                  placeholder="Cari nama, SKU, kategori..."
+                  className="h-9 sm:h-10 w-full rounded-xl sm:rounded-2xl bg-card/85 pl-8 sm:pl-9 text-xs shadow-2xs"
                 />
               </div>
 
               {/* Sorting Dropdown */}
               <Select value={sortBy} onValueChange={(val) => setSortBy(val as InventorySortOption)}>
-                <SelectTrigger className="h-11 rounded-2xl border-border/80 bg-card/85 px-3 min-w-[160px] text-xs font-semibold gap-1.5 shadow-2xs">
+                <SelectTrigger className="h-9 sm:h-10 rounded-xl sm:rounded-2xl border-border/80 bg-card/85 px-2.5 sm:px-3 min-w-[130px] sm:min-w-[150px] text-xs font-semibold gap-1.5 shadow-2xs">
                   <ArrowUpDown className="size-3.5 text-primary shrink-0" />
                   <SelectValue placeholder="Urutkan" />
                 </SelectTrigger>
@@ -659,7 +659,7 @@ export function InventarisView() {
                   aria-checked={isAuditMode}
                   onClick={() => setIsAuditMode((prev) => !prev)}
                   className={cn(
-                    "relative inline-flex h-11 items-center gap-2 rounded-2xl border px-3 text-xs font-semibold transition-all shadow-2xs cursor-pointer select-none shrink-0",
+                    "relative inline-flex h-9 sm:h-10 items-center gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border px-2.5 sm:px-3 text-xs font-semibold transition-all shadow-2xs cursor-pointer select-none shrink-0",
                     isAuditMode
                       ? "border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 ring-2 ring-emerald-500/20"
                       : "border-border/80 bg-card/85 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -668,28 +668,28 @@ export function InventarisView() {
                 >
                   <div
                     className={cn(
-                      "flex size-6 items-center justify-center rounded-xl transition-colors",
+                      "flex size-5 sm:size-6 items-center justify-center rounded-lg sm:rounded-xl transition-colors",
                       isAuditMode ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"
                     )}
                   >
-                    <ClipboardCheck className="size-3.5" />
+                    <ClipboardCheck className="size-3 sm:size-3.5" />
                   </div>
                   <div className="flex flex-col text-left">
-                    <span className="font-bold leading-tight">Mode Cek Stok</span>
-                    <span className="text-[10px] font-normal opacity-80">
-                      {isAuditMode ? "Aktif (Edit Cepat)" : "Non-aktif"}
+                    <span className="font-bold text-[11px] sm:text-xs leading-tight">Mode Cek Stok</span>
+                    <span className="text-[9px] sm:text-[10px] font-normal opacity-80 leading-none">
+                      {isAuditMode ? "Aktif" : "Non-aktif"}
                     </span>
                   </div>
                   <div
                     className={cn(
-                      "ml-1 h-5 w-9 rounded-full p-0.5 transition-colors duration-200 ease-in-out",
+                      "ml-0.5 sm:ml-1 h-4 sm:h-5 w-7 sm:w-9 rounded-full p-0.5 transition-colors duration-200 ease-in-out",
                       isAuditMode ? "bg-emerald-600" : "bg-muted-foreground/30"
                     )}
                   >
                     <div
                       className={cn(
-                        "size-4 rounded-full bg-white shadow-xs transition-transform duration-200 ease-in-out",
-                        isAuditMode ? "translate-x-4" : "translate-x-0"
+                        "size-3 sm:size-4 rounded-full bg-white shadow-xs transition-transform duration-200 ease-in-out",
+                        isAuditMode ? "translate-x-3 sm:translate-x-4" : "translate-x-0"
                       )}
                     />
                   </div>
@@ -697,42 +697,45 @@ export function InventarisView() {
               )}
 
               {canMutateInventory && !isAuditMode ? (
-                <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   <Button
                     render={<Link href="/inventaris/restok-ai" />}
                     nativeButton={false}
                     variant="outline"
-                    size="lg"
-                    className="h-11 shrink-0 rounded-2xl text-xs xl:text-sm"
+                    size="sm"
+                    className="h-9 sm:h-10 shrink-0 rounded-xl sm:rounded-2xl text-xs px-2.5 sm:px-3"
                   >
-                    <Camera className="size-4" />
-                    Restok via Scan Struk
+                    <Camera className="size-3.5" />
+                    <span>Restok via Scan Struk</span>
                   </Button>
-                  <ImportProductDialog onImportComplete={async (importedProducts) => {
-                    await refreshWorkspace();
-                    if (importedProducts && importedProducts.length > 0) {
-                      const ids = importedProducts.map((p) => p.id);
-                      setNewlyAddedIds((prev) => [...ids, ...prev]);
-                      
-                      if (importedProducts.length <= 5) {
-                        toast.success(
-                          `${importedProducts.length} produk berhasil ditambahkan: ${importedProducts.map(p => p.name).join(", ")}`, 
-                          { duration: 5000 }
-                        );
-                      } else {
-                        toast.success(
-                          `${importedProducts.length} produk berhasil ditambahkan secara massal.`, 
-                          { duration: 5000 }
-                        );
+                  <ImportProductDialog 
+                    triggerClassName="h-9 sm:h-10 shrink-0 rounded-xl sm:rounded-2xl text-xs px-2.5 sm:px-3"
+                    onImportComplete={async (importedProducts) => {
+                      await refreshWorkspace();
+                      if (importedProducts && importedProducts.length > 0) {
+                        const ids = importedProducts.map((p) => p.id);
+                        setNewlyAddedIds((prev) => [...ids, ...prev]);
+                        
+                        if (importedProducts.length <= 5) {
+                          toast.success(
+                            `${importedProducts.length} produk berhasil ditambahkan: ${importedProducts.map(p => p.name).join(", ")}`, 
+                            { duration: 5000 }
+                          );
+                        } else {
+                          toast.success(
+                            `${importedProducts.length} produk berhasil ditambahkan secara massal.`, 
+                            { duration: 5000 }
+                          );
+                        }
                       }
-                    }
-                  }} />
+                    }} 
+                  />
                   <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                     <DialogTrigger
-                      render={<Button size="lg" className="h-11 shrink-0 rounded-2xl text-xs xl:text-sm" />}
+                      render={<Button size="sm" className="h-9 sm:h-10 shrink-0 rounded-xl sm:rounded-2xl text-xs px-3 sm:px-3.5" />}
                     >
-                      <PackagePlus className="size-4" />
-                      Tambah barang
+                      <PackagePlus className="size-3.5" />
+                      <span>Tambah barang</span>
                     </DialogTrigger>
                     <DialogContent className="max-h-[92vh] w-full max-w-2xl sm:max-w-2xl md:max-w-3xl overflow-y-auto overflow-x-hidden rounded-[28px] p-0">
                       <DialogHeader className="p-6 pb-2">

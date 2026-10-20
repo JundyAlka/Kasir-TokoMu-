@@ -87,8 +87,10 @@ function generateTemplateCSV(): string {
 
 export function ImportProductDialog({
   onImportComplete,
+  triggerClassName,
 }: {
   onImportComplete: (products?: Array<{ id: string; name: string; sku: string }>) => void;
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -206,7 +208,7 @@ export function ImportProductDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
-          <Button variant="outline" size="lg" className="h-11 rounded-2xl" />
+          <Button variant="outline" size="lg" className={cn("h-11 rounded-2xl", triggerClassName)} />
         }
       >
         <FileSpreadsheet className="size-4" />
