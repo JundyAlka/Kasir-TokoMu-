@@ -17,7 +17,9 @@ import {
   Maximize2,
   MessageCircle,
   Minimize2,
+  Pencil,
   Phone,
+  Plus,
   Receipt,
   Search,
   TableProperties,
@@ -158,6 +160,12 @@ export function BukuHutangView() {
   const [quickPayAmount, setQuickPayAmount] = useState<number>(0);
   const [quickPayNote, setQuickPayNote] = useState<string>("");
   const [quickPaySubmitting, setQuickPaySubmitting] = useState<boolean>(false);
+
+  // Quick Adjust Amount States
+  const [adjustDebt, setAdjustDebt] = useState<Debt | null>(null);
+  const [adjustMode, setAdjustMode] = useState<"add" | "set">("add");
+  const [adjustAmount, setAdjustAmount] = useState<number>(0);
+  const [adjustSubmitting, setAdjustSubmitting] = useState<boolean>(false);
 
   const visibleDebts = useMemo(
     () => debts.map((debt) => debtOverrides[debt.id] ?? debt),
@@ -378,6 +386,53 @@ export function BukuHutangView() {
     setQuickPayMode("lunas");
     setQuickPayAmount(debt.remainingAmount);
     setQuickPayNote("Pelunasan kasbon");
+  }
+
+  function openQuickAdjust(debt: Debt, mode: "add" | "set" = "add") {
+    setAdjustDebt(debt);
+    setAdjustMode(mode);
+    setAdjustAmount(mode === "set" ? debt.amount : 0);
+  }
+
+  async function handleQuickAdjustSubmit() {
+    if (!adjustDebt) return;
+    if (adjustAmount <= 0) {
+      toast.error("Nominal harus lebih dari Rp 0.");
+      return;
+    }
+    if (adjustMode === "set" && adjustAmount < adjustDebt.paidAmount) {
+      toast.error(`Nominal tidak boleh kurang dari yang sudah dibayar (${formatCurrency(adjustDebt.paidAmount)}).`);
+      return;
+    }
+
+    try {
+      setAdjustSubmitting(true);
+      const payload = adjustMode === "add" ? { addAmount: adjustAmount } : { amount: adjustAmount };
+      const res = await fetch(`/api/debts/${adjustDebt.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Gagal mengubah nominal kasbon.");
+      }
+
+      const data = (await res.json()) as { debt: Debt };
+      handleDebtUpdated(data.debt);
+      toast.success(
+        adjustMode === "add"
+          ? `Nominal kasbon ${data.debt.borrowerName} ditambah ${formatCurrency(adjustAmount)}.`
+          : `Nominal kasbon ${data.debt.borrowerName} diubah menjadi ${formatCurrency(adjustAmount)}.`
+      );
+      setAdjustDebt(null);
+      setAdjustAmount(0);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal mengubah nominal kasbon.");
+    } finally {
+      setAdjustSubmitting(false);
+    }
   }
 
   function sendWhatsappReminder(borrowerName: string, whatsapp: string, remainingAmount: number, dueDate?: string | null) {
@@ -627,6 +682,7 @@ export function BukuHutangView() {
                           onOpenDetail={openDetail}
                           onQuickCicil={openQuickCicil}
                           onQuickLunas={openQuickLunas}
+                          onQuickAdjust={openQuickAdjust}
                           onSendReminder={sendWhatsappReminder}
                         />
                       );
@@ -773,7 +829,7 @@ export function BukuHutangView() {
                               <span>{isExpanded ? "Tutup Rincian" : `Rincian (${group.debts.length})`}</span>
                             </Button>
 
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               {group.totalRemaining > 0 && firstUnpaidDebt ? (
                                 <>
                                   <Button
@@ -796,6 +852,19 @@ export function BukuHutangView() {
                                     Lunas
                                   </Button>
                                 </>
+                              ) : null}
+                              {firstUnpaidDebt ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openQuickAdjust(firstUnpaidDebt, "add")}
+                                  className="h-8 rounded-full px-2.5 text-xs font-medium"
+                                  title="Tambah atau set nominal kasbon"
+                                >
+                                  <Plus className="size-3.5 mr-1" />
+                                  Nominal
+                                </Button>
                               ) : null}
                               <Button
                                 type="button"
@@ -846,6 +915,16 @@ export function BukuHutangView() {
                                         Cicil
                                       </Button>
                                     ) : null}
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => openQuickAdjust(d, "add")}
+                                      className="h-7 px-2 text-[11px] rounded-lg"
+                                      title="Tambah / atur nominal"
+                                    >
+                                      + Nominal
+                                    </Button>
                                     <Button
                                       type="button"
                                       size="sm"
@@ -1030,6 +1109,164 @@ export function BukuHutangView() {
         ) : null}
       </Dialog>
 
+      {/* Quick Adjust Nominal Modal */}
+      <Dialog open={Boolean(adjustDebt)} onOpenChange={(open) => !open && setAdjustDebt(null)}>
+        {adjustDebt ? (
+          <DialogContent className="sm:max-w-md rounded-[28px] p-6 gap-5">
+            <DialogHeader>
+              <DialogTitle className="font-heading text-xl flex items-center gap-2">
+                <Pencil className="size-5 text-primary" />
+                <span>Atur Nominal Kasbon</span>
+              </DialogTitle>
+              <DialogDescription>
+                Pelanggan: <span className="font-semibold text-foreground">{adjustDebt.borrowerName}</span>
+                {adjustDebt.whatsapp ? ` (${adjustDebt.whatsapp})` : ""}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-2.5">
+                <div className="rounded-2xl border border-border/60 bg-muted/40 p-3">
+                  <p className="text-[11px] text-muted-foreground">Total Saat Ini</p>
+                  <p className="text-sm font-semibold mt-0.5 tabular-nums">{formatCurrency(adjustDebt.amount)}</p>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-muted/40 p-3">
+                  <p className="text-[11px] text-muted-foreground">Sudah Dibayar</p>
+                  <p className="text-sm font-semibold mt-0.5 tabular-nums">{formatCurrency(adjustDebt.paidAmount)}</p>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-destructive/10 p-3">
+                  <p className="text-[11px] text-destructive font-medium">Sisa Tagihan</p>
+                  <p className="text-sm font-semibold text-destructive mt-0.5 tabular-nums">
+                    {formatCurrency(adjustDebt.remainingAmount)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="inline-flex w-full rounded-full bg-muted p-1">
+                <button
+                  type="button"
+                  className={cn(
+                    "flex-1 rounded-full px-3 py-1.5 text-xs font-semibold transition-all",
+                    adjustMode === "add"
+                      ? "bg-card text-foreground shadow-sm ring-1 ring-border/70"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  onClick={() => {
+                    setAdjustMode("add");
+                    setAdjustAmount(0);
+                  }}
+                >
+                  + Tambah Nominal
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex-1 rounded-full px-3 py-1.5 text-xs font-semibold transition-all",
+                    adjustMode === "set"
+                      ? "bg-card text-foreground shadow-sm ring-1 ring-border/70"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  onClick={() => {
+                    setAdjustMode("set");
+                    setAdjustAmount(adjustDebt.amount);
+                  }}
+                >
+                  Set Nominal Baru
+                </button>
+              </div>
+
+              <div className="space-y-2.5">
+                <div>
+                  <Label htmlFor="adjust-debt-amount" className="text-xs font-semibold">
+                    {adjustMode === "add" ? "Nominal Tambahan Hutang (Rp)" : "Nominal Total Hutang Baru (Rp)"}
+                  </Label>
+                  <div className="relative mt-1.5">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
+                      Rp
+                    </span>
+                    <Input
+                      id="adjust-debt-amount"
+                      type="text"
+                      inputMode="numeric"
+                      value={formatNumberInput(adjustAmount)}
+                      onChange={(e) => setAdjustAmount(parseNumberInput(e.target.value))}
+                      className="pl-11 text-lg font-semibold rounded-xl h-12 tabular-nums"
+                      placeholder="0"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                {adjustMode === "add" ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {[5000, 10000, 20000, 50000, 100000].map((preset) => (
+                      <Button
+                        key={preset}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setAdjustAmount((prev) => prev + preset)}
+                        className="h-7 text-xs rounded-lg px-2.5"
+                      >
+                        +{formatCurrency(preset)}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
+
+                {adjustMode === "add" && adjustAmount > 0 ? (
+                  <div className="rounded-xl border border-primary/25 bg-primary/5 px-3.5 py-2.5 text-xs flex items-center justify-between">
+                    <span className="text-muted-foreground">Total kasbon baru nanti:</span>
+                    <span className="font-bold text-foreground tabular-nums">
+                      {formatCurrency(adjustDebt.amount + adjustAmount)}
+                    </span>
+                  </div>
+                ) : null}
+
+                {adjustMode === "set" && adjustDebt.paidAmount > 0 && adjustAmount > 0 && adjustAmount < adjustDebt.paidAmount ? (
+                  <p className="text-xs text-destructive font-medium">
+                    Nominal tidak boleh kurang dari yang sudah dibayar ({formatCurrency(adjustDebt.paidAmount)}).
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0 mt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAdjustDebt(null)}
+                disabled={adjustSubmitting}
+                className="rounded-full"
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handleQuickAdjustSubmit()}
+                disabled={
+                  adjustSubmitting ||
+                  adjustAmount <= 0 ||
+                  (adjustMode === "set" && adjustAmount < adjustDebt.paidAmount)
+                }
+                className="rounded-full font-semibold"
+              >
+                {adjustSubmitting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin mr-2" />
+                    Menyimpan...
+                  </>
+                ) : adjustMode === "add" ? (
+                  `Tambah ${formatCurrency(adjustAmount)}`
+                ) : (
+                  `Simpan ${formatCurrency(adjustAmount)}`
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
+
       <DebtDetailDialog
         debtId={selectedDebtId}
         open={detailOpen}
@@ -1058,6 +1295,7 @@ function TableRowGroup({
   onOpenDetail,
   onQuickCicil,
   onQuickLunas,
+  onQuickAdjust,
   onSendReminder,
 }: {
   group: CustomerDebtGroup;
@@ -1070,6 +1308,7 @@ function TableRowGroup({
   onOpenDetail: (id: string) => void;
   onQuickCicil: (debt: Debt) => void;
   onQuickLunas: (debt: Debt) => void;
+  onQuickAdjust: (debt: Debt, mode?: "add" | "set") => void;
   onSendReminder: (name: string, phone: string, amount: number, dueDate?: string | null) => void;
 }) {
   return (
@@ -1281,6 +1520,20 @@ function TableRowGroup({
               </>
             ) : null}
 
+            {firstUnpaidDebt ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => onQuickAdjust(firstUnpaidDebt, "add")}
+                className="h-7 rounded-full border-border px-2 text-xs font-medium hover:bg-muted text-foreground"
+                title="Tambah atau set nominal kasbon"
+              >
+                <Plus className="size-3 mr-1 text-primary" />
+                Nominal
+              </Button>
+            ) : null}
+
             <Button
               type="button"
               size="sm"
@@ -1453,6 +1706,16 @@ function TableRowGroup({
                                   </Button>
                                 </>
                               ) : null}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onQuickAdjust(debt, "add")}
+                                className="h-6 rounded-full border-border bg-card px-2 text-[11px] font-medium"
+                                title="Tambah atau set nominal kasbon"
+                              >
+                                + Nominal
+                              </Button>
                               <Button
                                 type="button"
                                 size="sm"

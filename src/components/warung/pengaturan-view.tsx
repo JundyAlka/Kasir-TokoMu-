@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BadgeCheck, Bell, MapPin, RotateCcw, Store, WalletCards } from "lucide-react";
+import { ArrowRight, BadgeCheck, Bell, MapPin, MessageSquare, RotateCcw, Store, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 import { useAppState } from "@/components/providers/app-state-provider";
 import { ShiftSettings } from "@/components/tokomu/shift-settings";
-import { Button } from "@/components/ui/button";
+import { WhatsAppReportSettings } from "@/components/tokomu/whatsapp-report-settings";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +21,8 @@ const paymentMethods: PaymentMethod[] = ["Tunai", "QRIS", "Transfer"];
 
 export function PengaturanView({ role }: { role: string }) {
   const canMutateSettings = role === "pimpinan";
+  const canManageWhatsapp = role === "pimpinan" || role === "pengelola_keuangan";
+  const [activeTab, setActiveTab] = useState("profil");
   const { settings, lowStockProducts, resetWorkspace, updateSettings, products } = useAppState();
   const [form, setForm] = useState<Settings>(settings);
   const [isSaving, setIsSaving] = useState(false);
@@ -79,7 +83,7 @@ export function PengaturanView({ role }: { role: string }) {
   }
 
   return (
-    <Tabs defaultValue="profil" className="space-y-4">
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
       <TabsList className="h-11 rounded-full p-1">
         <TabsTrigger value="profil" className="rounded-full px-4 font-semibold">
           Profil Toko
@@ -87,6 +91,11 @@ export function PengaturanView({ role }: { role: string }) {
         {role === "pimpinan" ? (
           <TabsTrigger value="shift" className="rounded-full px-4 font-semibold">
             Shift Kasir
+          </TabsTrigger>
+        ) : null}
+        {canManageWhatsapp ? (
+          <TabsTrigger value="whatsapp" className="rounded-full px-4 font-semibold">
+            WhatsApp &amp; Auto Laporan
           </TabsTrigger>
         ) : null}
       </TabsList>
@@ -496,6 +505,36 @@ export function PengaturanView({ role }: { role: string }) {
             </div>
           </CardContent>
         </Card>
+
+        {canManageWhatsapp ? (
+          <Card className="border-border/60 bg-card/74 shadow-[0_28px_70px_-45px_rgba(66,38,20,0.55)]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 font-heading text-xl">
+                <MessageSquare className="size-5 text-primary" />
+                Otomasi Laporan ke WhatsApp (OpenWA)
+              </CardTitle>
+              <CardDescription>
+                Hubungkan gateway OpenWA, scan QR WhatsApp, lalu jadwalkan pengiriman laporan mingguan dan bulanan (teks + PDF) otomatis.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                className="rounded-full"
+                onClick={() => setActiveTab("whatsapp")}
+              >
+                Atur di Tab WhatsApp
+                <ArrowRight className="ml-1.5 size-4" />
+              </Button>
+              <Link
+                href="/pengaturan/whatsapp"
+                className={cn(buttonVariants({ variant: "outline" }), "rounded-full px-4")}
+              >
+                Buka Halaman Khusus
+              </Link>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
         </div>
       </TabsContent>
@@ -503,6 +542,11 @@ export function PengaturanView({ role }: { role: string }) {
       {role === "pimpinan" ? (
         <TabsContent value="shift">
           <ShiftSettings role={role} />
+        </TabsContent>
+      ) : null}
+      {canManageWhatsapp ? (
+        <TabsContent value="whatsapp">
+          <WhatsAppReportSettings />
         </TabsContent>
       ) : null}
     </Tabs>

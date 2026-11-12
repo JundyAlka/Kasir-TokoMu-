@@ -19,6 +19,10 @@ const DailyShiftPanel = dynamic(
   { ssr: false, loading: TabLoadingFallback }
 );
 
-export function HarianShiftClient() {
-  return <DailyShiftPanel />;
+export function HarianShiftClient({
+  initialTab = "shift",
+}: {
+  initialTab?: "shift" | "harian" | "transaksi";
+}) {
+  return <DailyShiftPanel key={initialTab} initialTab={initialTab} />;
 }

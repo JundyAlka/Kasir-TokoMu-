@@ -12,6 +12,7 @@ export type ProfitLossPdfData = {
     label: string;
     start: string;
     end: string;
+    reportKind?: "mingguan" | "bulanan";
   };
   identity: {
     storeName: string;
@@ -457,8 +458,10 @@ export function ProfitLossReportDocument({
   const netMargin =
     financial.revenue > 0 ? `${Math.round((financial.netProfit / financial.revenue) * 1000) / 10}%` : "0%";
 
+  const kindLabel = data.period.reportKind === "mingguan" ? "Mingguan" : "Bulanan";
+
   return (
-    <Document title={`Laporan Keuangan & Kinerja Bulanan ${data.period.label} - ${data.identity.storeName}`}>
+    <Document title={`Laporan Keuangan & Kinerja ${kindLabel} ${data.period.label} - ${data.identity.storeName}`}>
       <Page size="A4" style={styles.page}>
         {/* HEADER */}
         <View style={styles.header}>
@@ -466,7 +469,7 @@ export function ProfitLossReportDocument({
             <Text style={styles.eyebrow}>TokoMu • Dokumen Resmi Laporan Keuangan &amp; Neraca Pembukuan</Text>
             <Text style={styles.printDate}>Dicetak: {formatDate(data.generatedAt)}</Text>
           </View>
-          <Text style={styles.title}>Laporan Keuangan &amp; Neraca Laba / Rugi Bulanan</Text>
+          <Text style={styles.title}>Laporan Keuangan &amp; Neraca Laba / Rugi {kindLabel}</Text>
           <Text style={styles.storeName}>{data.identity.storeName}</Text>
           <Text style={styles.subtitle}>
             Periode: {data.period.label} ({formatDate(data.period.start)} s.d. {formatDate(data.period.end)})

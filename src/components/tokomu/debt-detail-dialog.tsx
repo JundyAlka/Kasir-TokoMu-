@@ -117,17 +117,26 @@ export function DebtDetailDialog({
   const [syncTotalAmount, setSyncTotalAmount] = useState(true);
   const [savingItems, setSavingItems] = useState(false);
 
+  // Amount editor states
+  const [editingAmount, setEditingAmount] = useState(false);
+  const [amountMode, setAmountMode] = useState<"set" | "add">("add");
+  const [newAmount, setNewAmount] = useState<number>(0);
+  const [savingAmount, setSavingAmount] = useState(false);
+
   useEffect(() => {
     if (!open || !debtId) {
-      setEditingItems(false);
       return;
     }
 
     let isActive = true;
-    setLoading(true);
-    void requestJson<{ debt: DebtDetail }>(`/api/debts/${debtId}`)
+    void Promise.resolve()
+      .then(() => {
+        if (!isActive) return null;
+        setLoading(true);
+        return requestJson<{ debt: DebtDetail }>(`/api/debts/${debtId}`);
+      })
       .then((response) => {
-        if (!isActive) {
+        if (!isActive || !response) {
           return;
         }
         setDetail(response.debt);
@@ -189,6 +198,38 @@ export function DebtDetailDialog({
       toast.error(error instanceof Error ? error.message : "Gagal mengubah jatuh tempo.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleSaveAmount() {
+    if (!detail) return;
+    if (newAmount <= 0) {
+      toast.error("Nominal harus lebih dari 0.");
+      return;
+    }
+    setSavingAmount(true);
+    try {
+      const body = amountMode === "add"
+        ? { addAmount: newAmount }
+        : { amount: newAmount };
+
+      const response = await requestJson<{ debt: DebtDetail }>(`/api/debts/${detail.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+
+      await refreshDetail(response.debt);
+      setEditingAmount(false);
+      setNewAmount(0);
+      toast.success(
+        amountMode === "add"
+          ? `Berhasil menambah nominal kasbon sebesar Rp ${formatNumberInput(newAmount)}.`
+          : `Nominal kasbon berhasil diubah menjadi Rp ${formatNumberInput(newAmount)}.`
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal mengubah nominal kasbon.");
+    } finally {
+      setSavingAmount(false);
     }
   }
 
@@ -346,7 +387,16 @@ export function DebtDetailDialog({
   const reminderText = detail ? `Assalamu'alaikum wr. wb.\n\nHalo ${detail.borrowerName}, mohon maaf mengganggu waktunya 🙏\n\nIni pesan dari TokoMu, sekadar mengingatkan mengenai catatan kasbon yang belum terselesaikan sebesar *${formatCurrency(detail.remainingAmount)}*.\n\nTerima kasih banyak ya, semoga sehat selalu dan dilancarkan rezekinya! 😊` : "";
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          setEditingItems(false);
+          setEditingAmount(false);
+        }
+        onOpenChange(nextOpen);
+      }}
+    >
       <DialogContent className="flex max-h-[92vh] w-[96vw] max-w-[96vw] sm:max-w-2xl md:max-w-3xl flex-col gap-0 overflow-hidden rounded-[28px] p-0">
         <DialogHeader className="border-b border-border/70 p-5 pb-4 sm:p-6 sm:pb-4">
           <DialogTitle className="flex items-center gap-2 font-heading text-2xl">
@@ -482,7 +532,24 @@ export function DebtDetailDialog({
 
             <section className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="rounded-[20px] bg-muted/45 p-3 sm:p-4 flex flex-col justify-center">
-                <p className="text-sm text-muted-foreground">Total Kasbon</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm text-muted-foreground">Total Kasbon</p>
+                  {!editingAmount && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-foreground rounded-full"
+                      title="Atur atau tambah nominal kasbon"
+                      onClick={() => {
+                        setEditingAmount(true);
+                        setAmountMode("add");
+                        setNewAmount(0);
+                      }}
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                  )}
+                </div>
                 <p className="mt-1 sm:mt-2 text-lg sm:text-xl font-semibold whitespace-nowrap tracking-tight">{formatCurrency(detail.amount)}</p>
               </div>
               <div className="rounded-[20px] bg-muted/45 p-3 sm:p-4 flex flex-col justify-center">
@@ -494,6 +561,123 @@ export function DebtDetailDialog({
                 <p className="mt-1 sm:mt-2 text-lg sm:text-xl font-semibold whitespace-nowrap tracking-tight">{formatCurrency(detail.remainingAmount)}</p>
               </div>
             </section>
+
+            {/* Edit Nominal Kasbon */}
+            {editingAmount && (
+              <section className="rounded-[22px] border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-heading text-sm font-semibold flex items-center gap-2">
+                    <Pencil className="size-4 text-primary" />
+                    Ubah Nominal Kasbon
+                  </h4>
+                </div>
+
+                <div className="inline-flex w-full rounded-full bg-muted p-1">
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                      amountMode === "add"
+                        ? "bg-card text-foreground shadow-sm ring-1 ring-border/70"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    onClick={() => {
+                      setAmountMode("add");
+                      setNewAmount(0);
+                    }}
+                  >
+                    + Tambah Nominal
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                      amountMode === "set"
+                        ? "bg-card text-foreground shadow-sm ring-1 ring-border/70"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    onClick={() => {
+                      setAmountMode("set");
+                      setNewAmount(detail.amount);
+                    }}
+                  >
+                    Set Nominal Baru
+                  </button>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">
+                    {amountMode === "add" ? "Jumlah yang ditambahkan" : "Nominal baru"}
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Rp</span>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={formatNumberInput(newAmount)}
+                      onChange={(e) => setNewAmount(parseNumberInput(e.target.value))}
+                      className="h-10 rounded-xl pl-9 text-right font-semibold tabular-nums"
+                      placeholder="0"
+                    />
+                  </div>
+                  {amountMode === "add" && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {[5000, 10000, 20000, 50000, 100000].map((preset) => (
+                        <Button
+                          key={preset}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setNewAmount((prev) => prev + preset)}
+                          className="h-7 rounded-lg px-2 text-xs"
+                        >
+                          +{formatCurrency(preset)}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  {amountMode === "add" && newAmount > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Total baru: <span className="font-semibold text-foreground">{formatCurrency(detail.amount + newAmount)}</span>
+                    </p>
+                  )}
+                  {amountMode === "set" && detail.paidAmount > 0 && newAmount > 0 && newAmount < detail.paidAmount && (
+                    <p className="text-xs text-destructive">
+                      Nominal tidak boleh kurang dari yang sudah dibayar ({formatCurrency(detail.paidAmount)}).
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    className="rounded-xl gap-1.5 flex-1"
+                    onClick={() => void handleSaveAmount()}
+                    disabled={
+                      savingAmount ||
+                      newAmount <= 0 ||
+                      (amountMode === "set" && newAmount < detail.paidAmount)
+                    }
+                  >
+                    {savingAmount ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                    Simpan
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl gap-1.5"
+                    onClick={() => {
+                      setEditingAmount(false);
+                      setNewAmount(0);
+                    }}
+                    disabled={savingAmount}
+                  >
+                    <X className="size-3.5" />
+                    Batal
+                  </Button>
+                </div>
+              </section>
+            )}
 
             {/* DAFTAR BARANG YANG DIHUTANG */}
             <section className="grid gap-3">

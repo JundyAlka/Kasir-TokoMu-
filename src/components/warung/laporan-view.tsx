@@ -1,6 +1,7 @@
 "use client";
 
 import { type PointerEvent, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -26,9 +27,11 @@ import {
   MoreVertical,
   Pencil,
   Printer,
+  ReceiptText,
   RotateCcw,
   Scale,
   ScrollText,
+  Send,
   Settings2,
   TableProperties,
   Trash2,
@@ -813,8 +816,28 @@ function TablePaginationFooter({
   );
 }
 
-export function DailyShiftPanel() {
+const TransactionsViewLazy = dynamic(
+  () => import("@/components/warung/transactions-view").then((m) => m.TransactionsView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-48 w-full items-center justify-center rounded-2xl border border-border/60 bg-card/40">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin text-primary" />
+          <span>Memuat riwayat transaksi...</span>
+        </div>
+      </div>
+    ),
+  }
+);
+
+export function DailyShiftPanel({
+  initialTab = "shift",
+}: {
+  initialTab?: "shift" | "harian" | "transaksi";
+}) {
   const role = useCurrentRole();
+  const [activeTab, setActiveTab] = useState<"shift" | "harian" | "transaksi">(initialTab);
   const [state, setState] = useState<RequestState>("loading");
   const [session, setSession] = useState<ShiftSession | null>(null);
   const [activeShift, setActiveShift] = useState<{ id: string; name: string } | null>(null);
@@ -931,26 +954,29 @@ export function DailyShiftPanel() {
     return dailyReports.slice(start, start + dailyPageSize);
   }, [dailyReports, dailyPage, dailyPageSize]);
 
+  const lockedDatesSet = useMemo(() => {
+    return new Set(
+      dailyReports.filter((r) => r.status === "locked").map((r) => r.reportDate)
+    );
+  }, [dailyReports]);
+
   async function load() {
     setState("loading");
     try {
-      const isFinanceOrLeadership = role === "pimpinan" || role === "pengelola_keuangan";
       const [currentResponse, shiftsResponse, dailyResponse] = await Promise.all([
         fetch("/api/shifts/current", { cache: "no-store" }),
         fetch(
           `/api/shifts?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}`,
           { cache: "no-store" }
         ),
-        isFinanceOrLeadership
-          ? fetch(
-              `/api/daily-reports?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}`,
-              { cache: "no-store" }
-            )
-          : Promise.resolve(null),
+        fetch(
+          `/api/daily-reports?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}`,
+          { cache: "no-store" }
+        ),
       ]);
       const current = await currentResponse.json().catch(() => null);
       const shifts = await shiftsResponse.json().catch(() => null);
-      const daily = dailyResponse ? await dailyResponse.json().catch(() => null) : { reports: [] };
+      const daily = await dailyResponse.json().catch(() => null);
 
       if (!currentResponse.ok || !current) {
         console.warn("[daily-shift] current shift fetch failed:", currentResponse.status, current);
@@ -1673,120 +1699,32 @@ export function DailyShiftPanel() {
         </p>
       </div>
 
-      {role === "kasir" ? (
-        <Card className="border-border/60 bg-card/60 backdrop-blur-sm overflow-hidden">
-          <CardHeader>
-            <CardTitle>Riwayat Shift</CardTitle>
-            <CardDescription>
-              Kas dan selisih setiap shift kasir {showAllTime ? "sepanjang waktu" : `periode ${selectedMonth}`}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table className="min-w-[760px]">
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="font-semibold">Tanggal</TableHead>
-                    <TableHead className="font-semibold">Shift</TableHead>
-                    <TableHead className="font-semibold">Kasir</TableHead>
-                    <TableHead className="font-semibold">Pemasukan Laci</TableHead>
-                    <TableHead className="font-semibold">Pengeluaran Laci</TableHead>
-                    <TableHead className="font-semibold">Kas Akhir Fisik</TableHead>
-                    <TableHead className="font-semibold">Selisih Fisik</TableHead>
-                    <TableHead className="font-semibold">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedShifts.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="h-28 text-center text-muted-foreground">
-                        Belum ada riwayat shift pada periode ini.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedShifts.map((item) => {
-                      const isToday = isRowToday(item.startedAt);
-                      return (
-                        <TableRow
-                          key={item.id}
-                          className={cn(
-                            "hover:bg-muted/40 transition-colors",
-                            item.variance ? "bg-destructive/10" : "",
-                            isToday && "bg-amber-500/10 dark:bg-amber-500/15 border-l-4 border-l-amber-500"
-                          )}
-                        >
-                          <TableCell className="font-medium whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              <span>{formatDate(item.startedAt)}</span>
-                              {isToday && (
-                                <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 font-bold">
-                                  Hari Ini
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-medium whitespace-nowrap">
-                            <Badge variant="outline" className="font-normal text-xs">{item.shiftName}</Badge>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{item.cashierName}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {item.expectedClosing == null
-                              ? "-"
-                              : formatCurrency(Math.max(0, item.expectedClosing - item.openingTotal))}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-muted-foreground">-</TableCell>
-                          <TableCell className="whitespace-nowrap font-medium">
-                            {item.closingTotal == null ? "-" : formatCurrency(item.closingTotal)}
-                          </TableCell>
-                          <TableCell
-                            className={cn(
-                              "whitespace-nowrap font-semibold",
-                              item.variance && item.variance < 0 ? "text-destructive" : item.variance && item.variance > 0 ? "text-blue-600" : "text-emerald-600"
-                            )}
-                          >
-                            {item.variance == null ? "-" : formatCurrency(item.variance)}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            <Badge variant={item.status === "closed" ? "secondary" : "default"}>
-                              {item.status === "closed" ? "Ditutup" : "Terbuka"}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Pagination Controls Footer for Kasir */}
-            <TablePaginationFooter
-              pageSize={shiftPageSize}
-              onPageSizeChange={setShiftPageSize}
-              currentPage={shiftPage}
-              onPageChange={setShiftPage}
-              totalItems={sortedShiftHistory.length}
-              totalPages={totalShiftPages}
-            />
-          </CardContent>
-        </Card>
-      ) : (
-        <Tabs defaultValue="shift" className="w-full space-y-4">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as "shift" | "harian" | "transaksi")}
+        className="w-full space-y-4"
+      >
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/40 pb-3">
             <div>
-              <h3 className="font-heading text-lg font-semibold">Riwayat Operasional & Rekap Harian</h3>
+              <h3 className="font-heading text-lg font-semibold">Riwayat Operasional, Transaksi & Rekap Harian</h3>
               <p className="text-xs text-muted-foreground">
-                Gunakan tab di bawah untuk melihat rincian per shift kasir atau buku rekapitulasi laba rugi harian toko.
+                {isLeadership
+                  ? "Gunakan tab di samping untuk melihat rincian per shift kasir, buku rekapitulasi laba rugi harian, atau riwayat transaksi."
+                  : "Kasir dapat mengatur nominal shift maupun rekap harian selama laporan tanggal tersebut belum dikunci, serta meninjau riwayat transaksi."}
               </p>
             </div>
-            <TabsList className="grid grid-cols-2 w-full sm:w-[380px] p-1 bg-muted/60 rounded-xl">
-              <TabsTrigger value="shift" className="rounded-lg text-xs font-semibold py-1.5 flex items-center justify-center gap-1.5 text-muted-foreground data-[state=active]:text-amber-950 dark:data-[state=active]:text-amber-950">
+            <TabsList className="grid grid-cols-1 sm:grid-cols-3 w-full sm:w-auto sm:min-w-[490px] p-1 bg-muted/60 rounded-xl">
+              <TabsTrigger value="shift" className="rounded-lg text-xs font-semibold py-1.5 px-3 flex items-center justify-center gap-1.5 text-muted-foreground data-[state=active]:text-amber-950 dark:data-[state=active]:text-amber-950">
                 <Clock className="size-3.5" />
                 <span>Riwayat Shift Kasir</span>
               </TabsTrigger>
-              <TabsTrigger value="harian" className="rounded-lg text-xs font-semibold py-1.5 flex items-center justify-center gap-1.5 text-muted-foreground data-[state=active]:text-amber-950 dark:data-[state=active]:text-amber-950">
+              <TabsTrigger value="harian" className="rounded-lg text-xs font-semibold py-1.5 px-3 flex items-center justify-center gap-1.5 text-muted-foreground data-[state=active]:text-amber-950 dark:data-[state=active]:text-amber-950">
                 <CalendarDays className="size-3.5" />
                 <span>Rekap Harian Toko</span>
+              </TabsTrigger>
+              <TabsTrigger value="transaksi" className="rounded-lg text-xs font-semibold py-1.5 px-3 flex items-center justify-center gap-1.5 text-muted-foreground data-[state=active]:text-amber-950 dark:data-[state=active]:text-amber-950">
+                <ReceiptText className="size-3.5" />
+                <span>Riwayat Transaksi</span>
               </TabsTrigger>
             </TabsList>
           </div>
@@ -1843,19 +1781,22 @@ export function DailyShiftPanel() {
                         <TableHead className="font-semibold">Kas Akhir Fisik</TableHead>
                         <TableHead className="font-semibold">Selisih Fisik</TableHead>
                         <TableHead className="font-semibold">Status</TableHead>
-                        {isLeadership && <TableHead className="w-12 text-center font-semibold">Aksi</TableHead>}
+                        <TableHead className="w-12 text-center font-semibold">Aksi</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {paginatedShifts.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={isLeadership ? 9 : 8} className="h-28 text-center text-muted-foreground">
+                          <TableCell colSpan={9} className="h-28 text-center text-muted-foreground">
                             Belum ada riwayat shift pada periode ini.
                           </TableCell>
                         </TableRow>
                       ) : (
                         paginatedShifts.map((item) => {
                           const isToday = isRowToday(item.startedAt);
+                          const shiftDateKey = getJakartaDateKey(item.startedAt);
+                          const isDayLocked = lockedDatesSet.has(shiftDateKey);
+                          const canEditShift = isLeadership || !isDayLocked;
                           return (
                             <TableRow
                               key={item.id}
@@ -1902,75 +1843,86 @@ export function DailyShiftPanel() {
                                 </Badge>
                               </TableCell>
 
-                              {/* Menu Titik Tiga Aksi (Super Admin / Pimpinan) */}
-                              {isLeadership && (
-                                <TableCell className="text-center whitespace-nowrap">
-                                  <div className="relative inline-block text-left">
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0 rounded-full hover:bg-muted cursor-pointer"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setShiftMenuOpenId((prev) => (prev === item.id ? null : item.id));
-                                      }}
-                                      title="Opsi Aksi Baris"
-                                    >
-                                      <MoreVertical className="size-4" />
-                                      <span className="sr-only">Opsi shift</span>
-                                    </Button>
+                              {/* Menu Titik Tiga Aksi */}
+                              <TableCell className="text-center whitespace-nowrap">
+                                <div className="relative inline-block text-left">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 rounded-full hover:bg-muted cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setShiftMenuOpenId((prev) => (prev === item.id ? null : item.id));
+                                    }}
+                                    title="Opsi Aksi Baris"
+                                  >
+                                    <MoreVertical className="size-4" />
+                                    <span className="sr-only">Opsi shift</span>
+                                  </Button>
 
-                                    {shiftMenuOpenId === item.id && (
-                                      <>
-                                        <div
-                                          className="fixed inset-0 z-40"
-                                          onClick={() => setShiftMenuOpenId(null)}
-                                        />
-                                        <div className="absolute right-0 top-full mt-1 z-50 min-w-[210px] rounded-2xl border border-border/80 bg-popover/95 p-1 text-popover-foreground shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95">
-                                          {item.status === "open" && (
+                                  {shiftMenuOpenId === item.id && (
+                                    <>
+                                      <div
+                                        className="fixed inset-0 z-40"
+                                        onClick={() => setShiftMenuOpenId(null)}
+                                      />
+                                      <div className="absolute right-0 top-full mt-1 z-50 min-w-[220px] rounded-2xl border border-border/80 bg-popover/95 p-1 text-popover-foreground shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95">
+                                        {canEditShift ? (
+                                          <>
+                                            {item.status === "open" && (
+                                              <button
+                                                type="button"
+                                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 cursor-pointer text-left transition-colors"
+                                                onClick={() => {
+                                                  setShiftMenuOpenId(null);
+                                                  openClosePastShift(item);
+                                                }}
+                                              >
+                                                <CircleDollarSign className="size-3.5 text-amber-600 shrink-0" />
+                                                <span>Tutup Shift Lampau Ini</span>
+                                              </button>
+                                            )}
                                             <button
                                               type="button"
-                                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 cursor-pointer text-left transition-colors"
+                                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium hover:bg-muted cursor-pointer text-left transition-colors"
                                               onClick={() => {
                                                 setShiftMenuOpenId(null);
-                                                openClosePastShift(item);
+                                                openEditShift(item);
                                               }}
                                             >
-                                              <CircleDollarSign className="size-3.5 text-amber-600 shrink-0" />
-                                              <span>Tutup Shift Lampau Ini</span>
+                                              <Pencil className="size-3.5 text-muted-foreground shrink-0" />
+                                              <span>Set Nominal / Edit Data Baris</span>
                                             </button>
-                                          )}
-                                          <button
-                                            type="button"
-                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium hover:bg-muted cursor-pointer text-left transition-colors"
-                                            onClick={() => {
-                                              setShiftMenuOpenId(null);
-                                              openEditShift(item);
-                                            }}
-                                          >
-                                            <Pencil className="size-3.5 text-muted-foreground shrink-0" />
-                                            <span>Set Ulang / Edit Data Baris</span>
-                                          </button>
-                                          <div className="h-px bg-border/40 my-1" />
-                                          <button
-                                            type="button"
-                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-destructive hover:bg-destructive/10 cursor-pointer text-left transition-colors"
-                                            onClick={() => {
-                                              setShiftMenuOpenId(null);
-                                              setShiftToDelete(item);
-                                              setDeleteShiftDialogOpen(true);
-                                            }}
-                                          >
-                                            <Trash2 className="size-3.5 shrink-0" />
-                                            <span>Hapus Sesi Shift Ini</span>
-                                          </button>
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              )}
+                                          </>
+                                        ) : (
+                                          <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-muted-foreground">
+                                            <Lock className="size-3.5 shrink-0" />
+                                            <span>Laporan Harian Sudah Fix / Terkunci</span>
+                                          </div>
+                                        )}
+                                        {isLeadership && (
+                                          <>
+                                            <div className="h-px bg-border/40 my-1" />
+                                            <button
+                                              type="button"
+                                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-destructive hover:bg-destructive/10 cursor-pointer text-left transition-colors"
+                                              onClick={() => {
+                                                setShiftMenuOpenId(null);
+                                                setShiftToDelete(item);
+                                                setDeleteShiftDialogOpen(true);
+                                              }}
+                                            >
+                                              <Trash2 className="size-3.5 shrink-0" />
+                                              <span>Hapus Sesi Shift Ini</span>
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </TableCell>
                             </TableRow>
                           );
                         })
@@ -2034,15 +1986,21 @@ export function DailyShiftPanel() {
                     Akumulasi penjualan seluruh shift, modal pokok (HPP), biaya operasional, dan laba bersih per hari.
                   </CardDescription>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={Boolean(session) || isSaving}
-                  onClick={() => void lockToday()}
-                  className="rounded-full shadow-sm"
-                >
-                  {Boolean(session) ? "Tutup shift dulu" : "Kunci Hari Ini"}
-                </Button>
+                {isLeadership ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={Boolean(session) || isSaving}
+                    onClick={() => void lockToday()}
+                    className="rounded-full shadow-sm"
+                  >
+                    {Boolean(session) ? "Tutup shift dulu" : "Kunci Hari Ini"}
+                  </Button>
+                ) : (
+                  <Badge variant="outline" className="w-fit rounded-full px-3 py-1 text-xs">
+                    Set nominal aktif selama status masih Draf
+                  </Badge>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -2055,19 +2013,20 @@ export function DailyShiftPanel() {
                         <TableHead className="font-semibold">Beban Operasional</TableHead>
                         <TableHead className="font-semibold">Laba Bersih</TableHead>
                         <TableHead className="font-semibold">Status Buku</TableHead>
-                        {isLeadership && <TableHead className="w-12 text-center font-semibold">Aksi</TableHead>}
+                        <TableHead className="w-12 text-center font-semibold">Aksi</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {paginatedDailyReports.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={isLeadership ? 7 : 6} className="h-28 text-center text-muted-foreground">
+                          <TableCell colSpan={7} className="h-28 text-center text-muted-foreground">
                             Belum ada laporan harian pada periode ini. Tutup seluruh shift kasir lalu klik Kunci Hari Ini.
                           </TableCell>
                         </TableRow>
                       ) : (
                         paginatedDailyReports.map((report) => {
                           const isToday = isRowToday(report.reportDate);
+                          const canEditDaily = isLeadership || report.status !== "locked";
                           return (
                             <TableRow
                               key={report.id}
@@ -2101,33 +2060,33 @@ export function DailyShiftPanel() {
                                 </Badge>
                               </TableCell>
 
-                              {/* Menu Titik Tiga Aksi (Super Admin / Pimpinan) */}
-                              {isLeadership && (
-                                <TableCell className="text-center whitespace-nowrap">
-                                  <div className="relative inline-block text-left">
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0 rounded-full hover:bg-muted cursor-pointer"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setDailyMenuOpenDate((prev) => (prev === report.reportDate ? null : report.reportDate));
-                                      }}
-                                      title="Opsi Aksi Rekap"
-                                    >
-                                      <MoreVertical className="size-4" />
-                                      <span className="sr-only">Opsi rekap</span>
-                                    </Button>
+                              {/* Menu Titik Tiga Aksi */}
+                              <TableCell className="text-center whitespace-nowrap">
+                                <div className="relative inline-block text-left">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 rounded-full hover:bg-muted cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDailyMenuOpenDate((prev) => (prev === report.reportDate ? null : report.reportDate));
+                                    }}
+                                    title="Opsi Aksi Rekap"
+                                  >
+                                    <MoreVertical className="size-4" />
+                                    <span className="sr-only">Opsi rekap</span>
+                                  </Button>
 
-                                    {dailyMenuOpenDate === report.reportDate && (
-                                      <>
-                                        <div
-                                          className="fixed inset-0 z-40"
-                                          onClick={() => setDailyMenuOpenDate(null)}
-                                        />
-                                        <div className="absolute right-0 top-full mt-1 z-50 min-w-[210px] rounded-2xl border border-border/80 bg-popover/95 p-1 text-popover-foreground shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95">
-                                          {report.status === "locked" ? (
+                                  {dailyMenuOpenDate === report.reportDate && (
+                                    <>
+                                      <div
+                                        className="fixed inset-0 z-40"
+                                        onClick={() => setDailyMenuOpenDate(null)}
+                                      />
+                                      <div className="absolute right-0 top-full mt-1 z-50 min-w-[215px] rounded-2xl border border-border/80 bg-popover/95 p-1 text-popover-foreground shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95">
+                                        {isLeadership && (
+                                          report.status === "locked" ? (
                                             <button
                                               type="button"
                                               className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 cursor-pointer text-left transition-colors"
@@ -2151,7 +2110,9 @@ export function DailyShiftPanel() {
                                               <Lock className="size-3.5 text-emerald-600 shrink-0" />
                                               <span>Kunci Buku Harian Ini</span>
                                             </button>
-                                          )}
+                                          )
+                                        )}
+                                        {canEditDaily ? (
                                           <button
                                             type="button"
                                             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium hover:bg-muted cursor-pointer text-left transition-colors"
@@ -2161,14 +2122,19 @@ export function DailyShiftPanel() {
                                             }}
                                           >
                                             <Pencil className="size-3.5 text-muted-foreground shrink-0" />
-                                            <span>Set Ulang / Edit Rekap Baris</span>
+                                            <span>Set Nominal / Edit Rekap Baris</span>
                                           </button>
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              )}
+                                        ) : (
+                                          <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-muted-foreground">
+                                            <Lock className="size-3.5 shrink-0" />
+                                            <span>Sudah Fix / Terkunci</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </TableCell>
                             </TableRow>
                           );
                         })
@@ -2189,8 +2155,12 @@ export function DailyShiftPanel() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* TAB 3: RIWAYAT TRANSAKSI (LAZY MOUNTED) */}
+          <TabsContent value="transaksi" className="space-y-4 mt-0 focus-visible:outline-none">
+            {activeTab === "transaksi" ? <TransactionsViewLazy /> : null}
+          </TabsContent>
         </Tabs>
-      )}
 
       {/* DIALOG SUPER ADMIN: TUTUP SHIFT LAMPAU */}
       <Dialog open={closePastShiftDialogOpen} onOpenChange={setClosePastShiftDialogOpen}>
@@ -2354,8 +2324,10 @@ export function DailyShiftPanel() {
                   value={editShiftData.status}
                   onValueChange={(val) => { if (val === "open" || val === "closed") setEditShiftData((cur) => ({ ...cur, status: val })); }}
                 >
-                  <SelectTrigger id="edit-status" className="h-10 rounded-xl">
-                    <SelectValue />
+                  <SelectTrigger id="edit-status" className="w-full h-10 rounded-xl">
+                    <SelectValue>
+                      {editShiftData.status === "open" ? "Terbuka (open)" : "Ditutup (closed)"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="closed">Ditutup (closed)</SelectItem>
@@ -2503,10 +2475,15 @@ export function DailyShiftPanel() {
                 <Label htmlFor="edit-daily-status" className="text-xs font-medium">Status Buku</Label>
                 <Select
                   value={editDailyData.status}
+                  disabled={!isLeadership}
                   onValueChange={(val) => { if (val === "draft" || val === "locked") setEditDailyData((cur) => ({ ...cur, status: val })); }}
                 >
-                  <SelectTrigger id="edit-daily-status" className="h-10 rounded-xl">
-                    <SelectValue />
+                  <SelectTrigger id="edit-daily-status" className="w-full h-10 rounded-xl">
+                    <SelectValue>
+                      {editDailyData.status === "draft"
+                        ? "Draf / Berjalan (draft)"
+                        : "Terkunci (locked)"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="locked">Terkunci (locked)</SelectItem>
@@ -2801,6 +2778,7 @@ export function LaporanView() {
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isLoadingReports, setIsLoadingReports] = useState(true);
   const [updatedSnapshotPeriod, setUpdatedSnapshotPeriod] = useState<string | null>(null);
+  const [isSendingWhatsapp, setIsSendingWhatsapp] = useState(false);
 
   useEffect(() => {
     fetchFinalizedReports(true);
@@ -3052,6 +3030,36 @@ export function LaporanView() {
     link.remove();
   }
 
+  async function handleSendToWhatsApp() {
+    const mode = reportRange === "mingguan" ? "mingguan" : "bulanan";
+    const targetPeriod = mode === "mingguan" ? reportDate : period;
+    setIsSendingWhatsapp(true);
+    try {
+      const res = await fetch("/api/whatsapp/send-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "report",
+          mode,
+          period: targetPeriod,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal mengirim laporan ke WhatsApp.");
+      }
+      toast.success(
+        `Laporan ${mode} (${targetPeriod}) berhasil dikirim ke WhatsApp.`
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Gagal mengirim laporan ke WhatsApp."
+      );
+    } finally {
+      setIsSendingWhatsapp(false);
+    }
+  }
+
   return (
     <div className="w-full space-y-4">
       {reportDataState === "error" ? <Card><CardContent className="flex min-h-64 flex-col items-center justify-center gap-3 text-center"><p role="alert" className="font-medium">Gagal memuat data, coba lagi</p><Button type="button" variant="outline" onClick={retryReport}>Muat ulang</Button></CardContent></Card> : reportDataState === "loading" ? <Card><CardContent className="flex min-h-64 items-center justify-center gap-2 text-muted-foreground"><Loader2 className="size-4 animate-spin" />Memuat laporan...</CardContent></Card> : <>
@@ -3265,7 +3273,21 @@ export function LaporanView() {
                 Preview memakai angka untung-rugi nyata dari database.
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                onClick={handleSendToWhatsApp}
+                disabled={isSendingWhatsapp}
+              >
+                {isSendingWhatsapp ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Send className="size-4" />
+                )}
+                Kirim ke WA
+              </Button>
               <Button
                 type="button"
                 variant="outline"

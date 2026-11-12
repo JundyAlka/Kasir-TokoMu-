@@ -14,6 +14,7 @@ import {
   Info,
   Landmark,
   ListChecks,
+  MessageSquare,
   Package2,
   ScrollText,
   Settings2,
@@ -51,6 +52,7 @@ const navigation = [
   { href: "/laporan", label: "Laporan", icon: FileChartColumn, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
   { href: "/laporan-pcm", label: "Laporan PCM", icon: ScrollText, roles: ["pimpinan"] },
   { href: "/pengaturan", label: "Pengaturan", icon: Settings2, roles: ["pimpinan", "pengelola_keuangan", "kasir"] },
+  { href: "/pengaturan/whatsapp", label: "WhatsApp Laporan", icon: MessageSquare, roles: ["pimpinan", "pengelola_keuangan"] },
   { href: "/pengaturan/karyawan", label: "Kelola Karyawan", icon: UserCog, roles: ["pimpinan"] },
   { href: "/pengaturan/audit-log", label: "Audit Log", icon: ListChecks, roles: ["pimpinan"] },
 ] satisfies Array<{ href: string; label: string; icon: typeof Gauge; roles: Role[] }>;

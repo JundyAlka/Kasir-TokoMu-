@@ -390,7 +390,7 @@ export function DashboardView() {
                   Aktivitas penjualan kasir terkini (klik baris untuk rincian).
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setTimelineOpen(true)}
@@ -399,6 +399,14 @@ export function DashboardView() {
                   <span>Lihat Semua ({recentTransactions.length})</span>
                   <Eye className="size-3.5 shrink-0" />
                 </button>
+                <Link
+                  href="/harian-shift?tab=transaksi"
+                  className="flex items-center gap-1 whitespace-nowrap rounded-xl border border-primary/25 bg-card/80 px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/10 sm:px-3"
+                  title="Buka tab Riwayat Transaksi di Harian & Shift"
+                >
+                  <span>Detail</span>
+                  <ArrowUpRight className="size-3.5 shrink-0" />
+                </Link>
               </div>
             </CardHeader>
             <CardContent className="flex-1 min-w-0">
@@ -538,11 +546,11 @@ export function DashboardView() {
               </DialogDescription>
             </div>
             <Link
-              href="/laporan"
+              href="/harian-shift?tab=transaksi"
               onClick={() => setTimelineOpen(false)}
               className="flex items-center gap-1 rounded-xl bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary transition hover:bg-primary/20 shrink-0 mr-6"
             >
-              <span>Semua Laporan</span>
+              <span>Semua & Filter</span>
               <ArrowUpRight className="size-3.5" />
             </Link>
           </DialogHeader>

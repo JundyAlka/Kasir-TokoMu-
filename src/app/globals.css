@@ -122,6 +122,15 @@
     @apply border-border outline-ring/50;
   }
 
+  button,
+  [role="button"],
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
   html {
     @apply font-sans;
   }
@@ -172,6 +181,22 @@
 
   .dark .glass-panel {
     background: rgba(44, 29, 24, 0.72);
+  }
+
+  @media (max-width: 1024px), (pointer: coarse) {
+    .glass-panel,
+    [class*="backdrop-blur"] {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+
+    .glass-panel {
+      background: rgba(255, 250, 243, 0.96);
+    }
+
+    .dark .glass-panel {
+      background: rgba(44, 29, 24, 0.96);
+    }
   }
 
   /* GPU-accelerated sidebar transitions — avoids layout reflow */

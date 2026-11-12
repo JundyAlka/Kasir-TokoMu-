@@ -216,7 +216,8 @@ export async function updateDailyReport(
     cogs?: number;
     expenseTotal?: number;
     status?: "draft" | "locked";
-  }
+  },
+  actorRole?: string
 ) {
   const ownerId = scopedWorkspace(workspaceOwnerId);
   const report = await pool.query<Record<string, unknown>>(
@@ -228,12 +229,18 @@ export async function updateDailyReport(
   }
 
   const existing = report.rows[0] ? mapRow(report.rows[0]) : await buildDailyReport(ownerId, reportDate);
+  if (actorRole === "kasir" && existing.status === "locked") {
+    throw new Error(
+      "Laporan harian ini sudah dikunci (fix). Hubungi pimpinan untuk membuka kunci terlebih dahulu."
+    );
+  }
+
   const revenue = data.revenue !== undefined ? data.revenue : existing.revenue;
   const cogs = data.cogs !== undefined ? data.cogs : existing.cogs;
   const expenseTotal = data.expenseTotal !== undefined ? data.expenseTotal : existing.expenseTotal;
   const grossProfit = revenue - cogs;
   const netProfit = grossProfit - expenseTotal;
-  const status = data.status || existing.status;
+  const status = actorRole === "kasir" ? existing.status : (data.status || existing.status);
 
   const updated = await pool.query<Record<string, unknown>>(
     `update daily_reports set

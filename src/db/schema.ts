@@ -541,3 +541,45 @@ export const auditLogs = pgTable(
     index("audit_logs_category_idx").on(table.workspaceOwnerId, table.category),
   ]
 );
+
+export const whatsappReportConfigs = pgTable("whatsapp_report_configs", {
+  workspaceOwnerId: text("workspace_owner_id").primaryKey(),
+  enabled: boolean("enabled").notNull().default(false),
+  baseUrl: text("base_url").notNull().default("http://localhost:2785"),
+  apiKey: text("api_key").notNull().default(""),
+  sessionId: text("session_id").notNull().default("tokomu-wa"),
+  recipients: jsonb("recipients").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  weeklyEnabled: boolean("weekly_enabled").notNull().default(true),
+  weeklyDayOfWeek: integer("weekly_day_of_week").notNull().default(1),
+  weeklyHour: integer("weekly_hour").notNull().default(8),
+  attachWeeklyPdf: boolean("attach_weekly_pdf").notNull().default(true),
+  monthlyEnabled: boolean("monthly_enabled").notNull().default(true),
+  monthlyDayOfMonth: integer("monthly_day_of_month").notNull().default(1),
+  monthlyHour: integer("monthly_hour").notNull().default(8),
+  attachMonthlyPdf: boolean("attach_monthly_pdf").notNull().default(true),
+  lastWeeklyPeriodSent: text("last_weekly_period_sent"),
+  lastMonthlyPeriodSent: text("last_monthly_period_sent"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull(),
+});
+
+export const whatsappDispatchLogs = pgTable(
+  "whatsapp_dispatch_logs",
+  {
+    id: text("id").primaryKey(),
+    workspaceOwnerId: text("workspace_owner_id").notNull(),
+    triggerType: text("trigger_type").notNull(),
+    reportMode: text("report_mode").notNull(),
+    periodKey: text("period_key").notNull(),
+    recipients: jsonb("recipients").$type<string[]>().notNull(),
+    status: text("status").notNull(),
+    summaryText: text("summary_text").notNull(),
+    pdfAttached: boolean("pdf_attached").notNull().default(false),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull(),
+  },
+  (table) => [
+    index("whatsapp_dispatch_logs_ws_created_idx").on(table.workspaceOwnerId, table.createdAt),
+  ]
+);

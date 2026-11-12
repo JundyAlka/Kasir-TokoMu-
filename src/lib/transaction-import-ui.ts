@@ -39,7 +39,7 @@ export function canContinueTransactionImport(
 
 export function isCashierRestrictedPath(role: string, pathname: string) {
   if (role !== "kasir") return false;
-  return ["/investor", "/bagi-hasil", "/laporan-pcm"].some(
+  return ["/investor", "/bagi-hasil", "/laporan-pcm", "/pengaturan/whatsapp"].some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)
   );
 }

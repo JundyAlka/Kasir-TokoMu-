@@ -19,9 +19,9 @@ const CloseShiftSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const body = CloseShiftSchema.parse(await request.json());
-    const { role, userId, workspaceOwnerId } = await requireRoutePolicy("/api/shifts/close", "POST");
+    const { userId, workspaceOwnerId } = await requireRoutePolicy("/api/shifts/close", "POST");
     const requestedSession = await getShiftSummary(workspaceOwnerId, body.sessionId);
-    if (!requestedSession || (role === "kasir" && requestedSession.cashierUserId !== userId)) throw notFoundError();
+    if (!requestedSession) throw notFoundError();
     const session = await closeShift(
       workspaceOwnerId,
       body.sessionId,

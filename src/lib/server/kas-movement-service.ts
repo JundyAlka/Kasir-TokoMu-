@@ -41,7 +41,8 @@ export async function createKasMovement(
   validateDraft(draft);
   const openShift = await getOpenSession(workspaceOwnerId);
   if (!openShift) throw new Error("Buka shift terlebih dahulu sebelum mencatat mutasi kas.");
-  if (!canManageOtherCashierShift && openShift.cashierUserId !== actorUserId) throw notFoundError();
+  void actorUserId;
+  void canManageOtherCashierShift;
   const [movement] = await db.insert(kasMovements).values({
     id: createId(),
     userId: workspaceOwnerId,
@@ -63,7 +64,9 @@ export async function listShiftKasMovements(
   canManageOtherCashierShift = false
 ) {
   const session = await getShiftSummary(workspaceOwnerId, shiftSessionId);
-  if (!session || (!canManageOtherCashierShift && session.cashierUserId !== actorUserId)) throw notFoundError();
+  if (!session) throw notFoundError();
+  void actorUserId;
+  void canManageOtherCashierShift;
   return db.select().from(kasMovements).where(and(
     eq(kasMovements.userId, workspaceOwnerId),
     eq(kasMovements.shiftSessionId, shiftSessionId)

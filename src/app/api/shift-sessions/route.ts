@@ -16,18 +16,17 @@ const OpenShiftSchema = z
 
 export async function GET() {
   try {
-    const { role, userId, workspaceOwnerId } = await requireRoutePolicy("/api/shift-sessions", "GET");
+    const { userId, workspaceOwnerId } = await requireRoutePolicy("/api/shift-sessions", "GET");
     const [openSession, activeShift, recordedBy] = await Promise.all([
       getOpenSession(workspaceOwnerId),
       getActiveShift(workspaceOwnerId),
       resolveRecordedBy(workspaceOwnerId, userId),
     ]);
-    const hasOtherOpenShift = role === "kasir" && openSession?.cashierUserId !== userId;
     return NextResponse.json({
-      session: hasOtherOpenShift ? null : openSession,
+      session: openSession,
       activeShift,
-      recordedBy: hasOtherOpenShift ? null : recordedBy,
-      hasOtherOpenShift,
+      recordedBy,
+      hasOtherOpenShift: false,
     });
   } catch (error) {
     return handleRouteError(error, "Gagal mengambil sesi shift.");

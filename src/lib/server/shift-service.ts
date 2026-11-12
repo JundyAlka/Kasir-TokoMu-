@@ -496,11 +496,25 @@ export async function updateShiftSession(
     varianceNote?: string | null;
     action?: "close" | "update";
   },
-  actorUserId?: string
+  actorUserId?: string,
+  actorRole?: string
 ) {
   const ownerId = scopedWorkspace(workspaceOwnerId);
   const session = await sessionById(ownerId, sessionId);
   if (!session) throw notFoundError();
+
+  const shiftDate = getJakartaDateKey(session.startedAt);
+  if (actorRole === "kasir") {
+    const lockCheck = await pool.query<{ status: string }>(
+      `select status from daily_reports where user_id = $1 and report_date = $2::date limit 1`,
+      [ownerId, shiftDate]
+    );
+    if (lockCheck.rows[0]?.status === "locked") {
+      throw new Error(
+        "Laporan harian tanggal ini sudah dikunci (fix). Kasir tidak dapat mengubah nominal shift."
+      );
+    }
+  }
 
   const now = nowIso();
 
@@ -594,10 +608,10 @@ export async function updateShiftSession(
   const updated = await sessionById(ownerId, sessionId);
   if (!updated) throw new Error("Gagal memperbarui data shift.");
 
-  // Auto-lock daily report if all shifts for this day are closed
+  // Refresh daily report totals; only auto-lock for leadership/finance roles
   try {
-    const shiftDate = getJakartaDateKey(updated.startedAt);
-    const dayRange = getJakartaDayRange(shiftDate);
+    const updatedShiftDate = getJakartaDateKey(updated.startedAt);
+    const dayRange = getJakartaDayRange(updatedShiftDate);
     const openCheck = await pool.query<{ id: string }>(
       `select id from shift_sessions
        where workspace_owner_id = $1 and status = 'open'
@@ -605,12 +619,14 @@ export async function updateShiftSession(
          and coalesce(opened_at, started_at) < $3::timestamptz limit 1`,
       [ownerId, dayRange.start, dayRange.end]
     );
-    if (!openCheck.rows[0]) {
-      await buildDailyReport(ownerId, shiftDate, { overwriteLocked: true });
+    if (actorRole === "kasir") {
+      await buildDailyReport(ownerId, updatedShiftDate, { overwriteLocked: false });
+    } else if (!openCheck.rows[0]) {
+      await buildDailyReport(ownerId, updatedShiftDate, { overwriteLocked: true });
       await pool.query(
         `update daily_reports set status = 'locked', locked_at = coalesce(locked_at, $3::timestamptz), locked_by_user_id = coalesce(locked_by_user_id, $4), updated_at = $3::timestamptz
          where user_id = $1 and report_date = $2::date`,
-        [ownerId, shiftDate, new Date().toISOString(), actorUserId || updated.cashierUserId]
+        [ownerId, updatedShiftDate, new Date().toISOString(), actorUserId || updated.cashierUserId]
       );
     }
   } catch (err) {
@@ -737,9 +753,20 @@ export async function getSuggestedOpeningBalances(workspaceOwnerId: string): Pro
 
 export async function resolveRecordedBy(workspaceOwnerId: string, currentUserId: string): Promise<RecordedByResolution> {
   const ownerId = scopedWorkspace(workspaceOwnerId);
-  const openSession = await getOpenSession(ownerId);
-  if (openSession) return { userId: openSession.cashierUserId, name: openSession.cashierName, shiftSessionId: openSession.id };
+  const [openSession, currentUserName] = await Promise.all([
+    getOpenSession(ownerId),
+    getUserName(currentUserId),
+  ]);
+  if (openSession) {
+    return {
+      userId: currentUserId,
+      name: currentUserName || openSession.cashierName,
+      shiftSessionId: openSession.id,
+    };
+  }
   const activeShift = await getActiveShift(ownerId);
-  if (activeShift?.assignedUserId) return { userId: activeShift.assignedUserId, name: await getUserName(activeShift.assignedUserId), shiftSessionId: null };
-  return { userId: currentUserId, name: await getUserName(currentUserId), shiftSessionId: null };
+  if (activeShift?.assignedUserId) {
+    return { userId: activeShift.assignedUserId, name: await getUserName(activeShift.assignedUserId), shiftSessionId: null };
+  }
+  return { userId: currentUserId, name: currentUserName, shiftSessionId: null };
 }

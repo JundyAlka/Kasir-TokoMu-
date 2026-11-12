@@ -79,6 +79,18 @@ export type SortOption =
   | "price-asc"
   | "price-desc";
 
+const kasirSortLabels: Record<SortOption, string> = {
+  popular: "Terlaris",
+  "revenue-desc": "Omzet Terbesar",
+  "qty-desc": "Terjual Terbanyak",
+  "stock-desc": "Stok Terbanyak",
+  "stock-asc": "Stok Tersedikit",
+  "name-asc": "Nama (A → Z)",
+  "name-desc": "Nama (Z → A)",
+  "price-asc": "Harga Termurah",
+  "price-desc": "Harga Tertinggi",
+};
+
 export type ProductSalesStat = {
   productId?: string;
   productName: string;
@@ -312,7 +324,7 @@ const ProductCard = memo(function ProductCard({
               className={cn(
                 "size-1.5 rounded-full shrink-0",
                 product.stock <= 0
-                  ? "bg-destructive animate-pulse"
+                  ? "bg-destructive"
                   : lowStock
                     ? "bg-amber-500"
                     : "bg-emerald-500"
@@ -1108,13 +1120,17 @@ export function KasirView() {
       return;
     }
 
-    const updateWidth = () => setWorkspaceWidth(element.getBoundingClientRect().width);
+    const updateWidth = () => {
+      const next = Math.round(element.getBoundingClientRect().width);
+      setWorkspaceWidth((prev) => (prev === next ? prev : next));
+    };
     updateWidth();
 
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (entry) {
-        setWorkspaceWidth(entry.contentRect.width);
+        const next = Math.round(entry.contentRect.width);
+        setWorkspaceWidth((prev) => (prev === next ? prev : next));
       }
     });
     observer.observe(element);
@@ -1158,7 +1174,7 @@ export function KasirView() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       setNowTick(Date.now());
-    }, 20000);
+    }, 60000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -1239,13 +1255,17 @@ export function KasirView() {
       return;
     }
 
-    const updateWidth = () => setProductColumnWidth(element.getBoundingClientRect().width);
+    const updateWidth = () => {
+      const next = Math.round(element.getBoundingClientRect().width);
+      setProductColumnWidth((prev) => (prev === next ? prev : next));
+    };
     updateWidth();
 
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (entry) {
-        setProductColumnWidth(entry.contentRect.width);
+        const next = Math.round(entry.contentRect.width);
+        setProductColumnWidth((prev) => (prev === next ? prev : next));
       }
     });
     observer.observe(element);
@@ -1499,7 +1519,7 @@ export function KasirView() {
         "grid gap-4 h-full max-h-full overflow-hidden",
         shouldStackCheckout
           ? "grid-cols-1 auto-rows-min overflow-auto"
-          : "grid-cols-[minmax(200px,1fr)_minmax(280px,320px)] md:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] xl:grid-cols-[minmax(0,1fr)_minmax(330px,380px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.76fr)]"
+          : "grid-cols-[minmax(200px,1fr)_minmax(290px,340px)] md:grid-cols-[minmax(0,1fr)_minmax(300px,350px)] xl:grid-cols-[minmax(0,1fr)_minmax(350px,400px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(390px,430px)]"
       )}
     >
       {shiftBannerName ? (
@@ -1595,10 +1615,14 @@ export function KasirView() {
               </div>
 
               <div className="flex items-center gap-1 shrink-0">
-                <Select value={sortBy} onValueChange={(val) => setSortBy(val as SortOption)}>
-                  <SelectTrigger className="h-8 rounded-xl border-border/70 bg-card/80 px-2 min-w-[105px] sm:min-w-[125px] text-[11px] font-semibold gap-1 shadow-2xs">
+                <Select
+                  value={sortBy}
+                  items={kasirSortLabels}
+                  onValueChange={(val) => setSortBy(val as SortOption)}
+                >
+                  <SelectTrigger className="h-8 rounded-xl border-border/70 bg-card/80 px-2 min-w-[120px] sm:min-w-[140px] text-[11px] font-semibold gap-1 shadow-2xs">
                     <ArrowUpDown className="size-3 text-primary shrink-0" />
-                    <SelectValue placeholder="Urutkan" />
+                    <SelectValue placeholder="Urutkan">{kasirSortLabels[sortBy]}</SelectValue>
                   </SelectTrigger>
                   <SelectContent
                     align="end"
@@ -1741,17 +1765,16 @@ export function KasirView() {
       <div className="min-w-0 min-h-0 flex flex-col overflow-hidden">
         <Card
           className={cn(
-            "glass-panel border-border/60 shadow-[0_28px_70px_-48px_rgba(66,38,20,0.6)] flex flex-col flex-1 overflow-hidden",
+            "glass-panel border-border/60 shadow-[0_28px_70px_-48px_rgba(66,38,20,0.6)] flex flex-col flex-1 gap-0 py-0 overflow-hidden",
             !shouldStackCheckout && "sticky top-0"
           )}
         >
-          <CardHeader className="shrink-0 pb-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <CardTitle className="font-heading text-2xl">Keranjang aktif</CardTitle>
-                <CardDescription>Semua item yang sudah ditap akan muncul di sini.</CardDescription>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
+          <CardHeader className="shrink-0 px-4 sm:px-5 pt-3.5 sm:pt-4 pb-2.5 sm:pb-3 border-b border-border/45">
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+              <CardTitle className="font-heading text-xl sm:text-2xl leading-tight">
+                Keranjang aktif
+              </CardTitle>
+              <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
                 {shiftRemainingCalc?.isDue && (
                   <button
                     type="button"
@@ -1759,108 +1782,128 @@ export function KasirView() {
                       setShiftWarningDismissed(false);
                       setShiftClosingOpen(true);
                     }}
-                    title="Klik untuk membuka dialog tutup buku shift"
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold transition-all shadow-sm cursor-pointer",
+                    title={
                       shiftRemainingCalc.isOverdue
-                        ? "bg-red-500/15 text-red-700 dark:text-red-400 border border-red-500/30 animate-pulse hover:bg-red-500/25"
-                        : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25"
+                        ? `Tutup Buku (lewat ${Math.abs(shiftRemainingCalc.remainingMinutes)} menit)`
+                        : `Tutup Buku (sisa ${shiftRemainingCalc.remainingMinutes} menit)`
+                    }
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap",
+                      shiftRemainingCalc.isOverdue
+                        ? "bg-red-500/15 text-red-700 dark:text-red-400 border border-red-500/35 animate-pulse hover:bg-red-500/25"
+                        : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/35 hover:bg-amber-500/25"
                     )}
                   >
-                    <CircleDollarSign className="size-3.5" />
+                    <CircleDollarSign className="size-3 shrink-0" />
                     <span>
                       {shiftRemainingCalc.isOverdue
-                        ? `Tutup Buku (${Math.abs(shiftRemainingCalc.remainingMinutes)}m lalu)`
-                        : `Tutup Buku (${shiftRemainingCalc.remainingMinutes}m)`}
+                        ? `Lewat ${Math.abs(shiftRemainingCalc.remainingMinutes)}m`
+                        : `Tutup (${shiftRemainingCalc.remainingMinutes}m)`}
                     </span>
                   </button>
                 )}
-                <Badge className="rounded-full bg-foreground text-background">{cartLines.length} item</Badge>
+                <Badge className="rounded-full bg-foreground text-background whitespace-nowrap">
+                  {cartLines.length} item
+                </Badge>
               </div>
             </div>
+            <CardDescription className="text-xs sm:text-sm mt-0.5 truncate">
+              Semua item yang sudah ditap akan muncul di sini.
+            </CardDescription>
           </CardHeader>
 
-          {shiftRemainingCalc?.isDue && !shiftWarningDismissed && (
-            <div className="mx-4 sm:mx-5 mb-2 rounded-2xl border border-amber-500/35 bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-amber-500/15 p-3.5 text-amber-950 dark:text-amber-100 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-              <div className="flex items-start justify-between gap-2.5">
-                <div className="flex items-start gap-2.5 min-w-0">
-                  <div
-                    className={cn(
-                      "p-2 rounded-xl text-white shrink-0 mt-0.5 shadow-sm",
-                      shiftRemainingCalc.isOverdue ? "bg-red-600 animate-pulse" : "bg-amber-600"
-                    )}
-                  >
-                    <BellRing className="size-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-heading font-bold text-sm text-foreground">
-                        {shiftRemainingCalc.isOverdue
-                          ? "Shift Telah Berakhir — Tutup Buku"
-                          : "Pemberitahuan Tutup Buku Shift"}
+          <CardContent className="relative flex-1 flex flex-col p-0 min-h-0 overflow-hidden">
+            {shiftRemainingCalc?.isDue && !shiftWarningDismissed && (
+              <div
+                className={cn(
+                  "pointer-events-auto absolute inset-x-3 sm:inset-x-4 top-3 z-20 rounded-2xl border p-3.5 backdrop-blur-md shadow-[0_18px_45px_-16px_rgba(0,0,0,0.45)] animate-in fade-in slide-in-from-top-2 duration-300",
+                  shiftRemainingCalc.isOverdue
+                    ? "border-red-500/45 bg-red-50/85 dark:bg-stone-950/75 text-red-950 dark:text-red-100"
+                    : "border-amber-500/45 bg-amber-50/85 dark:bg-stone-950/75 text-amber-950 dark:text-amber-100"
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div
+                      className={cn(
+                        "p-2 rounded-xl text-white shrink-0 mt-0.5 shadow-sm",
+                        shiftRemainingCalc.isOverdue ? "bg-red-600 animate-pulse" : "bg-amber-600"
+                      )}
+                    >
+                      <BellRing className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="font-heading font-bold text-xs sm:text-sm text-foreground leading-snug">
+                          {shiftRemainingCalc.isOverdue
+                            ? "Shift Berakhir — Tutup Buku"
+                            : "Pemberitahuan Tutup Buku Shift"}
+                        </p>
+                        <span
+                          className={cn(
+                            "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
+                            shiftRemainingCalc.isOverdue
+                              ? "bg-red-500/20 text-red-700 dark:text-red-300"
+                              : "bg-amber-500/20 text-amber-800 dark:text-amber-200"
+                          )}
+                        >
+                          {shiftRemainingCalc.isOverdue
+                            ? `Lewat ${Math.abs(shiftRemainingCalc.remainingMinutes)} Menit`
+                            : `Sisa ${shiftRemainingCalc.remainingMinutes} Menit`}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                        {(() => {
+                          const rawName = shiftRemainingCalc.shiftName.trim();
+                          const shiftLabel = /^shift\b/i.test(rawName) ? rawName : `Shift ${rawName}`;
+                          return shiftRemainingCalc.isOverdue
+                            ? `${shiftLabel} selesai pkl ${shiftRemainingCalc.endTime}. Segera lakukan tutup buku dan rekonsiliasi uang kas fisik.`
+                            : `${shiftLabel} akan berakhir pkl ${shiftRemainingCalc.endTime}. Mohon persiapkan rekonsiliasi kas dan tutup buku.`;
+                        })()}
                       </p>
-                      <span
-                        className={cn(
-                          "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
-                          shiftRemainingCalc.isOverdue
-                            ? "bg-red-500/20 text-red-700 dark:text-red-300"
-                            : "bg-amber-500/20 text-amber-800 dark:text-amber-200"
-                        )}
-                      >
-                        {shiftRemainingCalc.isOverdue
-                          ? `Lewat ${Math.abs(shiftRemainingCalc.remainingMinutes)} Menit`
-                          : `Sisa ${shiftRemainingCalc.remainingMinutes} Menit`}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                      {shiftRemainingCalc.isOverdue
-                        ? `Shift ${shiftRemainingCalc.shiftName} selesai pkl ${shiftRemainingCalc.endTime}. Harap segera lakukan tutup buku dan rekonsiliasi uang kas fisik.`
-                        : `Shift ${shiftRemainingCalc.shiftName} akan berakhir pkl ${shiftRemainingCalc.endTime}. Mohon persiapkan rekonsiliasi kas dan tutup buku.`}
-                    </p>
-                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => setShiftClosingOpen(true)}
-                        className="h-8 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs px-3.5 shadow-sm cursor-pointer"
-                      >
-                        <CircleDollarSign className="size-3.5 mr-1" />
-                        Tutup Buku Sekarang
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShiftWarningDismissed(true)}
-                        className="h-8 rounded-xl text-xs text-muted-foreground hover:text-foreground cursor-pointer"
-                      >
-                        Tutup Sementara
-                      </Button>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => setShiftClosingOpen(true)}
+                          className="h-8 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs px-3 shadow-sm cursor-pointer"
+                        >
+                          <CircleDollarSign className="size-3.5 mr-1" />
+                          Tutup Buku Sekarang
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShiftWarningDismissed(true)}
+                          className="h-8 rounded-xl text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                        >
+                          Tutup Sementara
+                        </Button>
+                      </div>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setShiftWarningDismissed(true)}
+                    className="text-muted-foreground hover:text-foreground p-1 rounded-lg transition-colors cursor-pointer shrink-0"
+                    title="Sembunyikan peringatan"
+                  >
+                    <X className="size-4" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShiftWarningDismissed(true)}
-                  className="text-muted-foreground hover:text-foreground p-1 rounded-lg transition-colors cursor-pointer shrink-0"
-                  title="Sembunyikan peringatan"
-                >
-                  <X className="size-4" />
-                </button>
               </div>
-            </div>
-          )}
-          <CardContent className="flex-1 flex flex-col p-0 min-h-0 overflow-hidden">
+            )}
             {/* Scrollable middle: cart items + payment options */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 sm:space-y-4 p-4 sm:p-5 min-h-0">
+            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-3 px-4 sm:px-5 py-3 min-h-0">
             <div
               className={cn(
-                "rounded-[24px] border border-border bg-background/25 p-3 sm:p-3.5 shadow-inner dark:bg-black/15 transition-all min-h-[80px] flex flex-col overflow-y-auto custom-scrollbar",
-                cartLines.length === 0 ? "justify-center items-center text-center flex-1" : "justify-start"
+                "rounded-[20px] border border-border/75 bg-background/30 p-2.5 sm:p-3 shadow-inner dark:bg-black/15 transition-all flex-1 min-h-[120px] flex flex-col overflow-y-auto custom-scrollbar",
+                cartLines.length === 0 ? "justify-center items-center text-center border-dashed" : "justify-start"
               )}
             >
               {cartLines.length > 0 ? (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {cartLines.map((line) => (
                     <CartItemRow
                       key={line.product.id}
@@ -1871,10 +1914,10 @@ export function KasirView() {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center text-center py-4">
-                  <ReceiptText className="size-9 text-muted-foreground" />
-                  <p className="mt-3 font-heading text-lg font-semibold">Belum ada item</p>
-                  <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+                <div className="flex flex-col items-center justify-center text-center py-3 px-2">
+                  <ReceiptText className="size-8 text-muted-foreground/80" />
+                  <p className="mt-2.5 font-heading text-base sm:text-lg font-semibold">Belum ada item</p>
+                  <p className="mt-1 max-w-xs text-xs text-muted-foreground leading-relaxed">
                     Tap produk dari sisi kiri untuk mulai membuat transaksi baru.
                   </p>
                 </div>
@@ -1996,8 +2039,8 @@ export function KasirView() {
             </div>
 
             {/* Fixed bottom: total + checkout - always visible */}
-            <div className="shrink-0 border-t border-border/40 p-3 sm:p-4 lg:px-5 lg:py-4">
-              <div className="rounded-[20px] lg:rounded-[24px] border border-border bg-card p-3 sm:p-3.5 lg:px-5 lg:py-4 text-card-foreground shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] dark:bg-muted/30">
+            <div className="shrink-0 border-t border-border/45 px-4 sm:px-5 py-3">
+              <div className="rounded-[20px] border border-border bg-card p-3 sm:p-3.5 text-card-foreground shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] dark:bg-muted/30">
               <div className="flex items-center justify-between text-xs sm:text-sm text-muted-foreground">
                 <span className="font-medium">Total tagihan</span>
                 <Badge variant="outline" className="rounded-full bg-background px-2.5 py-0.5 font-semibold text-xs border-border/60">

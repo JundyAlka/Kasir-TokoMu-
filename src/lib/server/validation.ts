@@ -104,6 +104,7 @@ export const DebtUpdateSchema = z
     status: z.enum(["aktif", "lunas", "lewat_tempo"]).optional(),
     isPaid: z.literal(true).optional(),
     amount: positiveInteger("Nominal hutang").optional(),
+    addAmount: positiveInteger("Tambahan nominal hutang").optional(),
     items: z
       .array(
         z

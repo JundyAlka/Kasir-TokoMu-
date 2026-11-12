@@ -203,5 +203,6 @@ function Summary({ label, value, tone, compact = false }: { label: string; value
 }
 
 function BucketSelect({ label, value, onChange }: { label: string; value: "cash" | "coins" | "savings"; onChange: (value: "cash" | "coins" | "savings") => void }) {
-  return <div className="grid gap-2"><Label>{label}</Label><Select value={value} onValueChange={(next) => onChange(next as "cash" | "coins" | "savings")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Laci kas</SelectItem><SelectItem value="coins">Receh</SelectItem><SelectItem value="savings">Tabungan</SelectItem></SelectContent></Select></div>;
+  const labels = { cash: "Laci kas", coins: "Receh", savings: "Tabungan" } as const;
+  return <div className="grid gap-2"><Label>{label}</Label><Select value={value} onValueChange={(next) => onChange(next as "cash" | "coins" | "savings")}><SelectTrigger className="w-full"><SelectValue>{labels[value]}</SelectValue></SelectTrigger><SelectContent><SelectItem value="cash">Laci kas</SelectItem><SelectItem value="coins">Receh</SelectItem><SelectItem value="savings">Tabungan</SelectItem></SelectContent></Select></div>;
 }

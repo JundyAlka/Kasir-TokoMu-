@@ -19,10 +19,10 @@ export async function POST(
 ) {
   try {
     const body = CloseShiftSchema.parse(await request.json());
-    const { role, userId, workspaceOwnerId } = await requireRoutePolicy("/api/shift-sessions/[id]/close", "POST");
+    const { workspaceOwnerId } = await requireRoutePolicy("/api/shift-sessions/[id]/close", "POST");
     const { id } = await context.params;
     const requestedSession = await getShiftSummary(workspaceOwnerId, id);
-    if (!requestedSession || (role === "kasir" && requestedSession.cashierUserId !== userId)) throw notFoundError();
+    if (!requestedSession) throw notFoundError();
     const session = await closeShift(workspaceOwnerId, id, body.closingCash);
     return NextResponse.json({ session });
   } catch (error) {

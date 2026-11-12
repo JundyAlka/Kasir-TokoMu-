@@ -25,6 +25,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
   Warehouse,
 } from "lucide-react";
@@ -73,14 +74,25 @@ import { Product, ProductDraft } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export type InventorySortOption =
+  | "recent"
   | "name-asc"
   | "name-desc"
   | "stock-desc"
   | "stock-asc"
   | "price-asc"
   | "price-desc"
-  | "category"
-  | "recent";
+  | "category";
+
+const inventorySortLabels: Record<InventorySortOption, string> = {
+  recent: "Produk Terbaru",
+  "name-asc": "Nama (A → Z)",
+  "name-desc": "Nama (Z → A)",
+  "stock-desc": "Stok Terbanyak",
+  "stock-asc": "Stok Tersedikit",
+  "price-asc": "Harga Termurah",
+  "price-desc": "Harga Tertinggi",
+  category: "Kategori Produk",
+};
 
 type RowAuditState = {
   stock: number;
@@ -123,7 +135,7 @@ export function InventarisView() {
     }
     return false;
   });
-  const [sortBy, setSortBy] = useState<InventorySortOption>("name-asc");
+  const [sortBy, setSortBy] = useState<InventorySortOption>("recent");
   const [rowDrafts, setRowDrafts] = useState<Record<string, RowAuditState>>({});
   const saveTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [page, setPage] = useState(1);
@@ -594,10 +606,14 @@ export function InventarisView() {
               </div>
 
               {/* Sorting Dropdown */}
-              <Select value={sortBy} onValueChange={(val) => setSortBy(val as InventorySortOption)}>
-                <SelectTrigger className="h-9 sm:h-10 rounded-xl sm:rounded-2xl border-border/80 bg-card/85 px-2.5 sm:px-3 min-w-[130px] sm:min-w-[150px] text-xs font-semibold gap-1.5 shadow-2xs">
+              <Select
+                value={sortBy}
+                items={inventorySortLabels}
+                onValueChange={(val) => setSortBy(val as InventorySortOption)}
+              >
+                <SelectTrigger className="h-9 sm:h-10 rounded-xl sm:rounded-2xl border-border/80 bg-card/85 px-2.5 sm:px-3 min-w-[155px] sm:min-w-[180px] text-xs font-semibold gap-1.5 shadow-2xs">
                   <ArrowUpDown className="size-3.5 text-primary shrink-0" />
-                  <SelectValue placeholder="Urutkan" />
+                  <SelectValue placeholder="Urutkan">{inventorySortLabels[sortBy]}</SelectValue>
                 </SelectTrigger>
                 <SelectContent
                   align="end"
@@ -606,6 +622,12 @@ export function InventarisView() {
                   alignItemWithTrigger={false}
                   className="w-auto min-w-[240px] sm:min-w-[260px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border/90 bg-popover text-popover-foreground shadow-2xl p-1.5 text-xs z-[100] backdrop-blur-none ring-1 ring-border/50"
                 >
+                  <SelectItem value="recent" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="size-3.5 text-primary shrink-0" />
+                      <span className="whitespace-nowrap font-medium">Produk Terbaru</span>
+                    </span>
+                  </SelectItem>
                   <SelectItem value="name-asc" className="rounded-xl py-2 px-2.5 font-medium cursor-pointer">
                     <span className="flex items-center gap-2">
                       <span className="text-xs shrink-0">🔤</span>

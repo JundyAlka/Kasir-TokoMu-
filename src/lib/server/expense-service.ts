@@ -18,7 +18,8 @@ export async function createShiftExpense(
   const input = ExpenseCreateSchema.parse(draft);
   const openShift = await getOpenSession(workspaceOwnerId);
   if (!openShift) throw new Error("Buka shift terlebih dahulu sebelum mencatat pengeluaran.");
-  if (!canManageOtherCashierShift && openShift.cashierUserId !== actorUserId) throw notFoundError();
+  void actorUserId;
+  void canManageOtherCashierShift;
   const timestamp = nowIso();
   const isCashMovement = input.expenseType === "setoran_tabungan" || input.expenseType === "sales_titipan";
 

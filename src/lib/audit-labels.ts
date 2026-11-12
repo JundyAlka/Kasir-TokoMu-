@@ -41,11 +41,13 @@ const EVENT_MAP: Record<string, AuditLabelInfo> = {
 
   // Settings
   SETTINGS_UPDATED: { label: "Pengaturan diubah", icon: "Settings", category: "update" },
+  WHATSAPP_CONFIG_UPDATED: { label: "Konfigurasi OpenWA diubah", icon: "MessageSquare", category: "update" },
 
   // Users / Auth
   USER_INVITED: { label: "User diundang", icon: "UserPlus", category: "auth" },
   USER_DEACTIVATED: { label: "User dinonaktifkan", icon: "UserX", category: "auth" },
   ROLE_CHANGED: { label: "Role diubah", icon: "Shield", category: "auth" },
+  USER_SWITCHED: { label: "Akun diganti", icon: "ArrowRightLeft", category: "auth" },
 
   // Investors
   INVESTOR_CREATED: { label: "Investor dibuat", icon: "UserPlus", category: "create" },
@@ -66,6 +68,7 @@ const EVENT_MAP: Record<string, AuditLabelInfo> = {
 
   // System
   RESET_WORKSPACE: { label: "Workspace direset", icon: "RotateCcw", category: "system" },
+  WHATSAPP_REPORT_SENT: { label: "Laporan dikirim ke WhatsApp", icon: "Send", category: "system" },
 };
 
 export function getAuditLabel(eventType: string): AuditLabelInfo {

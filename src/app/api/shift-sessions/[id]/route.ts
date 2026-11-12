@@ -25,9 +25,9 @@ export async function PATCH(
 ) {
   try {
     const body = UpdateShiftSessionSchema.parse(await request.json());
-    const { userId, workspaceOwnerId } = await requireRoutePolicy("/api/shift-sessions/[id]", "PATCH");
+    const { userId, role, workspaceOwnerId } = await requireRoutePolicy("/api/shift-sessions/[id]", "PATCH");
     const { id } = await context.params;
-    const session = await updateShiftSession(workspaceOwnerId, id, body, userId);
+    const session = await updateShiftSession(workspaceOwnerId, id, body, userId, role);
     return NextResponse.json({ session });
   } catch (error) {
     return handleRouteError(error, "Gagal memperbarui sesi shift.");

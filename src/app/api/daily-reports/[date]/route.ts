@@ -19,9 +19,9 @@ export async function PATCH(
 ) {
   try {
     const body = UpdateDailyReportSchema.parse(await request.json());
-    const { workspaceOwnerId } = await requireRoutePolicy("/api/daily-reports/[date]", "PATCH");
+    const { role, workspaceOwnerId } = await requireRoutePolicy("/api/daily-reports/[date]", "PATCH");
     const { date } = await context.params;
-    const report = await updateDailyReport(workspaceOwnerId, date, body);
+    const report = await updateDailyReport(workspaceOwnerId, date, body, role);
     return NextResponse.json({ report });
   } catch (error) {
     return handleRouteError(error, "Gagal memperbarui laporan harian.");

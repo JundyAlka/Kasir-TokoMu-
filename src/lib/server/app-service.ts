@@ -920,6 +920,7 @@ export async function updateDebt(
     status?: "aktif" | "lunas" | "lewat_tempo";
     isPaid?: true;
     amount?: number;
+    addAmount?: number;
     items?: Array<{
       productId?: string | null;
       name: string;
@@ -967,9 +968,35 @@ export async function updateDebt(
         );
       }
     });
+  } else if (draft.addAmount !== undefined && draft.addAmount > 0) {
+    finalAmount = existing.amount + draft.addAmount;
   } else if (draft.amount !== undefined) {
     finalAmount = draft.amount;
   }
+
+  if (finalAmount < existing.paidAmount) {
+    throw new Error(
+      `Nominal hutang tidak boleh kurang dari yang sudah dibayar (Rp ${existing.paidAmount.toLocaleString("id-ID")}).`
+    );
+  }
+
+  const nextDueDate =
+    draft.dueDate !== undefined
+      ? draft.dueDate
+        ? parseDueDate(draft.dueDate)
+        : null
+      : existing.dueDate;
+
+  const isNowPaid = existing.paidAmount >= finalAmount;
+  const nextStatus =
+    draft.status ??
+    effectiveDebtStatus({
+      amount: finalAmount,
+      paidAmount: existing.paidAmount,
+      dueDate: nextDueDate,
+      isPaid: isNowPaid ? 1 : 0,
+      status: isNowPaid ? "lunas" : "aktif",
+    });
 
   const [updated] = await db
     .update(debts)
@@ -977,13 +1004,9 @@ export async function updateDebt(
       borrowerName: draft.borrowerName ?? existing.borrowerName,
       whatsapp: draft.whatsapp ?? existing.whatsapp,
       amount: finalAmount,
-      dueDate:
-        draft.dueDate !== undefined
-          ? draft.dueDate
-            ? parseDueDate(draft.dueDate)
-            : null
-          : existing.dueDate,
-      status: draft.status ?? effectiveDebtStatus({ ...existing, amount: finalAmount }),
+      dueDate: nextDueDate,
+      isPaid: nextStatus === "lunas" ? 1 : 0,
+      status: nextStatus,
     })
     .where(and(eq(debts.id, debtId), eq(debts.userId, userId)))
     .returning();
