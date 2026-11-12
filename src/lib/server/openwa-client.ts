@@ -165,33 +165,23 @@ function extractErrorMessage(json: unknown, fallbackText: string, status: number
   return `OpenWA mengembalikan HTTP ${status}`;
 }
 
-export async function getOpenWaSessionStatus(
-  config: OpenWaConnectionConfig
-): Promise<OpenWaSessionStatusResult> {
-  const sessionId = config.sessionId.trim() || "tokomu-wa";
-  const res = await openWaRequest(
-    config,
-    `/api/sessions/${encodeURIComponent(sessionId)}`,
-    { method: "GET" }
-  );
-
-  if (res.status === 404) {
-    return {
-      exists: false,
-      sessionId,
-      status: "not_created",
-      connected: false,
-      phoneNumber: null,
-      pushName: null,
-      raw: res.json,
-    };
+function extractSessionsArray(json: unknown): Record<string, unknown>[] {
+  if (Array.isArray(json)) {
+    return json.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"));
   }
-
-  if (!res.ok) {
-    throw new Error(extractErrorMessage(res.json, res.text, res.status));
+  if (json && typeof json === "object") {
+    const obj = json as Record<string, unknown>;
+    if (Array.isArray(obj.data)) {
+      return obj.data.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"));
+    }
+    if (Array.isArray(obj.sessions)) {
+      return obj.sessions.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"));
+    }
   }
+  return [];
+}
 
-  const data = unwrapPayload(res.json);
+function parseSessionObject(data: Record<string, unknown>, fallbackSessionId: string, raw: unknown): OpenWaSessionStatusResult {
   const rawStatus =
     typeof data.status === "string"
       ? data.status
@@ -219,48 +209,134 @@ export async function getOpenWaSessionStatus(
     normalizedStatus === "connected" ||
     normalizedStatus === "authenticated";
 
+  const resolvedId =
+    (typeof data.id === "string" && data.id) ||
+    fallbackSessionId;
+
   return {
     exists: true,
-    sessionId,
+    sessionId: resolvedId,
     status: rawStatus,
     connected,
     phoneNumber,
     pushName,
-    raw: res.json,
+    raw,
+  };
+}
+
+async function resolveSessionRecord(
+  config: OpenWaConnectionConfig
+): Promise<OpenWaSessionStatusResult & { rawObj?: Record<string, unknown> }> {
+  const target = config.sessionId.trim() || "tokomu-wa";
+
+  const listRes = await openWaRequest(config, "/api/sessions", { method: "GET" });
+  if (listRes.ok) {
+    const items = extractSessionsArray(listRes.json);
+    const matched = items.find((item) => item.id === target || item.name === target);
+    if (matched) {
+      return {
+        ...parseSessionObject(matched, target, matched),
+        rawObj: matched,
+      };
+    }
+  }
+
+  const directRes = await openWaRequest(
+    config,
+    `/api/sessions/${encodeURIComponent(target)}`,
+    { method: "GET" }
+  );
+
+  if (directRes.status === 404 || directRes.status === 400) {
+    return {
+      exists: false,
+      sessionId: target,
+      status: "not_created",
+      connected: false,
+      phoneNumber: null,
+      pushName: null,
+      raw: directRes.json,
+    };
+  }
+
+  if (!directRes.ok) {
+    throw new Error(extractErrorMessage(directRes.json, directRes.text, directRes.status));
+  }
+
+  const data = unwrapPayload(directRes.json);
+  return {
+    ...parseSessionObject(data, target, directRes.json),
+    rawObj: data,
+  };
+}
+
+function toSafeSessionName(raw: string): string {
+  const cleaned = raw
+    .trim()
+    .replace(/[^a-zA-Z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 50);
+  if (cleaned.length >= 3) return cleaned;
+  return "tokomu-wa";
+}
+
+export async function getOpenWaSessionStatus(
+  config: OpenWaConnectionConfig
+): Promise<OpenWaSessionStatusResult> {
+  const resolved = await resolveSessionRecord(config);
+  return {
+    exists: resolved.exists,
+    sessionId: config.sessionId.trim() || resolved.sessionId,
+    status: resolved.status,
+    connected: resolved.connected,
+    phoneNumber: resolved.phoneNumber,
+    pushName: resolved.pushName,
+    raw: resolved.raw,
   };
 }
 
 export async function startOpenWaSession(
   config: OpenWaConnectionConfig
 ): Promise<OpenWaSessionStatusResult> {
-  const sessionId = config.sessionId.trim() || "tokomu-wa";
+  const configuredName = config.sessionId.trim() || "tokomu-wa";
+  let resolved = await resolveSessionRecord(config);
 
-  let res = await openWaRequest(
-    config,
-    `/api/sessions/${encodeURIComponent(sessionId)}/start`,
-    { method: "POST" }
-  );
-
-  if (res.status === 404) {
+  if (!resolved.exists) {
     const createRes = await openWaRequest(config, "/api/sessions", {
       method: "POST",
-      body: JSON.stringify({ sessionId }),
+      body: JSON.stringify({ name: toSafeSessionName(configuredName) }),
     });
     if (!createRes.ok && createRes.status !== 409) {
       throw new Error(
         extractErrorMessage(createRes.json, createRes.text, createRes.status)
       );
     }
-
-    res = await openWaRequest(
-      config,
-      `/api/sessions/${encodeURIComponent(sessionId)}/start`,
-      { method: "POST" }
-    );
+    resolved = await resolveSessionRecord(config);
   }
 
-  if (!res.ok) {
-    throw new Error(extractErrorMessage(res.json, res.text, res.status));
+  if (!resolved.exists) {
+    throw new Error(`Session OpenWA "${configuredName}" gagal dibuat.`);
+  }
+
+  const engineLoaded = Boolean(resolved.rawObj?.engineLoaded);
+  const statusLower = resolved.status.toLowerCase();
+  const alreadyActive =
+    engineLoaded ||
+    resolved.connected ||
+    statusLower === "initializing" ||
+    statusLower === "qr_ready";
+
+  if (!alreadyActive) {
+    const startRes = await openWaRequest(
+      config,
+      `/api/sessions/${encodeURIComponent(resolved.sessionId)}/start`,
+      { method: "POST" }
+    );
+    if (!startRes.ok && startRes.status !== 400) {
+      throw new Error(
+        extractErrorMessage(startRes.json, startRes.text, startRes.status)
+      );
+    }
   }
 
   return getOpenWaSessionStatus(config);
@@ -269,30 +345,57 @@ export async function startOpenWaSession(
 export async function getOpenWaSessionQr(
   config: OpenWaConnectionConfig
 ): Promise<OpenWaQrResult> {
-  const sessionId = config.sessionId.trim() || "tokomu-wa";
-  const res = await openWaRequest(
-    config,
-    `/api/sessions/${encodeURIComponent(sessionId)}/qr`,
-    { method: "GET" }
-  );
-
-  if (res.status === 404) {
+  const configuredName = config.sessionId.trim() || "tokomu-wa";
+  const resolved = await resolveSessionRecord(config);
+  if (!resolved.exists) {
     return {
-      sessionId,
+      sessionId: configuredName,
       status: "not_created",
       qrCode: null,
       message: "Session belum dibuat atau belum dijalankan.",
     };
   }
 
+  if (resolved.connected) {
+    return {
+      sessionId: configuredName,
+      status: resolved.status,
+      qrCode: null,
+      message: "WhatsApp sudah terhubung.",
+    };
+  }
+
+  const res = await openWaRequest(
+    config,
+    `/api/sessions/${encodeURIComponent(resolved.sessionId)}/qr`,
+    { method: "GET" }
+  );
+
+  if (res.status === 404) {
+    return {
+      sessionId: configuredName,
+      status: resolved.status || "not_created",
+      qrCode: null,
+      message: "QR belum siap. Tunggu beberapa detik atau klik Mulai Session & Tampilkan QR.",
+    };
+  }
+
   if (!res.ok) {
-    const statusInfo = await getOpenWaSessionStatus(config).catch(() => null);
-    if (statusInfo?.connected) {
+    const refreshed = await getOpenWaSessionStatus(config).catch(() => null);
+    if (refreshed?.connected) {
       return {
-        sessionId,
-        status: statusInfo.status,
+        sessionId: configuredName,
+        status: refreshed.status,
         qrCode: null,
         message: "WhatsApp sudah terhubung.",
+      };
+    }
+    if (res.status === 400) {
+      return {
+        sessionId: configuredName,
+        status: refreshed?.status || resolved.status || "initializing",
+        qrCode: null,
+        message: "QR sedang disiapkan oleh OpenWA, klik Refresh QR sebentar lagi.",
       };
     }
     throw new Error(extractErrorMessage(res.json, res.text, res.status));
@@ -310,10 +413,10 @@ export async function getOpenWaSessionQr(
       ? data.status
       : qrCode
         ? "qr_ready"
-        : "unknown";
+        : resolved.status;
 
   return {
-    sessionId,
+    sessionId: configuredName,
     status,
     qrCode,
     message: typeof data.message === "string" ? data.message : undefined,
@@ -325,7 +428,10 @@ export async function sendOpenWaText(
   rawChatId: string,
   text: string
 ): Promise<OpenWaSendResult> {
-  const sessionId = config.sessionId.trim() || "tokomu-wa";
+  const resolved = await resolveSessionRecord(config);
+  if (!resolved.exists) {
+    throw new Error(`Session OpenWA "${config.sessionId}" belum dibuat.`);
+  }
   const chatId = normalizeWhatsAppChatId(rawChatId);
   if (!chatId) {
     throw new Error("Nomor tujuan WhatsApp tidak boleh kosong.");
@@ -333,7 +439,7 @@ export async function sendOpenWaText(
 
   const res = await openWaRequest(
     config,
-    `/api/sessions/${encodeURIComponent(sessionId)}/messages/send-text`,
+    `/api/sessions/${encodeURIComponent(resolved.sessionId)}/messages/send-text`,
     {
       method: "POST",
       body: JSON.stringify({ chatId, text }),
@@ -369,7 +475,10 @@ export async function sendOpenWaDocument(
     caption?: string;
   }
 ): Promise<OpenWaSendResult> {
-  const sessionId = config.sessionId.trim() || "tokomu-wa";
+  const resolved = await resolveSessionRecord(config);
+  if (!resolved.exists) {
+    throw new Error(`Session OpenWA "${config.sessionId}" belum dibuat.`);
+  }
   const chatId = normalizeWhatsAppChatId(rawChatId);
   if (!chatId) {
     throw new Error("Nomor tujuan WhatsApp tidak boleh kosong.");
@@ -377,7 +486,7 @@ export async function sendOpenWaDocument(
 
   const res = await openWaRequest(
     config,
-    `/api/sessions/${encodeURIComponent(sessionId)}/messages/send-document`,
+    `/api/sessions/${encodeURIComponent(resolved.sessionId)}/messages/send-document`,
     {
       method: "POST",
       body: JSON.stringify({
