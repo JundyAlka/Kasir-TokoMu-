@@ -31,10 +31,18 @@ export async function getDailyReportRollup(workspaceOwnerId: string, range: { st
   return { periodStart: range.start, periodEnd: range.end, ...totals, averageTicket: totals.transactionCount ? Math.round(totals.revenue / totals.transactionCount) : 0, dailyReports, dailyTransactions: [], source: "daily_reports" };
 }
 
-async function getLiveReportRollup(workspaceOwnerId: string, range: { start: string; end: string }): Promise<DailyReportRollup> {
+async function getLiveReportRollup(
+  workspaceOwnerId: string,
+  range: { start: string; end: string },
+  options?: { dailyMode?: boolean }
+): Promise<DailyReportRollup> {
+  const dailyDateRange = {
+    start: jakartaDateKey(range.start),
+    end: jakartaDateKey(range.end),
+  };
   const [summary, dailyRollup, liveTransactions] = await Promise.all([
     calculatePeriodProfit(workspaceOwnerId, range.start, range.end),
-    getDailyReportRollup(workspaceOwnerId, range),
+    getDailyReportRollup(workspaceOwnerId, dailyDateRange),
     pool.query<{ occurredAt: string; total: number }>(
       `select occurred_at as "occurredAt", total
        from transactions
@@ -64,10 +72,11 @@ async function getLiveReportRollup(workspaceOwnerId: string, range: { start: str
     .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 
   const hasDaily = dailyRollup.dailyReports.length > 0;
+  const summaryExpense = options?.dailyMode ? summary.expenses : summary.expenseTotal;
   const revenue = Math.max(summary.revenue, dailyRollup.revenue);
-  const expenseTotal = Math.max(summary.expenseTotal, dailyRollup.expenseTotal);
+  const expenseTotal = Math.max(summaryExpense, dailyRollup.expenseTotal);
   const cogs = Math.max(summary.cogs, dailyRollup.cogs);
-  const grossProfit = Math.max(summary.grossProfit, revenue - cogs);
+  const grossProfit = revenue - cogs;
   const netProfit = hasDaily && summary.revenue === 0 ? dailyRollup.netProfit : (revenue - cogs - expenseTotal);
   const transactionCount = Math.max(summary.transactionCount, dailyRollup.transactionCount);
   const averageTicket = transactionCount ? Math.round(revenue / transactionCount) : 0;
@@ -85,14 +94,21 @@ async function getLiveReportRollup(workspaceOwnerId: string, range: { start: str
     averageTicket,
     dailyReports: dailyRollup.dailyReports,
     dailyTransactions,
-    source: hasDaily ? "daily_reports" : "live_transactions",
+    source: hasDaily && summary.revenue === 0 ? "daily_reports" : "live_transactions",
   };
 }
 
 export async function getReportRollupByMode(workspaceOwnerId: string, mode: "harian" | "mingguan" | "bulanan", value: string) {
-  if (mode === "harian") { const range = dayRange(value); return getDailyReportRollup(workspaceOwnerId, { start: value, end: jakartaDateKey(range.end) }); }
-  if (mode === "mingguan") { const range = getJakartaWeekRange(new Date(`${value}T12:00:00.000Z`)); return getLiveReportRollup(workspaceOwnerId, { start: jakartaDateKey(range.start), end: jakartaDateKey(range.end) }); }
-  const [year, month] = value.split("-").map(Number); return getLiveReportRollup(workspaceOwnerId, getJakartaMonthRange(year, month));
+  if (mode === "harian") {
+    const range = dayRange(value);
+    return getLiveReportRollup(workspaceOwnerId, range, { dailyMode: true });
+  }
+  if (mode === "mingguan") {
+    const range = getJakartaWeekRange(new Date(`${value}T12:00:00.000Z`));
+    return getLiveReportRollup(workspaceOwnerId, range);
+  }
+  const [year, month] = value.split("-").map(Number);
+  return getLiveReportRollup(workspaceOwnerId, getJakartaMonthRange(year, month));
 }
 
 export class UnlockedDailyReportsError extends Error { constructor(readonly dates: string[]) { super("UNLOCKED_DAILY_REPORTS"); } }

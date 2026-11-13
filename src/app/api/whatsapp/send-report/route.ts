@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const { userId: actorUserId, workspaceOwnerId } = await getRequestUser();
     const body = (await request.json().catch(() => ({}))) as {
       action?: "test" | "report";
-      mode?: "mingguan" | "bulanan";
+      mode?: "harian" | "mingguan" | "bulanan";
       period?: string;
       attachPdf?: boolean;
       recipients?: string[] | string;
@@ -34,10 +34,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, log });
     }
 
-    const mode = body.mode === "mingguan" ? "mingguan" : "bulanan";
+    const mode =
+      body.mode === "harian" || body.mode === "mingguan"
+        ? body.mode
+        : "bulanan";
     const parts = getJakartaNowParts();
     const defaultPeriod =
-      mode === "mingguan"
+      mode === "harian" || mode === "mingguan"
         ? parts.dateKey
         : `${parts.year}-${String(parts.month).padStart(2, "0")}`;
 

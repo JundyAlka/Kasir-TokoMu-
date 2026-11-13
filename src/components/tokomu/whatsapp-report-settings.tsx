@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   CheckCircle2,
   Clock,
+  Download,
   FileText,
   Loader2,
   MessageSquare,
@@ -44,6 +45,10 @@ interface WhatsAppReportConfigDto {
   hasApiKey: boolean;
   sessionId: string;
   recipients: string[];
+  dailyEnabled: boolean;
+  dailyHour: number;
+  attachDailyPdf: boolean;
+  dailyWaitShiftClose: boolean;
   weeklyEnabled: boolean;
   weeklyDayOfWeek: number;
   weeklyHour: number;
@@ -52,6 +57,7 @@ interface WhatsAppReportConfigDto {
   monthlyDayOfMonth: number;
   monthlyHour: number;
   attachMonthlyPdf: boolean;
+  lastDailyPeriodSent: string | null;
   lastWeeklyPeriodSent: string | null;
   lastMonthlyPeriodSent: string | null;
   lastError: string | null;
@@ -102,6 +108,8 @@ const MONTH_DAY_OPTIONS = Array.from({ length: 28 }, (_, idx) => ({
 
 function formatTriggerLabel(triggerType: string) {
   switch (triggerType) {
+    case "auto_daily":
+      return "Auto Harian";
     case "auto_weekly":
       return "Auto Mingguan";
     case "auto_monthly":
@@ -130,6 +138,11 @@ export function WhatsAppReportSettings() {
   const [sessionId, setSessionId] = useState("tokomu-wa");
   const [recipientsText, setRecipientsText] = useState("");
 
+  const [dailyEnabled, setDailyEnabled] = useState(true);
+  const [dailyHour, setDailyHour] = useState("19");
+  const [attachDailyPdf, setAttachDailyPdf] = useState(true);
+  const [dailyWaitShiftClose, setDailyWaitShiftClose] = useState(true);
+
   const [weeklyEnabled, setWeeklyEnabled] = useState(true);
   const [weeklyDayOfWeek, setWeeklyDayOfWeek] = useState("1");
   const [weeklyHour, setWeeklyHour] = useState("8");
@@ -140,6 +153,7 @@ export function WhatsAppReportSettings() {
   const [monthlyHour, setMonthlyHour] = useState("8");
   const [attachMonthlyPdf, setAttachMonthlyPdf] = useState(true);
 
+  const [lastDailySent, setLastDailySent] = useState<string | null>(null);
   const [lastWeeklySent, setLastWeeklySent] = useState<string | null>(null);
   const [lastMonthlySent, setLastMonthlySent] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -158,6 +172,10 @@ export function WhatsAppReportSettings() {
     setClearApiKey(false);
     setSessionId(cfg.sessionId);
     setRecipientsText((cfg.recipients ?? []).join("\n"));
+    setDailyEnabled(cfg.dailyEnabled ?? true);
+    setDailyHour(String(cfg.dailyHour ?? 19));
+    setAttachDailyPdf(cfg.attachDailyPdf ?? true);
+    setDailyWaitShiftClose(cfg.dailyWaitShiftClose ?? true);
     setWeeklyEnabled(cfg.weeklyEnabled);
     setWeeklyDayOfWeek(String(cfg.weeklyDayOfWeek));
     setWeeklyHour(String(cfg.weeklyHour));
@@ -166,6 +184,7 @@ export function WhatsAppReportSettings() {
     setMonthlyDayOfMonth(String(cfg.monthlyDayOfMonth));
     setMonthlyHour(String(cfg.monthlyHour));
     setAttachMonthlyPdf(cfg.attachMonthlyPdf);
+    setLastDailySent(cfg.lastDailyPeriodSent ?? null);
     setLastWeeklySent(cfg.lastWeeklyPeriodSent);
     setLastMonthlySent(cfg.lastMonthlyPeriodSent);
     setLastError(cfg.lastError);
@@ -274,6 +293,10 @@ export function WhatsAppReportSettings() {
         baseUrl,
         sessionId,
         recipients: recipientsText,
+        dailyEnabled,
+        dailyHour: Number(dailyHour),
+        attachDailyPdf,
+        dailyWaitShiftClose,
         weeklyEnabled,
         weeklyDayOfWeek: Number(weeklyDayOfWeek),
         weeklyHour: Number(weeklyHour),
@@ -316,7 +339,7 @@ export function WhatsAppReportSettings() {
     await saveConfig();
   }
 
-  async function handleSend(action: "test" | "mingguan" | "bulanan") {
+  async function handleSend(action: "test" | "harian" | "mingguan" | "bulanan") {
     setSendingAction(action);
     try {
       const saved = await saveConfig();
@@ -329,7 +352,11 @@ export function WhatsAppReportSettings() {
               action: "report",
               mode: action,
               attachPdf:
-                action === "mingguan" ? attachWeeklyPdf : attachMonthlyPdf,
+                action === "harian"
+                  ? attachDailyPdf
+                  : action === "mingguan"
+                    ? attachWeeklyPdf
+                    : attachMonthlyPdf,
             };
 
       const res = await fetch("/api/whatsapp/send-report", {
@@ -379,7 +406,7 @@ export function WhatsAppReportSettings() {
                 Integrasi WhatsApp (OpenWA)
               </CardTitle>
               <CardDescription>
-                Hubungkan WarungOS dengan server OpenWA Anda untuk mengirim ringkasan laporan keuangan mingguan dan bulanan secara otomatis.
+                Hubungkan WarungOS dengan server OpenWA Anda untuk mengirim ringkasan laporan keuangan harian, mingguan, dan bulanan secara otomatis.
               </CardDescription>
             </div>
             <Button
@@ -584,72 +611,150 @@ export function WhatsAppReportSettings() {
             </div>
 
             {/* Schedule Configuration */}
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/15 p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Clock className="size-4 text-primary" />
-                    <h3 className="font-semibold">2. Jadwal Laporan Mingguan</h3>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={weeklyEnabled ? "default" : "outline"}
-                    className="h-9 min-w-[96px] rounded-xl px-4 text-xs font-semibold"
-                    onClick={() => setWeeklyEnabled((v) => !v)}
-                  >
-                    {weeklyEnabled ? "Aktif" : "Mati"}
-                  </Button>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-1.5">
-                    <Label>Setiap Hari</Label>
-                    <Select
-                      value={weeklyDayOfWeek}
-                      onValueChange={(val) => val && setWeeklyDayOfWeek(val)}
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="flex flex-col justify-between space-y-4 rounded-2xl border border-border/70 bg-muted/15 p-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="size-4 text-primary" />
+                      <h3 className="font-semibold">2. Jadwal Laporan Harian</h3>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={dailyEnabled ? "default" : "outline"}
+                      className="h-9 min-w-[96px] rounded-xl px-4 text-xs font-semibold"
+                      onClick={() => setDailyEnabled((v) => !v)}
                     >
-                      <SelectTrigger className="w-full h-10 rounded-xl">
-                        <SelectValue>
-                          {WEEKDAY_OPTIONS.find((opt) => opt.value === weeklyDayOfWeek)?.label ??
-                            weeklyDayOfWeek}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {WEEKDAY_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      {dailyEnabled ? "Aktif" : "Mati"}
+                    </Button>
                   </div>
 
-                  <div className="grid gap-1.5">
-                    <Label>Jam Kirim (WIB)</Label>
-                    <Select
-                      value={weeklyHour}
-                      onValueChange={(val) => val && setWeeklyHour(val)}
-                    >
-                      <SelectTrigger className="w-full h-10 rounded-xl">
-                        <SelectValue>
-                          {HOUR_OPTIONS.find((opt) => opt.value === weeklyHour)?.label ??
-                            `${String(weeklyHour).padStart(2, "0")}:00 WIB`}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {HOUR_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-1.5">
+                      <Label>Jam Kirim (WIB)</Label>
+                      <Select
+                        value={dailyHour}
+                        onValueChange={(val) => val && setDailyHour(val)}
+                      >
+                        <SelectTrigger className="w-full h-10 rounded-xl">
+                          <SelectValue>
+                            {HOUR_OPTIONS.find((opt) => opt.value === dailyHour)?.label ??
+                              `${String(dailyHour).padStart(2, "0")}:00 WIB`}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HOUR_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid gap-1.5">
+                      <Label>Aturan Shift</Label>
+                      <Button
+                        type="button"
+                        variant={dailyWaitShiftClose ? "default" : "outline"}
+                        className="h-10 w-full rounded-xl px-3 text-xs font-semibold"
+                        onClick={() => setDailyWaitShiftClose((v) => !v)}
+                      >
+                        {dailyWaitShiftClose
+                          ? "Setelah Shift Selesai"
+                          : "Langsung Sesuai Jam"}
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2.5">
-                  <p className="text-xs text-muted-foreground flex-1 min-w-[200px]">
+                  <p className="text-xs text-muted-foreground flex-1 min-w-[180px]">
+                    {dailyWaitShiftClose
+                      ? `Dikirim mulai ${String(dailyHour).padStart(2, "0")}:00 WIB setelah shift kasir ditutup.`
+                      : `Dikirim otomatis setiap hari pada ${String(dailyHour).padStart(2, "0")}:00 WIB.`}
+                    {lastDailySent ? ` Terkirim terakhir: ${lastDailySent}.` : ""}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={attachDailyPdf ? "default" : "outline"}
+                    className="h-9 min-w-[184px] rounded-xl px-4 text-xs font-semibold"
+                    onClick={() => setAttachDailyPdf((v) => !v)}
+                  >
+                    {attachDailyPdf ? "PDF Harian: Dilampirkan" : "PDF Harian: Teks Saja"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex flex-col justify-between space-y-4 rounded-2xl border border-border/70 bg-muted/15 p-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="size-4 text-primary" />
+                      <h3 className="font-semibold">3. Jadwal Laporan Mingguan</h3>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={weeklyEnabled ? "default" : "outline"}
+                      className="h-9 min-w-[96px] rounded-xl px-4 text-xs font-semibold"
+                      onClick={() => setWeeklyEnabled((v) => !v)}
+                    >
+                      {weeklyEnabled ? "Aktif" : "Mati"}
+                    </Button>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-1.5">
+                      <Label>Setiap Hari</Label>
+                      <Select
+                        value={weeklyDayOfWeek}
+                        onValueChange={(val) => val && setWeeklyDayOfWeek(val)}
+                      >
+                        <SelectTrigger className="w-full h-10 rounded-xl">
+                          <SelectValue>
+                            {WEEKDAY_OPTIONS.find((opt) => opt.value === weeklyDayOfWeek)?.label ??
+                              weeklyDayOfWeek}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {WEEKDAY_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid gap-1.5">
+                      <Label>Jam Kirim (WIB)</Label>
+                      <Select
+                        value={weeklyHour}
+                        onValueChange={(val) => val && setWeeklyHour(val)}
+                      >
+                        <SelectTrigger className="w-full h-10 rounded-xl">
+                          <SelectValue>
+                            {HOUR_OPTIONS.find((opt) => opt.value === weeklyHour)?.label ??
+                              `${String(weeklyHour).padStart(2, "0")}:00 WIB`}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HOUR_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2.5">
+                  <p className="text-xs text-muted-foreground flex-1 min-w-[180px]">
                     {weeklyDayOfWeek === "0"
                       ? "Hari Minggu akan mengirim rekap pekan berjalan yang berakhir hari ini."
                       : "Mengirim rekap pekan yang baru selesai (Senin - Minggu sebelumnya)."}
@@ -659,7 +764,7 @@ export function WhatsAppReportSettings() {
                     type="button"
                     size="sm"
                     variant={attachWeeklyPdf ? "default" : "outline"}
-                    className="h-9 min-w-[196px] rounded-xl px-4 text-xs font-semibold"
+                    className="h-9 min-w-[184px] rounded-xl px-4 text-xs font-semibold"
                     onClick={() => setAttachWeeklyPdf((v) => !v)}
                   >
                     {attachWeeklyPdf ? "PDF Mingguan: Dilampirkan" : "PDF Mingguan: Teks Saja"}
@@ -667,12 +772,13 @@ export function WhatsAppReportSettings() {
                 </div>
               </div>
 
-              <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/15 p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <FileText className="size-4 text-primary" />
-                    <h3 className="font-semibold">3. Jadwal Laporan Bulanan</h3>
-                  </div>
+              <div className="flex flex-col justify-between space-y-4 rounded-2xl border border-border/70 bg-muted/15 p-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <FileText className="size-4 text-primary" />
+                      <h3 className="font-semibold">4. Jadwal Laporan Bulanan</h3>
+                    </div>
                   <Button
                     type="button"
                     size="sm"
@@ -729,9 +835,10 @@ export function WhatsAppReportSettings() {
                     </Select>
                   </div>
                 </div>
+                </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2.5">
-                  <p className="text-xs text-muted-foreground flex-1 min-w-[200px]">
+                  <p className="text-xs text-muted-foreground flex-1 min-w-[180px]">
                     {Number(monthlyDayOfMonth) <= 15
                       ? "Tanggal 1–15 akan mengirim rekap lengkap bulan sebelumnya."
                       : "Tanggal 16–28 akan mengirim rekap bulan berjalan."}
@@ -741,7 +848,7 @@ export function WhatsAppReportSettings() {
                     type="button"
                     size="sm"
                     variant={attachMonthlyPdf ? "default" : "outline"}
-                    className="h-9 min-w-[196px] rounded-xl px-4 text-xs font-semibold"
+                    className="h-9 min-w-[184px] rounded-xl px-4 text-xs font-semibold"
                     onClick={() => setAttachMonthlyPdf((v) => !v)}
                   >
                     {attachMonthlyPdf ? "PDF Bulanan: Dilampirkan" : "PDF Bulanan: Teks Saja"}
@@ -786,6 +893,21 @@ export function WhatsAppReportSettings() {
                 type="button"
                 variant="outline"
                 disabled={sendingAction !== null || saving}
+                onClick={() => void handleSend("harian")}
+                className="rounded-full"
+              >
+                {sendingAction === "harian" ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 size-4" />
+                )}
+                Kirim Laporan Harian
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                disabled={sendingAction !== null || saving}
                 onClick={() => void handleSend("mingguan")}
                 className="rounded-full"
               >
@@ -810,6 +932,22 @@ export function WhatsAppReportSettings() {
                   <Send className="mr-2 size-4" />
                 )}
                 Kirim Laporan Bulanan
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  window.open(
+                    "/api/reports/profit-loss/pdf?mode=harian&download=1",
+                    "_blank",
+                    "noopener,noreferrer"
+                  );
+                }}
+                className="rounded-full"
+              >
+                <Download className="mr-2 size-4" />
+                Unduh PDF Harian
               </Button>
             </div>
           </form>

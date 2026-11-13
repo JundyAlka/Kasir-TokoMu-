@@ -17,6 +17,11 @@ export async function GET(request: Request) {
     await requireRoutePolicy("/api/reports/profit-loss/pdf", "GET");
     const { workspaceOwnerId } = await getRequestUser();
     const url = new URL(request.url);
+    const modeParam = url.searchParams.get("mode");
+    const mode =
+      modeParam === "harian" || modeParam === "mingguan" || modeParam === "bulanan"
+        ? modeParam
+        : "bulanan";
     const periodValue = url.searchParams.get("period") ?? "";
     const disposition = url.searchParams.get("download") === "1" ? "attachment" : "inline";
     const requestedNotes = url.searchParams
@@ -28,6 +33,7 @@ export async function GET(request: Request) {
     const { buffer, filename } = await buildProfitLossPdfBuffer({
       workspaceOwnerId,
       periodValue,
+      mode,
       requestedNotes,
       customModalAwal: parseCustomNumber(url.searchParams.get("modalAwal")),
       customInventaris: parseCustomNumber(url.searchParams.get("inventaris")),

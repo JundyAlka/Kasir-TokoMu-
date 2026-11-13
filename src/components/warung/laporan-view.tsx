@@ -3001,7 +3001,9 @@ export function LaporanView() {
   }
 
   function buildReportPdfUrl(download = false) {
-    const params = new URLSearchParams({ period });
+    const mode = reportRange;
+    const targetPeriod = mode === "bulanan" ? period : reportDate;
+    const params = new URLSearchParams({ mode, period: targetPeriod });
     if (download) {
       params.set("download", "1");
     }
@@ -3022,17 +3024,18 @@ export function LaporanView() {
   }
 
   function handleDownloadPdf() {
+    const targetPeriod = reportRange === "bulanan" ? period : reportDate;
     const link = document.createElement("a");
     link.href = buildReportPdfUrl(true);
-    link.download = `laporan-untung-rugi-${period}.pdf`;
+    link.download = `laporan-keuangan-${reportRange}-${targetPeriod}.pdf`;
     document.body.appendChild(link);
     link.click();
     link.remove();
   }
 
   async function handleSendToWhatsApp() {
-    const mode = reportRange === "mingguan" ? "mingguan" : "bulanan";
-    const targetPeriod = mode === "mingguan" ? reportDate : period;
+    const mode = reportRange;
+    const targetPeriod = mode === "bulanan" ? period : reportDate;
     setIsSendingWhatsapp(true);
     try {
       const res = await fetch("/api/whatsapp/send-report", {

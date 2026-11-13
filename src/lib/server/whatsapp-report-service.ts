@@ -20,11 +20,13 @@ import {
   getTopProductsForPeriod,
 } from "@/lib/server/reporting";
 import {
+  getJakartaDayRange,
   getJakartaWeekRange,
   JAKARTA_TIME_ZONE,
 } from "@/lib/server/timezone";
 
 export type WhatsAppTriggerType =
+  | "auto_daily"
   | "auto_weekly"
   | "auto_monthly"
   | "manual"
@@ -38,6 +40,10 @@ export interface WhatsAppReportConfigDto {
   hasApiKey: boolean;
   sessionId: string;
   recipients: string[];
+  dailyEnabled: boolean;
+  dailyHour: number;
+  attachDailyPdf: boolean;
+  dailyWaitShiftClose: boolean;
   weeklyEnabled: boolean;
   weeklyDayOfWeek: number;
   weeklyHour: number;
@@ -46,6 +52,7 @@ export interface WhatsAppReportConfigDto {
   monthlyDayOfMonth: number;
   monthlyHour: number;
   attachMonthlyPdf: boolean;
+  lastDailyPeriodSent: string | null;
   lastWeeklyPeriodSent: string | null;
   lastMonthlyPeriodSent: string | null;
   lastError: string | null;
@@ -59,6 +66,10 @@ export interface WhatsAppReportConfigUpdateInput {
   clearApiKey?: boolean;
   sessionId?: string;
   recipients?: string[] | string;
+  dailyEnabled?: boolean;
+  dailyHour?: number;
+  attachDailyPdf?: boolean;
+  dailyWaitShiftClose?: boolean;
   weeklyEnabled?: boolean;
   weeklyDayOfWeek?: number;
   weeklyHour?: number;
@@ -95,6 +106,10 @@ export async function ensureWhatsAppTables() {
       "api_key" text DEFAULT '' NOT NULL,
       "session_id" text DEFAULT 'tokomu-wa' NOT NULL,
       "recipients" jsonb DEFAULT '[]'::jsonb NOT NULL,
+      "daily_enabled" boolean DEFAULT true NOT NULL,
+      "daily_hour" integer DEFAULT 19 NOT NULL,
+      "attach_daily_pdf" boolean DEFAULT true NOT NULL,
+      "daily_wait_shift_close" boolean DEFAULT true NOT NULL,
       "weekly_enabled" boolean DEFAULT true NOT NULL,
       "weekly_day_of_week" integer DEFAULT 1 NOT NULL,
       "weekly_hour" integer DEFAULT 8 NOT NULL,
@@ -103,6 +118,7 @@ export async function ensureWhatsAppTables() {
       "monthly_day_of_month" integer DEFAULT 1 NOT NULL,
       "monthly_hour" integer DEFAULT 8 NOT NULL,
       "attach_monthly_pdf" boolean DEFAULT true NOT NULL,
+      "last_daily_period_sent" text,
       "last_weekly_period_sent" text,
       "last_monthly_period_sent" text,
       "last_error" text,
@@ -112,7 +128,12 @@ export async function ensureWhatsAppTables() {
   `);
   await pool.query(`
     ALTER TABLE "whatsapp_report_configs"
-      ADD COLUMN IF NOT EXISTS "attach_weekly_pdf" boolean DEFAULT true NOT NULL;
+      ADD COLUMN IF NOT EXISTS "attach_weekly_pdf" boolean DEFAULT true NOT NULL,
+      ADD COLUMN IF NOT EXISTS "daily_enabled" boolean DEFAULT true NOT NULL,
+      ADD COLUMN IF NOT EXISTS "daily_hour" integer DEFAULT 19 NOT NULL,
+      ADD COLUMN IF NOT EXISTS "attach_daily_pdf" boolean DEFAULT true NOT NULL,
+      ADD COLUMN IF NOT EXISTS "daily_wait_shift_close" boolean DEFAULT true NOT NULL,
+      ADD COLUMN IF NOT EXISTS "last_daily_period_sent" text;
   `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS "whatsapp_dispatch_logs" (
@@ -282,6 +303,10 @@ export async function getRawWhatsAppReportConfig(workspaceOwnerId: string) {
       apiKey: defaultApiKey,
       sessionId: defaultSessionId,
       recipients: initialRecipients,
+      dailyEnabled: true,
+      dailyHour: 19,
+      attachDailyPdf: true,
+      dailyWaitShiftClose: true,
       weeklyEnabled: true,
       weeklyDayOfWeek: 1,
       weeklyHour: 8,
@@ -290,6 +315,7 @@ export async function getRawWhatsAppReportConfig(workspaceOwnerId: string) {
       monthlyDayOfMonth: 1,
       monthlyHour: 8,
       attachMonthlyPdf: true,
+      lastDailyPeriodSent: null,
       lastWeeklyPeriodSent: null,
       lastMonthlyPeriodSent: null,
       lastError: null,
@@ -327,6 +353,10 @@ function toConfigDto(
     hasApiKey: row.apiKey.trim().length > 0,
     sessionId: row.sessionId,
     recipients: Array.isArray(row.recipients) ? row.recipients : [],
+    dailyEnabled: row.dailyEnabled,
+    dailyHour: row.dailyHour,
+    attachDailyPdf: row.attachDailyPdf,
+    dailyWaitShiftClose: row.dailyWaitShiftClose,
     weeklyEnabled: row.weeklyEnabled,
     weeklyDayOfWeek: row.weeklyDayOfWeek,
     weeklyHour: row.weeklyHour,
@@ -335,6 +365,7 @@ function toConfigDto(
     monthlyDayOfMonth: row.monthlyDayOfMonth,
     monthlyHour: row.monthlyHour,
     attachMonthlyPdf: row.attachMonthlyPdf,
+    lastDailyPeriodSent: row.lastDailyPeriodSent ?? null,
     lastWeeklyPeriodSent: row.lastWeeklyPeriodSent ?? null,
     lastMonthlyPeriodSent: row.lastMonthlyPeriodSent ?? null,
     lastError: row.lastError ?? null,
@@ -381,6 +412,11 @@ export async function updateWhatsAppReportConfig(
       ? parseWhatsAppRecipients(input.recipients)
       : existing.recipients;
 
+  const dailyHour =
+    input.dailyHour !== undefined
+      ? Math.min(23, Math.max(0, Math.round(input.dailyHour)))
+      : existing.dailyHour;
+
   const weeklyDayOfWeek =
     input.weeklyDayOfWeek !== undefined
       ? Math.min(6, Math.max(0, Math.round(input.weeklyDayOfWeek)))
@@ -410,6 +446,10 @@ export async function updateWhatsAppReportConfig(
       apiKey: nextApiKey,
       sessionId: nextSessionId,
       recipients: nextRecipients,
+      dailyEnabled: input.dailyEnabled ?? existing.dailyEnabled,
+      dailyHour,
+      attachDailyPdf: input.attachDailyPdf ?? existing.attachDailyPdf,
+      dailyWaitShiftClose: input.dailyWaitShiftClose ?? existing.dailyWaitShiftClose,
       weeklyEnabled: input.weeklyEnabled ?? existing.weeklyEnabled,
       weeklyDayOfWeek,
       weeklyHour,
@@ -435,6 +475,7 @@ export async function updateWhatsAppReportConfig(
         baseUrl: updated.baseUrl,
         sessionId: updated.sessionId,
         recipientsCount: updated.recipients.length,
+        dailyEnabled: updated.dailyEnabled,
         weeklyEnabled: updated.weeklyEnabled,
         monthlyEnabled: updated.monthlyEnabled,
       },
@@ -470,7 +511,24 @@ export async function listWhatsAppDispatchLogs(
   }));
 }
 
-function resolveRangeFromMode(mode: "mingguan" | "bulanan", periodValue: string) {
+function resolveRangeFromMode(
+  mode: "harian" | "mingguan" | "bulanan",
+  periodValue: string
+) {
+  if (mode === "harian") {
+    const cleanDate = /^\d{4}-\d{2}-\d{2}$/.test(periodValue)
+      ? periodValue
+      : getJakartaNowParts().dateKey;
+    const range = getJakartaDayRange(cleanDate);
+    return {
+      periodValue: cleanDate,
+      periodKey: cleanDate,
+      start: range.start,
+      end: range.end,
+      label: formatJakartaDateLabel(range.start),
+    };
+  }
+
   if (mode === "mingguan") {
     const cleanDate = /^\d{4}-\d{2}-\d{2}$/.test(periodValue)
       ? periodValue
@@ -511,32 +569,57 @@ function resolveRangeFromMode(mode: "mingguan" | "bulanan", periodValue: string)
 
 export async function buildWhatsAppReportMessage(
   workspaceOwnerId: string,
-  mode: "mingguan" | "bulanan",
+  mode: "harian" | "mingguan" | "bulanan",
   periodValue: string
 ) {
   const resolved = resolveRangeFromMode(mode, periodValue);
 
-  const [[profile], rollup, assetSummary, topProducts] = await Promise.all([
-    db
-      .select({
-        storeName: storeProfiles.storeName,
-        storeAddress: storeProfiles.storeAddress,
-        profitSharePcmPct: storeProfiles.profitSharePcmPct,
-        profitShareReservePct: storeProfiles.profitShareReservePct,
-      })
-      .from(storeProfiles)
-      .where(eq(storeProfiles.userId, workspaceOwnerId))
-      .limit(1),
-    getReportRollupByMode(workspaceOwnerId, mode, resolved.periodValue),
-    getAssetCapitalSummary(workspaceOwnerId),
-    getTopProductsForPeriod(workspaceOwnerId, resolved.start, resolved.end, 3),
-  ]);
+  const [[profile], rollup, assetSummary, topProducts, dailyShiftRes] =
+    await Promise.all([
+      db
+        .select({
+          storeName: storeProfiles.storeName,
+          storeAddress: storeProfiles.storeAddress,
+          profitSharePcmPct: storeProfiles.profitSharePcmPct,
+          profitShareReservePct: storeProfiles.profitShareReservePct,
+        })
+        .from(storeProfiles)
+        .where(eq(storeProfiles.userId, workspaceOwnerId))
+        .limit(1),
+      getReportRollupByMode(workspaceOwnerId, mode, resolved.periodValue),
+      getAssetCapitalSummary(workspaceOwnerId),
+      getTopProductsForPeriod(workspaceOwnerId, resolved.start, resolved.end, 3),
+      mode === "harian"
+        ? pool.query<{
+            status: string;
+            endedAt: string | null;
+            closingCash: string | null;
+            closingCoins: string | null;
+            closingSavings: string | null;
+          }>(
+            `select
+               status,
+               ended_at as "endedAt",
+               closing_cash::text as "closingCash",
+               closing_coins::text as "closingCoins",
+               closing_savings::text as "closingSavings"
+             from shift_sessions
+             where workspace_owner_id = $1
+               and coalesce(opened_at, started_at) >= $2::timestamptz
+               and coalesce(opened_at, started_at) < $3::timestamptz
+             order by coalesce(closed_at, ended_at, opened_at, started_at) desc`,
+            [workspaceOwnerId, resolved.start, resolved.end]
+          )
+        : Promise.resolve({ rows: [] }),
+    ]);
 
   const storeName = profile?.storeName?.trim() || "TokoMu";
   const title =
-    mode === "mingguan"
-      ? `📊 *LAPORAN MINGGUAN - ${storeName.toUpperCase()}*`
-      : `📑 *LAPORAN BULANAN - ${storeName.toUpperCase()}*`;
+    mode === "harian"
+      ? `📅 *LAPORAN HARIAN - ${storeName.toUpperCase()}*`
+      : mode === "mingguan"
+        ? `📊 *LAPORAN MINGGUAN - ${storeName.toUpperCase()}*`
+        : `📑 *LAPORAN BULANAN - ${storeName.toUpperCase()}*`;
 
   const lines: string[] = [
     title,
@@ -579,6 +662,27 @@ export async function buildWhatsAppReportMessage(
     );
   }
 
+  if (mode === "harian" && dailyShiftRes.rows.length > 0) {
+    const closedCount = dailyShiftRes.rows.filter(
+      (s) => s.status === "closed" || Boolean(s.endedAt)
+    ).length;
+    const openCount = dailyShiftRes.rows.length - closedCount;
+    const latestClosed = dailyShiftRes.rows.find(
+      (s) => s.status === "closed" || Boolean(s.endedAt)
+    );
+    lines.push("", "🔐 *Rekap Shift Hari Ini*");
+    lines.push(
+      `• Total Shift: ${dailyShiftRes.rows.length} (${closedCount} selesai${openCount > 0 ? `, ${openCount} masih buka` : ""})`
+    );
+    if (latestClosed) {
+      const cashEnd =
+        Number(latestClosed.closingCash || 0) +
+        Number(latestClosed.closingCoins || 0) +
+        Number(latestClosed.closingSavings || 0);
+      lines.push(`• Saldo Kas Akhir Shift: ${formatRupiah(cashEnd)}`);
+    }
+  }
+
   if (topProducts.length > 0) {
     lines.push("", "🏆 *Produk Terlaris*");
     topProducts.forEach((prod, index) => {
@@ -605,7 +709,7 @@ export async function buildWhatsAppReportMessage(
 export async function dispatchWhatsAppReport(params: {
   workspaceOwnerId: string;
   actorUserId: string;
-  mode: "mingguan" | "bulanan";
+  mode: "harian" | "mingguan" | "bulanan";
   periodValue: string;
   triggerType: WhatsAppTriggerType;
   attachPdf?: boolean;
@@ -633,9 +737,11 @@ export async function dispatchWhatsAppReport(params: {
 
   const shouldAttachPdf =
     params.attachPdf ??
-    (params.mode === "mingguan"
-      ? config.attachWeeklyPdf
-      : config.attachMonthlyPdf);
+    (params.mode === "harian"
+      ? config.attachDailyPdf
+      : params.mode === "mingguan"
+        ? config.attachWeeklyPdf
+        : config.attachMonthlyPdf);
 
   let pdfPayload: { buffer: Buffer; filename: string } | null = null;
   const warnings: string[] = [];
@@ -687,7 +793,7 @@ export async function dispatchWhatsAppReport(params: {
           base64: pdfPayload.buffer.toString("base64"),
           filename: pdfPayload.filename,
           mimetype: "application/pdf",
-          caption: `Lampiran PDF Laporan Keuangan ${params.mode === "mingguan" ? "Mingguan" : "Bulanan"} (${report.periodLabel})`,
+          caption: `Lampiran PDF Laporan Keuangan ${params.mode === "harian" ? "Harian" : params.mode === "mingguan" ? "Mingguan" : "Bulanan"} (${report.periodLabel})`,
         });
         pdfSuccessCount += 1;
       } catch (error) {
@@ -732,7 +838,12 @@ export async function dispatchWhatsAppReport(params: {
   };
 
   if (status !== "failed") {
-    if (params.mode === "mingguan" && params.triggerType === "auto_weekly") {
+    if (params.mode === "harian" && params.triggerType === "auto_daily") {
+      updateFields.lastDailyPeriodSent = report.periodKey;
+    } else if (
+      params.mode === "mingguan" &&
+      params.triggerType === "auto_weekly"
+    ) {
       updateFields.lastWeeklyPeriodSent = report.periodKey;
     } else if (
       params.mode === "bulanan" &&
@@ -914,6 +1025,24 @@ export async function processScheduledWhatsAppReports(now = new Date()) {
       processed += 1;
       if (!cfg.recipients || cfg.recipients.length === 0) continue;
 
+      const dailyCandidate =
+        cfg.dailyEnabled &&
+        parts.hour >= cfg.dailyHour &&
+        cfg.lastDailyPeriodSent !== parts.dateKey;
+
+      let dailyDue = dailyCandidate;
+      if (dailyCandidate && cfg.dailyWaitShiftClose) {
+        const openShiftResult = await pool.query<{ id: string }>(
+          `select id
+           from shift_sessions
+           where workspace_owner_id = $1
+             and (ended_at is null or status = 'open')
+           limit 1`,
+          [cfg.workspaceOwnerId]
+        );
+        dailyDue = openShiftResult.rows.length === 0;
+      }
+
       const weeklyTargetDateKey = getScheduledWeeklyTargetDateKey(
         parts,
         cfg.weeklyDayOfWeek
@@ -935,7 +1064,7 @@ export async function processScheduledWhatsAppReports(now = new Date()) {
         parts.hour >= cfg.monthlyHour &&
         cfg.lastMonthlyPeriodSent !== monthlyTargetPeriod;
 
-      if (!weeklyDue && !monthlyDue) continue;
+      if (!dailyDue && !weeklyDue && !monthlyDue) continue;
 
       try {
         const sessionStatus = await getOpenWaSessionStatus({
@@ -961,6 +1090,24 @@ export async function processScheduledWhatsAppReports(now = new Date()) {
           .where(eq(whatsappReportConfigs.workspaceOwnerId, cfg.workspaceOwnerId));
         errors.push(`${cfg.workspaceOwnerId}: ${msg}`);
         continue;
+      }
+
+      if (dailyDue) {
+        try {
+          await dispatchWhatsAppReport({
+            workspaceOwnerId: cfg.workspaceOwnerId,
+            actorUserId: cfg.workspaceOwnerId,
+            mode: "harian",
+            periodValue: parts.dateKey,
+            triggerType: "auto_daily",
+            attachPdf: cfg.attachDailyPdf,
+          });
+          sent.push(`${cfg.workspaceOwnerId}:daily:${parts.dateKey}`);
+        } catch (error) {
+          errors.push(
+            `${cfg.workspaceOwnerId}:daily: ${error instanceof Error ? error.message : "gagal"}`
+          );
+        }
       }
 
       if (weeklyDue) {

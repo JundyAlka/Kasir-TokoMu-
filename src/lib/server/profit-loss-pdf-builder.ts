@@ -18,6 +18,7 @@ import {
 } from "@/lib/server/reporting";
 import {
   getJakartaDateKey,
+  getJakartaDayRange,
   getJakartaWeekRange,
   JAKARTA_TIME_ZONE,
 } from "@/lib/server/timezone";
@@ -25,7 +26,7 @@ import {
 export interface BuildProfitLossPdfOptions {
   workspaceOwnerId: string;
   periodValue: string;
-  mode?: "mingguan" | "bulanan";
+  mode?: "harian" | "mingguan" | "bulanan";
   requestedNotes?: string[];
   customModalAwal?: number | null;
   customInventaris?: number | null;
@@ -47,7 +48,23 @@ function formatShortDate(dateInput: string | Date) {
   }).format(new Date(dateInput));
 }
 
-function parseReportPeriod(value: string, mode: "mingguan" | "bulanan") {
+function parseReportPeriod(
+  value: string,
+  mode: "harian" | "mingguan" | "bulanan"
+) {
+  if (mode === "harian") {
+    const cleanDate = /^\d{4}-\d{2}-\d{2}$/.test(value ?? "")
+      ? value
+      : getJakartaDateKey();
+    const range = getJakartaDayRange(cleanDate);
+    return {
+      mode,
+      rollupValue: cleanDate,
+      range,
+      label: formatShortDate(range.start),
+    };
+  }
+
   if (mode === "mingguan") {
     const cleanDate = /^\d{4}-\d{2}-\d{2}$/.test(value ?? "")
       ? value
@@ -465,9 +482,11 @@ export async function buildProfitLossPdfBuffer(
 
   const buffer = await renderToBuffer(ProfitLossReportDocument({ data }));
   const prefix =
-    mode === "mingguan"
-      ? "laporan-keuangan-mingguan"
-      : "laporan-keuangan-bulanan";
+    mode === "harian"
+      ? "laporan-keuangan-harian"
+      : mode === "mingguan"
+        ? "laporan-keuangan-mingguan"
+        : "laporan-keuangan-bulanan";
   const filename = `${prefix}-${cleanFilename(period.label)}.pdf`;
 
   return {

@@ -12,7 +12,7 @@ export type ProfitLossPdfData = {
     label: string;
     start: string;
     end: string;
-    reportKind?: "mingguan" | "bulanan";
+    reportKind?: "harian" | "mingguan" | "bulanan";
   };
   identity: {
     storeName: string;
@@ -458,7 +458,12 @@ export function ProfitLossReportDocument({
   const netMargin =
     financial.revenue > 0 ? `${Math.round((financial.netProfit / financial.revenue) * 1000) / 10}%` : "0%";
 
-  const kindLabel = data.period.reportKind === "mingguan" ? "Mingguan" : "Bulanan";
+  const kindLabel =
+    data.period.reportKind === "harian"
+      ? "Harian"
+      : data.period.reportKind === "mingguan"
+        ? "Mingguan"
+        : "Bulanan";
 
   return (
     <Document title={`Laporan Keuangan & Kinerja ${kindLabel} ${data.period.label} - ${data.identity.storeName}`}>
