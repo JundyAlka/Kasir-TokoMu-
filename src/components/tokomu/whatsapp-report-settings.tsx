@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  Calendar,
   CheckCircle2,
   Clock,
   Download,
@@ -573,14 +574,14 @@ export function WhatsAppReportSettings() {
                   ) : null}
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     disabled={sessionBusy}
                     onClick={() => void checkSession("status")}
-                    className="rounded-full"
+                    className="rounded-xl px-2 text-xs h-9 font-medium"
                   >
                     {sessionBusy ? (
                       <Loader2 className="mr-1.5 size-3.5 animate-spin" />
@@ -595,10 +596,10 @@ export function WhatsAppReportSettings() {
                     size="sm"
                     disabled={sessionBusy}
                     onClick={() => void checkSession("start")}
-                    className="rounded-full"
+                    className="rounded-xl px-2 text-xs h-9 font-medium"
                   >
                     <QrCode className="mr-1.5 size-3.5" />
-                    Mulai / Scan QR
+                    Mulai QR
                   </Button>
                   <Button
                     type="button"
@@ -606,42 +607,44 @@ export function WhatsAppReportSettings() {
                     size="sm"
                     disabled={sessionBusy}
                     onClick={() => void checkSession("qr")}
-                    className="rounded-full"
+                    className="rounded-xl px-2 text-xs h-9 font-medium"
                   >
-                    Refresh QR
+                    <RefreshCw className="mr-1.5 size-3.5" />
+                    Refresh
                   </Button>
                 </div>
               </div>
             </div>
 
             {/* Schedule Configuration */}
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="flex flex-col justify-between space-y-4 rounded-2xl border border-border/70 bg-muted/15 p-4">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Clock className="size-4 text-primary" />
-                      <h3 className="font-semibold">2. Jadwal Laporan Harian</h3>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {/* Card 1: Harian */}
+              <div className="flex flex-col justify-between rounded-2xl border border-border/70 bg-card/60 p-4 transition-all shadow-sm">
+                <div className="space-y-3.5">
+                  <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Clock className="size-4 text-primary shrink-0" />
+                      <h3 className="text-sm font-semibold truncate sm:text-base">2. Laporan Harian</h3>
                     </div>
                     <Button
                       type="button"
                       size="sm"
                       variant={dailyEnabled ? "default" : "outline"}
-                      className="h-9 min-w-[96px] rounded-xl px-4 text-xs font-semibold"
+                      className="h-7 px-3 rounded-full text-xs font-semibold shrink-0"
                       onClick={() => setDailyEnabled((v) => !v)}
                     >
                       {dailyEnabled ? "Aktif" : "Mati"}
                     </Button>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid grid-cols-2 gap-2.5">
                     <div className="grid gap-1.5">
-                      <Label>Jam Kirim (WIB)</Label>
+                      <Label className="text-xs text-muted-foreground font-medium">Jam Kirim (WIB)</Label>
                       <Select
                         value={dailyHour}
                         onValueChange={(val) => val && setDailyHour(val)}
                       >
-                        <SelectTrigger className="w-full h-10 rounded-xl">
+                        <SelectTrigger className="w-full h-10 rounded-xl text-xs font-medium">
                           <SelectValue>
                             {HOUR_OPTIONS.find((opt) => opt.value === dailyHour)?.label ??
                               `${String(dailyHour).padStart(2, "0")}:00 WIB`}
@@ -658,66 +661,69 @@ export function WhatsAppReportSettings() {
                     </div>
 
                     <div className="grid gap-1.5">
-                      <Label>Aturan Shift</Label>
-                      <Button
-                        type="button"
-                        variant={dailyWaitShiftClose ? "default" : "outline"}
-                        className="h-10 w-full rounded-xl px-3 text-xs font-semibold"
-                        onClick={() => setDailyWaitShiftClose((v) => !v)}
+                      <Label className="text-xs text-muted-foreground font-medium">Aturan Shift</Label>
+                      <Select
+                        value={dailyWaitShiftClose ? "shift_close" : "exact_hour"}
+                        onValueChange={(val) => setDailyWaitShiftClose(val === "shift_close")}
                       >
-                        {dailyWaitShiftClose
-                          ? "Setelah Shift Selesai"
-                          : "Langsung Sesuai Jam"}
-                      </Button>
+                        <SelectTrigger className="w-full h-10 rounded-xl text-xs font-medium">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="shift_close">Setelah Shift</SelectItem>
+                          <SelectItem value="exact_hour">Sesuai Jam</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2.5">
-                  <p className="text-xs text-muted-foreground flex-1 min-w-[180px]">
+                <div className="mt-4 pt-2.5 space-y-3 border-t border-border/40">
+                  <p className="text-xs text-muted-foreground min-h-[32px] leading-relaxed">
                     {dailyWaitShiftClose
-                      ? `Dikirim mulai ${String(dailyHour).padStart(2, "0")}:00 WIB setelah shift kasir ditutup.`
-                      : `Dikirim otomatis setiap hari pada ${String(dailyHour).padStart(2, "0")}:00 WIB.`}
-                    {lastDailySent ? ` Terkirim terakhir: ${lastDailySent}.` : ""}
+                      ? `Dikirim mulai ${String(dailyHour).padStart(2, "0")}:00 WIB setelah shift ditutup.`
+                      : `Dikirim otomatis setiap hari jam ${String(dailyHour).padStart(2, "0")}:00 WIB.`}
+                    {lastDailySent ? ` (Terkirim: ${lastDailySent})` : ""}
                   </p>
                   <Button
                     type="button"
                     size="sm"
                     variant={attachDailyPdf ? "default" : "outline"}
-                    className="h-9 min-w-[184px] rounded-xl px-4 text-xs font-semibold"
+                    className="w-full h-9 rounded-xl text-xs font-semibold shadow-none"
                     onClick={() => setAttachDailyPdf((v) => !v)}
                   >
-                    {attachDailyPdf ? "PDF Harian: Dilampirkan" : "PDF Harian: Teks Saja"}
+                    {attachDailyPdf ? "✓ PDF Harian: Dilampirkan" : "○ PDF Harian: Teks Saja"}
                   </Button>
                 </div>
               </div>
 
-              <div className="flex flex-col justify-between space-y-4 rounded-2xl border border-border/70 bg-muted/15 p-4">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Clock className="size-4 text-primary" />
-                      <h3 className="font-semibold">3. Jadwal Laporan Mingguan</h3>
+              {/* Card 2: Mingguan */}
+              <div className="flex flex-col justify-between rounded-2xl border border-border/70 bg-card/60 p-4 transition-all shadow-sm">
+                <div className="space-y-3.5">
+                  <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Clock className="size-4 text-primary shrink-0" />
+                      <h3 className="text-sm font-semibold truncate sm:text-base">3. Laporan Mingguan</h3>
                     </div>
                     <Button
                       type="button"
                       size="sm"
                       variant={weeklyEnabled ? "default" : "outline"}
-                      className="h-9 min-w-[96px] rounded-xl px-4 text-xs font-semibold"
+                      className="h-7 px-3 rounded-full text-xs font-semibold shrink-0"
                       onClick={() => setWeeklyEnabled((v) => !v)}
                     >
                       {weeklyEnabled ? "Aktif" : "Mati"}
                     </Button>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid grid-cols-2 gap-2.5">
                     <div className="grid gap-1.5">
-                      <Label>Setiap Hari</Label>
+                      <Label className="text-xs text-muted-foreground font-medium">Setiap Hari</Label>
                       <Select
                         value={weeklyDayOfWeek}
                         onValueChange={(val) => val && setWeeklyDayOfWeek(val)}
                       >
-                        <SelectTrigger className="w-full h-10 rounded-xl">
+                        <SelectTrigger className="w-full h-10 rounded-xl text-xs font-medium">
                           <SelectValue>
                             {WEEKDAY_OPTIONS.find((opt) => opt.value === weeklyDayOfWeek)?.label ??
                               weeklyDayOfWeek}
@@ -734,12 +740,12 @@ export function WhatsAppReportSettings() {
                     </div>
 
                     <div className="grid gap-1.5">
-                      <Label>Jam Kirim (WIB)</Label>
+                      <Label className="text-xs text-muted-foreground font-medium">Jam Kirim (WIB)</Label>
                       <Select
                         value={weeklyHour}
                         onValueChange={(val) => val && setWeeklyHour(val)}
                       >
-                        <SelectTrigger className="w-full h-10 rounded-xl">
+                        <SelectTrigger className="w-full h-10 rounded-xl text-xs font-medium">
                           <SelectValue>
                             {HOUR_OPTIONS.find((opt) => opt.value === weeklyHour)?.label ??
                               `${String(weeklyHour).padStart(2, "0")}:00 WIB`}
@@ -757,105 +763,106 @@ export function WhatsAppReportSettings() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2.5">
-                  <p className="text-xs text-muted-foreground flex-1 min-w-[180px]">
+                <div className="mt-4 pt-2.5 space-y-3 border-t border-border/40">
+                  <p className="text-xs text-muted-foreground min-h-[32px] leading-relaxed">
                     {weeklyDayOfWeek === "0"
-                      ? "Hari Minggu akan mengirim rekap pekan berjalan yang berakhir hari ini."
-                      : "Mengirim rekap pekan yang baru selesai (Senin - Minggu sebelumnya)."}
-                    {lastWeeklySent ? ` Terkirim terakhir: ${lastWeeklySent}.` : ""}
+                      ? "Hari Minggu kirim rekap pekan yang berakhir hari ini."
+                      : "Kirim rekap pekan yang baru selesai (Senin–Minggu lalu)."}
+                    {lastWeeklySent ? ` (Terkirim: ${lastWeeklySent})` : ""}
                   </p>
                   <Button
                     type="button"
                     size="sm"
                     variant={attachWeeklyPdf ? "default" : "outline"}
-                    className="h-9 min-w-[184px] rounded-xl px-4 text-xs font-semibold"
+                    className="w-full h-9 rounded-xl text-xs font-semibold shadow-none"
                     onClick={() => setAttachWeeklyPdf((v) => !v)}
                   >
-                    {attachWeeklyPdf ? "PDF Mingguan: Dilampirkan" : "PDF Mingguan: Teks Saja"}
+                    {attachWeeklyPdf ? "✓ PDF Mingguan: Dilampirkan" : "○ PDF Mingguan: Teks Saja"}
                   </Button>
                 </div>
               </div>
 
-              <div className="flex flex-col justify-between space-y-4 rounded-2xl border border-border/70 bg-muted/15 p-4">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <FileText className="size-4 text-primary" />
-                      <h3 className="font-semibold">4. Jadwal Laporan Bulanan</h3>
+              {/* Card 3: Bulanan */}
+              <div className="flex flex-col justify-between rounded-2xl border border-border/70 bg-card/60 p-4 transition-all shadow-sm">
+                <div className="space-y-3.5">
+                  <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="size-4 text-primary shrink-0" />
+                      <h3 className="text-sm font-semibold truncate sm:text-base">4. Laporan Bulanan</h3>
                     </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={monthlyEnabled ? "default" : "outline"}
-                    className="h-9 min-w-[96px] rounded-xl px-4 text-xs font-semibold"
-                    onClick={() => setMonthlyEnabled((v) => !v)}
-                  >
-                    {monthlyEnabled ? "Aktif" : "Mati"}
-                  </Button>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-1.5">
-                    <Label>Setiap Tanggal</Label>
-                    <Select
-                      value={monthlyDayOfMonth}
-                      onValueChange={(val) => val && setMonthlyDayOfMonth(val)}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={monthlyEnabled ? "default" : "outline"}
+                      className="h-7 px-3 rounded-full text-xs font-semibold shrink-0"
+                      onClick={() => setMonthlyEnabled((v) => !v)}
                     >
-                      <SelectTrigger className="w-full h-10 rounded-xl">
-                        <SelectValue>
-                          {MONTH_DAY_OPTIONS.find((opt) => opt.value === monthlyDayOfMonth)
-                            ?.label ?? `Tanggal ${monthlyDayOfMonth}`}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {MONTH_DAY_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      {monthlyEnabled ? "Aktif" : "Mati"}
+                    </Button>
                   </div>
 
-                  <div className="grid gap-1.5">
-                    <Label>Jam Kirim (WIB)</Label>
-                    <Select
-                      value={monthlyHour}
-                      onValueChange={(val) => val && setMonthlyHour(val)}
-                    >
-                      <SelectTrigger className="w-full h-10 rounded-xl">
-                        <SelectValue>
-                          {HOUR_OPTIONS.find((opt) => opt.value === monthlyHour)?.label ??
-                            `${String(monthlyHour).padStart(2, "0")}:00 WIB`}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {HOUR_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs text-muted-foreground font-medium">Setiap Tanggal</Label>
+                      <Select
+                        value={monthlyDayOfMonth}
+                        onValueChange={(val) => val && setMonthlyDayOfMonth(val)}
+                      >
+                        <SelectTrigger className="w-full h-10 rounded-xl text-xs font-medium">
+                          <SelectValue>
+                            {MONTH_DAY_OPTIONS.find((opt) => opt.value === monthlyDayOfMonth)
+                              ?.label ?? `Tanggal ${monthlyDayOfMonth}`}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MONTH_DAY_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs text-muted-foreground font-medium">Jam Kirim (WIB)</Label>
+                      <Select
+                        value={monthlyHour}
+                        onValueChange={(val) => val && setMonthlyHour(val)}
+                      >
+                        <SelectTrigger className="w-full h-10 rounded-xl text-xs font-medium">
+                          <SelectValue>
+                            {HOUR_OPTIONS.find((opt) => opt.value === monthlyHour)?.label ??
+                              `${String(monthlyHour).padStart(2, "0")}:00 WIB`}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HOUR_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
-                </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2.5">
-                  <p className="text-xs text-muted-foreground flex-1 min-w-[180px]">
+                <div className="mt-4 pt-2.5 space-y-3 border-t border-border/40">
+                  <p className="text-xs text-muted-foreground min-h-[32px] leading-relaxed">
                     {Number(monthlyDayOfMonth) <= 15
-                      ? "Tanggal 1–15 akan mengirim rekap lengkap bulan sebelumnya."
-                      : "Tanggal 16–28 akan mengirim rekap bulan berjalan."}
-                    {lastMonthlySent ? ` Terkirim terakhir: ${lastMonthlySent}.` : ""}
+                      ? "Tgl 1–15 kirim rekap lengkap bulan sebelumnya."
+                      : "Tgl 16–28 kirim rekap bulan berjalan saat ini."}
+                    {lastMonthlySent ? ` (Terkirim: ${lastMonthlySent})` : ""}
                   </p>
                   <Button
                     type="button"
                     size="sm"
                     variant={attachMonthlyPdf ? "default" : "outline"}
-                    className="h-9 min-w-[184px] rounded-xl px-4 text-xs font-semibold"
+                    className="w-full h-9 rounded-xl text-xs font-semibold shadow-none"
                     onClick={() => setAttachMonthlyPdf((v) => !v)}
                   >
-                    {attachMonthlyPdf ? "PDF Bulanan: Dilampirkan" : "PDF Bulanan: Teks Saja"}
+                    {attachMonthlyPdf ? "✓ PDF Bulanan: Dilampirkan" : "○ PDF Bulanan: Teks Saja"}
                   </Button>
                 </div>
               </div>
@@ -867,111 +874,135 @@ export function WhatsAppReportSettings() {
               </div>
             ) : null}
 
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <Button type="submit" disabled={saving} className="rounded-full">
-                  {saving ? (
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                  ) : (
-                    <Save className="mr-2 size-4" />
-                  )}
-                  Simpan Pengaturan OpenWA
-                </Button>
+            {/* Action Buttons & Manual Dispatch Toolbar */}
+            <div className="space-y-4 pt-2">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded-xl h-11 px-5 font-semibold shadow-sm"
+                  >
+                    {saving ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 size-4" />
+                    )}
+                    Simpan Pengaturan OpenWA
+                  </Button>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={sendingAction !== null || saving}
-                  onClick={() => void handleSend("test")}
-                  className="rounded-full"
-                >
-                  {sendingAction === "test" ? (
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="mr-2 size-4" />
-                  )}
-                  Kirim Uji Coba WA
-                </Button>
-
-                <div className="flex items-center gap-2 rounded-full border border-border/70 bg-muted/20 px-3 py-1">
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    Tgl Harian:
-                  </span>
-                  <Input
-                    type="date"
-                    value={manualReportDate}
-                    onChange={(e) => setManualReportDate(e.target.value)}
-                    className="h-7 w-36 border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
-                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={sendingAction !== null || saving}
+                    onClick={() => void handleSend("test")}
+                    className="rounded-xl h-11 px-4 font-medium"
+                  >
+                    {sendingAction === "test" ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="mr-2 size-4 text-emerald-600" />
+                    )}
+                    Kirim Uji Coba WA
+                  </Button>
                 </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={sendingAction !== null || saving}
-                  onClick={() => void handleSend("harian")}
-                  className="rounded-full"
-                >
-                  {sendingAction === "harian" ? (
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                  ) : (
-                    <Send className="mr-2 size-4" />
-                  )}
-                  Kirim Laporan Harian
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={sendingAction !== null || saving}
-                  onClick={() => void handleSend("mingguan")}
-                  className="rounded-full"
-                >
-                  {sendingAction === "mingguan" ? (
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                  ) : (
-                    <Send className="mr-2 size-4" />
-                  )}
-                  Kirim Laporan Mingguan
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={sendingAction !== null || saving}
-                  onClick={() => void handleSend("bulanan")}
-                  className="rounded-full"
-                >
-                  {sendingAction === "bulanan" ? (
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                  ) : (
-                    <Send className="mr-2 size-4" />
-                  )}
-                  Kirim Laporan Bulanan
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    const periodQuery = manualReportDate
-                      ? `&period=${manualReportDate}`
-                      : "";
-                    window.open(
-                      `/api/reports/profit-loss/pdf?mode=harian${periodQuery}&download=1`,
-                      "_blank",
-                      "noopener,noreferrer"
-                    );
-                  }}
-                  className="rounded-full"
-                >
-                  <Download className="mr-2 size-4" />
-                  Unduh PDF Harian
-                </Button>
               </div>
 
-              <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2 text-xs text-muted-foreground">
+              {/* Dedicated Toolbar for Manual Dispatch & PDF Download */}
+              <div className="rounded-2xl border border-border/70 bg-muted/20 p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2">
+                    <Send className="size-4 text-primary" />
+                    <span className="text-xs sm:text-sm font-semibold">
+                      Uji Kirim Manual &amp; Unduh PDF
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-background/90 px-3 py-1.5 shadow-sm">
+                    <Calendar className="size-3.5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground whitespace-nowrap font-medium">
+                      Tgl Acuan:
+                    </span>
+                    <Input
+                      type="date"
+                      value={manualReportDate}
+                      onChange={(e) => setManualReportDate(e.target.value)}
+                      className="h-6 w-32 border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0 font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={sendingAction !== null || saving}
+                    onClick={() => void handleSend("harian")}
+                    className="rounded-xl h-10 text-xs font-semibold shadow-none"
+                  >
+                    {sendingAction === "harian" ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <Send className="mr-1.5 size-3.5" />
+                    )}
+                    Kirim Harian
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={sendingAction !== null || saving}
+                    onClick={() => void handleSend("mingguan")}
+                    className="rounded-xl h-10 text-xs font-semibold shadow-none"
+                  >
+                    {sendingAction === "mingguan" ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <Send className="mr-1.5 size-3.5" />
+                    )}
+                    Kirim Mingguan
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={sendingAction !== null || saving}
+                    onClick={() => void handleSend("bulanan")}
+                    className="rounded-xl h-10 text-xs font-semibold shadow-none"
+                  >
+                    {sendingAction === "bulanan" ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <Send className="mr-1.5 size-3.5" />
+                    )}
+                    Kirim Bulanan
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const periodQuery = manualReportDate
+                        ? `&period=${manualReportDate}`
+                        : "";
+                      window.open(
+                        `/api/reports/profit-loss/pdf?mode=harian${periodQuery}&download=1`,
+                        "_blank",
+                        "noopener,noreferrer"
+                      );
+                    }}
+                    className="rounded-xl h-10 text-xs font-semibold border-primary/40 text-primary hover:bg-primary/10"
+                  >
+                    <Download className="mr-1.5 size-3.5" />
+                    Unduh PDF Harian
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2 text-xs text-muted-foreground leading-relaxed">
                 <strong>Informasi Real-time Laporan Harian:</strong> Laporan harian membaca transaksi kasir secara langsung (live) meski shift belum tutup buku. Jika belum ada transaksi pada tanggal yang dipilih, omzet tercatat Rp 0 (normal dan aman).
               </div>
             </div>
