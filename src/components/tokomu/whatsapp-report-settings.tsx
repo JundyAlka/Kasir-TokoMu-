@@ -142,6 +142,9 @@ export function WhatsAppReportSettings() {
   const [dailyHour, setDailyHour] = useState("19");
   const [attachDailyPdf, setAttachDailyPdf] = useState(true);
   const [dailyWaitShiftClose, setDailyWaitShiftClose] = useState(true);
+  const [manualReportDate, setManualReportDate] = useState(() =>
+    new Date().toLocaleDateString("en-CA")
+  );
 
   const [weeklyEnabled, setWeeklyEnabled] = useState(true);
   const [weeklyDayOfWeek, setWeeklyDayOfWeek] = useState("1");
@@ -351,6 +354,7 @@ export function WhatsAppReportSettings() {
           : {
               action: "report",
               mode: action,
+              period: action === "harian" ? manualReportDate : undefined,
               attachPdf:
                 action === "harian"
                   ? attachDailyPdf
@@ -864,91 +868,112 @@ export function WhatsAppReportSettings() {
             ) : null}
 
             {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-3">
-              <Button type="submit" disabled={saving} className="rounded-full">
-                {saving ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 size-4" />
-                )}
-                Simpan Pengaturan OpenWA
-              </Button>
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="submit" disabled={saving} className="rounded-full">
+                  {saving ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 size-4" />
+                  )}
+                  Simpan Pengaturan OpenWA
+                </Button>
 
-              <Button
-                type="button"
-                variant="outline"
-                disabled={sendingAction !== null || saving}
-                onClick={() => void handleSend("test")}
-                className="rounded-full"
-              >
-                {sendingAction === "test" ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="mr-2 size-4" />
-                )}
-                Kirim Uji Coba WA
-              </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={sendingAction !== null || saving}
+                  onClick={() => void handleSend("test")}
+                  className="rounded-full"
+                >
+                  {sendingAction === "test" ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="mr-2 size-4" />
+                  )}
+                  Kirim Uji Coba WA
+                </Button>
 
-              <Button
-                type="button"
-                variant="outline"
-                disabled={sendingAction !== null || saving}
-                onClick={() => void handleSend("harian")}
-                className="rounded-full"
-              >
-                {sendingAction === "harian" ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 size-4" />
-                )}
-                Kirim Laporan Harian
-              </Button>
+                <div className="flex items-center gap-2 rounded-full border border-border/70 bg-muted/20 px-3 py-1">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    Tgl Harian:
+                  </span>
+                  <Input
+                    type="date"
+                    value={manualReportDate}
+                    onChange={(e) => setManualReportDate(e.target.value)}
+                    className="h-7 w-36 border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
+                  />
+                </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                disabled={sendingAction !== null || saving}
-                onClick={() => void handleSend("mingguan")}
-                className="rounded-full"
-              >
-                {sendingAction === "mingguan" ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 size-4" />
-                )}
-                Kirim Laporan Mingguan
-              </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={sendingAction !== null || saving}
+                  onClick={() => void handleSend("harian")}
+                  className="rounded-full"
+                >
+                  {sendingAction === "harian" ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 size-4" />
+                  )}
+                  Kirim Laporan Harian
+                </Button>
 
-              <Button
-                type="button"
-                variant="outline"
-                disabled={sendingAction !== null || saving}
-                onClick={() => void handleSend("bulanan")}
-                className="rounded-full"
-              >
-                {sendingAction === "bulanan" ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 size-4" />
-                )}
-                Kirim Laporan Bulanan
-              </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={sendingAction !== null || saving}
+                  onClick={() => void handleSend("mingguan")}
+                  className="rounded-full"
+                >
+                  {sendingAction === "mingguan" ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 size-4" />
+                  )}
+                  Kirim Laporan Mingguan
+                </Button>
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  window.open(
-                    "/api/reports/profit-loss/pdf?mode=harian&download=1",
-                    "_blank",
-                    "noopener,noreferrer"
-                  );
-                }}
-                className="rounded-full"
-              >
-                <Download className="mr-2 size-4" />
-                Unduh PDF Harian
-              </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={sendingAction !== null || saving}
+                  onClick={() => void handleSend("bulanan")}
+                  className="rounded-full"
+                >
+                  {sendingAction === "bulanan" ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 size-4" />
+                  )}
+                  Kirim Laporan Bulanan
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const periodQuery = manualReportDate
+                      ? `&period=${manualReportDate}`
+                      : "";
+                    window.open(
+                      `/api/reports/profit-loss/pdf?mode=harian${periodQuery}&download=1`,
+                      "_blank",
+                      "noopener,noreferrer"
+                    );
+                  }}
+                  className="rounded-full"
+                >
+                  <Download className="mr-2 size-4" />
+                  Unduh PDF Harian
+                </Button>
+              </div>
+
+              <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2 text-xs text-muted-foreground">
+                <strong>Informasi Real-time Laporan Harian:</strong> Laporan harian membaca transaksi kasir secara langsung (live) meski shift belum tutup buku. Jika belum ada transaksi pada tanggal yang dipilih, omzet tercatat Rp 0 (normal dan aman).
+              </div>
             </div>
           </form>
         </CardContent>

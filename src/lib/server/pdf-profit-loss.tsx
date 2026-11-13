@@ -30,6 +30,25 @@ export type ProfitLossPdfData = {
     transactionCount: number;
     averageTicket: number;
   };
+  operationalBreakdown?: {
+    cashSales: number;
+    nonCashSales: number;
+    kasbonSales: number;
+    totalRevenue: number;
+    cogs: number;
+    grossProfit: number;
+    operatingExpenses: number;
+    profitDistribution: number;
+    totalExpenses: number;
+    netProfit: number;
+    isSurplus: boolean;
+    pcmPct?: number;
+    pcmAmount?: number;
+    reservePct?: number;
+    reserveAmount?: number;
+    executorPct?: number;
+    executorAmount?: number;
+  };
   physicalBalanceSheet?: {
     modalAwal: number;
     kas: number;
@@ -447,11 +466,34 @@ export function ProfitLossReportDocument({
   data: ProfitLossPdfData;
 }>) {
   const financial = data.financial;
-  const assets = data.assetsAndCapital;
-  const neraca = data.physicalBalanceSheet;
   const debtors = data.debtors ?? [];
   const stockCategories = data.stockCategories ?? [];
   const supplierDebts = data.supplierDebts ?? [];
+
+  const opBreakdown = data.operationalBreakdown ?? {
+    cashSales: financial.revenue,
+    nonCashSales: 0,
+    kasbonSales: 0,
+    totalRevenue: financial.revenue,
+    cogs: financial.cogs,
+    grossProfit: financial.grossProfit,
+    operatingExpenses: financial.expenseTotal,
+    profitDistribution: financial.profitDistribution,
+    totalExpenses: financial.expenseTotal + financial.profitDistribution,
+    netProfit: financial.netProfit,
+    isSurplus: financial.netProfit >= 0,
+    pcmPct: 30,
+    pcmAmount: Math.round((Math.max(0, financial.netProfit) * 30) / 100),
+    reservePct: 20,
+    reserveAmount: Math.round((Math.max(0, financial.netProfit) * 20) / 100),
+    executorPct: 50,
+    executorAmount: Math.max(
+      0,
+      Math.max(0, financial.netProfit) -
+        Math.round((Math.max(0, financial.netProfit) * 30) / 100) -
+        Math.round((Math.max(0, financial.netProfit) * 20) / 100)
+    ),
+  };
 
   const grossMargin =
     financial.revenue > 0 ? `${Math.round((financial.grossProfit / financial.revenue) * 1000) / 10}%` : "0%";
@@ -471,10 +513,10 @@ export function ProfitLossReportDocument({
         {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.eyebrowRow}>
-            <Text style={styles.eyebrow}>TokoMu • Dokumen Resmi Laporan Keuangan &amp; Neraca Pembukuan</Text>
+            <Text style={styles.eyebrow}>TokoMu • Dokumen Resmi Laporan Keuangan &amp; Laba Rugi Operasional</Text>
             <Text style={styles.printDate}>Dicetak: {formatDate(data.generatedAt)}</Text>
           </View>
-          <Text style={styles.title}>Laporan Keuangan &amp; Neraca Laba / Rugi {kindLabel}</Text>
+          <Text style={styles.title}>Laporan Keuangan &amp; Laba / Rugi {kindLabel}</Text>
           <Text style={styles.storeName}>{data.identity.storeName}</Text>
           <Text style={styles.subtitle}>
             Periode: {data.period.label} ({formatDate(data.period.start)} s.d. {formatDate(data.period.end)})
@@ -511,73 +553,82 @@ export function ProfitLossReportDocument({
           </View>
         </View>
 
-        {/* 2. LAPORAN LABA / RUGI & NERACA FISIK TOKO (Format Sesuai Catatan Buku Fisik Toko - Image 2) */}
-        {neraca ? (
-          <View style={styles.section} wrap={false}>
-            <Text style={styles.sectionTitle}>2. Laporan Neraca Fisik &amp; Laba / Rugi Berjalan</Text>
-            
-            <View style={styles.twoColContainer}>
-              {/* Kolom Kiri: Sisi Harta / Aset Toko */}
-              <View style={styles.colHalf}>
-                <View style={styles.table}>
-                  <View style={[styles.tableHeader, { backgroundColor: "#ecfdf5" }]}>
-                    <Text style={[styles.cell, styles.headCell, col("65%"), { color: "#065f46" }]}>A. Posisi Harta / Aset Toko</Text>
-                    <Text style={[styles.cell, styles.headCell, styles.lastCell, styles.right, col("35%"), { color: "#065f46" }]}>Nominal</Text>
-                  </View>
-                  <FinancialRow label="1. Kas Toko (Laci kas/receh/tabungan)" value={neraca.kas} />
-                  <FinancialRow label="2. Stok Barang Dagangan (Cek Stok)" value={neraca.stokDagangan} />
-                  <FinancialRow label="3. Inventaris Toko" value={neraca.inventarisToko} />
-                  <FinancialRow label="4. Show Case / Peralatan" value={neraca.showcase} />
-                  <FinancialRow label="5. Piutang Toko (Kasbon Pelanggan)" value={neraca.piutangToko} />
-                  <View style={[styles.tableRowHighlight, { backgroundColor: "#d1fae5", borderTopWidth: 1.5, borderTopColor: "#059669" }]}>
-                    <Text style={[styles.cell, styles.boldCell, col("65%"), { color: "#065f46" }]}>Total Nilai Harta / Aset</Text>
-                    <Text style={[styles.cell, styles.lastCell, styles.right, styles.boldCell, col("35%"), { color: "#065f46" }]}>
-                      {formatCurrency(neraca.totalAset)}
-                    </Text>
-                  </View>
+        {/* 2. REKAPITULASI LABA / RUGI & OPERASIONAL PERIODE INI */}
+        <View style={styles.section} wrap={false}>
+          <Text style={styles.sectionTitle}>2. Rekapitulasi Laba / Rugi &amp; Operasional Periode Ini</Text>
+          
+          <View style={styles.twoColContainer}>
+            {/* Kolom Kiri: Sisi Pendapatan Usaha */}
+            <View style={styles.colHalf}>
+              <View style={styles.table}>
+                <View style={[styles.tableHeader, { backgroundColor: "#ecfdf5" }]}>
+                  <Text style={[styles.cell, styles.headCell, col("65%"), { color: "#065f46" }]}>A. Komponen Pendapatan Usaha</Text>
+                  <Text style={[styles.cell, styles.headCell, styles.lastCell, styles.right, col("35%"), { color: "#065f46" }]}>Nominal</Text>
                 </View>
-              </View>
-
-              {/* Kolom Kanan: Sisi Hutang, Modal Awal & Biaya */}
-              <View style={styles.colHalf}>
-                <View style={styles.table}>
-                  <View style={[styles.tableHeader, { backgroundColor: "#fff1f2" }]}>
-                    <Text style={[styles.cell, styles.headCell, col("65%"), { color: "#9f1239" }]}>B. Hutang, Modal &amp; Beban</Text>
-                    <Text style={[styles.cell, styles.headCell, styles.lastCell, styles.right, col("35%"), { color: "#9f1239" }]}>Nominal</Text>
-                  </View>
-                  <FinancialRow label="1. Modal Awal Toko" value={neraca.modalAwal} isBold />
-                  <FinancialRow label="2. Hutang Toko (Supplier/Kulakan)" value={neraca.hutangToko} />
-                  <FinancialRow label="3. Hutang Sales Titipan" value={neraca.hutangSalesTitipan} />
-                  <FinancialRow label="4. Hutang Modal Investasi" value={neraca.hutangInvestasi} />
-                  <FinancialRow label="5. Biaya ATK &amp; Pengeluaran" value={neraca.biayaAtk} />
-                  <View style={[styles.tableRowHighlight, { backgroundColor: "#ffe4e6", borderTopWidth: 1.5, borderTopColor: "#e11d48" }]}>
-                    <Text style={[styles.cell, styles.boldCell, col("65%"), { color: "#9f1239" }]}>Total Kewajiban &amp; Modal</Text>
-                    <Text style={[styles.cell, styles.lastCell, styles.right, styles.boldCell, col("35%"), { color: "#9f1239" }]}>
-                      {formatCurrency(neraca.totalKewajibanDanBiaya)}
-                    </Text>
-                  </View>
+                <FinancialRow label="1. Penjualan Tunai (Cash)" value={opBreakdown.cashSales} />
+                <FinancialRow label="2. Penjualan Nontunai (QRIS/Transfer)" value={opBreakdown.nonCashSales} />
+                <FinancialRow label="3. Penjualan Kasbon (Piutang Baru)" value={opBreakdown.kasbonSales} />
+                <View style={[styles.tableRowHighlight, { backgroundColor: "#d1fae5", borderTopWidth: 1.5, borderTopColor: "#059669" }]}>
+                  <Text style={[styles.cell, styles.boldCell, col("65%"), { color: "#065f46" }]}>Total Omzet Penjualan</Text>
+                  <Text style={[styles.cell, styles.lastCell, styles.right, styles.boldCell, col("35%"), { color: "#065f46" }]}>
+                    {formatCurrency(financial.revenue)}
+                  </Text>
+                </View>
+                <FinancialRow label="4. HPP (Modal Pokok Terjual)" value={financial.cogs} />
+                <View style={[styles.tableRowHighlight, { backgroundColor: "#ecfdf5", borderTopWidth: 1, borderTopColor: "#a7f3d0" }]}>
+                  <Text style={[styles.cell, styles.boldCell, col("65%"), { color: "#065f46" }]}>Laba Kotor Usaha</Text>
+                  <Text style={[styles.cell, styles.lastCell, styles.right, styles.boldCell, col("35%"), { color: "#065f46" }]}>
+                    {formatCurrency(financial.grossProfit)}
+                  </Text>
                 </View>
               </View>
             </View>
 
-            {/* Callout Hasil Laba / Rugi Berjalan */}
-            <View style={[styles.calloutBox, neraca.isSurplus ? styles.calloutSurplus : styles.calloutDeficit, { marginTop: 6 }]}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <View>
-                  <Text style={[styles.calloutTitle, { color: neraca.isSurplus ? "#065f46" : "#9f1239" }]}>
-                    Hasil Pembukuan: {neraca.isSurplus ? "Surplus Laba Toko Berjalan" : "Rugi Toko Berjalan"} Periode {data.period.label}
-                  </Text>
-                  <Text style={styles.calloutFormula}>
-                    Rumus: Total Harta ({formatCurrency(neraca.totalAset)}) − Total Kewajiban &amp; Modal ({formatCurrency(neraca.totalKewajibanDanBiaya)})
+            {/* Kolom Kanan: Sisi Beban & Alokasi Laba Bersih */}
+            <View style={styles.colHalf}>
+              <View style={styles.table}>
+                <View style={[styles.tableHeader, { backgroundColor: "#fff1f2" }]}>
+                  <Text style={[styles.cell, styles.headCell, col("65%"), { color: "#9f1239" }]}>B. Beban &amp; Biaya Operasional</Text>
+                  <Text style={[styles.cell, styles.headCell, styles.lastCell, styles.right, col("35%"), { color: "#9f1239" }]}>Nominal</Text>
+                </View>
+                <FinancialRow label="1. Beban Operasional &amp; ATK" value={financial.expenseTotal} />
+                <FinancialRow label="2. Bagi Hasil Pemodal / Investor" value={financial.profitDistribution} />
+                <View style={[styles.tableRowHighlight, { backgroundColor: "#ffe4e6", borderTopWidth: 1.5, borderTopColor: "#e11d48" }]}>
+                  <Text style={[styles.cell, styles.boldCell, col("65%"), { color: "#9f1239" }]}>Total Beban Usaha</Text>
+                  <Text style={[styles.cell, styles.lastCell, styles.right, styles.boldCell, col("35%"), { color: "#9f1239" }]}>
+                    {formatCurrency(financial.expenseTotal + financial.profitDistribution)}
                   </Text>
                 </View>
-                <Text style={[styles.calloutAmount, { color: neraca.isSurplus ? "#059669" : "#e11d48" }]}>
-                  {formatCurrency(neraca.labaRugiBerjalan)}
-                </Text>
+                {opBreakdown.isSurplus && opBreakdown.netProfit > 0 ? (
+                  <>
+                    <FinancialRow label={`• Hak PCM (${opBreakdown.pcmPct ?? 30}%)`} value={opBreakdown.pcmAmount ?? 0} />
+                    <FinancialRow label={`• Kas Cadangan Toko (${opBreakdown.reservePct ?? 20}%)`} value={opBreakdown.reserveAmount ?? 0} />
+                    <FinancialRow label={`• Toko / Pengelola (${opBreakdown.executorPct ?? 50}%)`} value={opBreakdown.executorAmount ?? 0} />
+                  </>
+                ) : (
+                  <FinancialRow label="• Alokasi Hasil" value="Tidak ada pembagian saat defisit" />
+                )}
               </View>
             </View>
           </View>
-        ) : null}
+
+          {/* Callout Hasil Laba / Rugi Bersih Periode Tersebut */}
+          <View style={[styles.calloutBox, opBreakdown.isSurplus ? styles.calloutSurplus : styles.calloutDeficit, { marginTop: 6 }]}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <View>
+                <Text style={[styles.calloutTitle, { color: opBreakdown.isSurplus ? "#065f46" : "#9f1239" }]}>
+                  Hasil Pembukuan: {opBreakdown.isSurplus ? "Surplus Laba Bersih Usaha" : "Defisit Operasional"} Periode {data.period.label}
+                </Text>
+                <Text style={styles.calloutFormula}>
+                  Rumus: Laba Kotor ({formatCurrency(financial.grossProfit)}) − Beban Operasional ({formatCurrency(financial.expenseTotal)}) = Laba Bersih ({formatCurrency(financial.netProfit)})
+                </Text>
+              </View>
+              <Text style={[styles.calloutAmount, { color: opBreakdown.isSurplus ? "#059669" : "#e11d48" }]}>
+                {formatCurrency(financial.netProfit)}
+              </Text>
+            </View>
+          </View>
+        </View>
 
         {/* 3. RINCIAN PIUTANG TOKO (Daftar Kasbon Pelanggan - Sesuai Image 1) */}
         {debtors.length > 0 ? (

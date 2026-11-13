@@ -148,6 +148,7 @@ export async function calculatePeriodProfit(
     expenses: number;
     transactionCount: number;
     profitDistribution: number;
+    totalSalary: number;
   }>(
     `
       with tx as (
@@ -156,16 +157,16 @@ export async function calculatePeriodProfit(
           count(*)::int as transaction_count
         from transactions
         where user_id = $1
-          and occurred_at >= $2::timestamptz
-          and occurred_at < $3::timestamptz
+          and coalesce(occurred_at, created_at) >= $2::timestamptz
+          and coalesce(occurred_at, created_at) < $3::timestamptz
       ),
       item_cost as (
         select coalesce(sum(ti.quantity * ti.cost_price), 0)::int as cogs
         from transaction_items ti
         join transactions t on t.id = ti.transaction_id
         where t.user_id = $1
-          and t.occurred_at >= $2::timestamptz
-          and t.occurred_at < $3::timestamptz
+          and coalesce(t.occurred_at, t.created_at) >= $2::timestamptz
+          and coalesce(t.occurred_at, t.created_at) < $3::timestamptz
       ),
       exp as (
         select
@@ -197,7 +198,7 @@ export async function calculatePeriodProfit(
   const row = result.rows[0] ?? { revenue: 0, cogs: 0, expenses: 0, profitDistribution: 0, totalSalary: 0, transactionCount: 0 };
   const grossProfit = row.revenue - row.cogs;
   // Beban total adalah beban expense biasa ditambah beban gaji karyawan (snapshot saat ini)
-  const expenseTotal = row.expenses + (row as any).totalSalary;
+  const expenseTotal = row.expenses + Number(row.totalSalary || 0);
   const baseProfit = grossProfit - expenseTotal;
 
   return {

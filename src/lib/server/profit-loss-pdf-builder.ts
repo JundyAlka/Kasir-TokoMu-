@@ -411,15 +411,59 @@ export async function buildProfitLossPdfBuffer(
     isSurplus: labaRugiBerjalan >= 0,
   };
 
+  const pcmPct = profile?.profitSharePcmPct ?? 30;
+  const reservePct = profile?.profitShareReservePct ?? 20;
+  const executorPct = Math.max(0, 100 - pcmPct - reservePct);
+  const distributable = Math.max(0, dailySummary.netProfit);
+  const pcmAmount = Math.round((distributable * pcmPct) / 100);
+  const reserveAmount = Math.round((distributable * reservePct) / 100);
+  const executorAmount = Math.max(0, distributable - pcmAmount - reserveAmount);
+
+  const cashSales = paymentBreakdownResult.rows
+    .filter((r) => r.paymentMethod === "cash")
+    .reduce((sum, r) => sum + Number(r.total || 0), 0);
+  const nonCashSales = paymentBreakdownResult.rows
+    .filter((r) => r.paymentMethod === "transfer" || r.paymentMethod === "qris")
+    .reduce((sum, r) => sum + Number(r.total || 0), 0);
+  const kasbonSales = paymentBreakdownResult.rows
+    .filter((r) => r.paymentMethod === "kasbon")
+    .reduce((sum, r) => sum + Number(r.total || 0), 0);
+
+  const operationalBreakdown = {
+    cashSales,
+    nonCashSales,
+    kasbonSales,
+    totalRevenue: dailySummary.revenue,
+    cogs: dailySummary.cogs,
+    grossProfit: dailySummary.grossProfit,
+    operatingExpenses: dailySummary.expenseTotal,
+    profitDistribution: dailySummary.profitDistribution,
+    totalExpenses: dailySummary.expenseTotal + dailySummary.profitDistribution,
+    netProfit: dailySummary.netProfit,
+    isSurplus: dailySummary.netProfit >= 0,
+    pcmPct,
+    pcmAmount,
+    reservePct,
+    reserveAmount,
+    executorPct,
+    executorAmount,
+  };
+
+  const financialMargin =
+    dailySummary.revenue > 0
+      ? Math.round((dailySummary.netProfit / dailySummary.revenue) * 1000) / 10
+      : 0;
+
   const ownerNotes =
     requestedNotes.length > 0
       ? requestedNotes
       : [
           `Laba bersih usaha ${period.label} tercatat ${formatCurrency(dailySummary.netProfit)} dengan omzet penjualan ${formatCurrency(dailySummary.revenue)}.`,
-          `Total nilai modal stok aktif toko senilai ${formatCurrency(assetSummary.inventoryCapital)} dari ${totalActiveProducts} SKU (${totalStockUnits} unit fisik).`,
-          `Piutang kasbon aktif pelanggan toko tercatat ${formatCurrency(assetSummary.activeReceivables)}.`,
-          `Hasil pembukuan neraca fisik toko menunjukkan ${labaRugiBerjalan >= 0 ? "Surplus Berjalan" : "Rugi Berjalan"} ${formatCurrency(labaRugiBerjalan)}.`,
-          "Laporan kinerja, neraca fisik, dan keuangan dicetak dan divalidasi secara otomatis dari sistem TokoMu.",
+          `Total beban operasional dan pengeluaran tercatat senilai ${formatCurrency(dailySummary.expenseTotal)}.`,
+          `Nilai modal stok aktif barang dagangan saat ini senilai ${formatCurrency(assetSummary.inventoryCapital)} dari ${totalActiveProducts} SKU (${totalStockUnits} unit fisik).`,
+          `Piutang kasbon aktif pelanggan toko tercatat senilai ${formatCurrency(assetSummary.activeReceivables)}.`,
+          `Hasil pembukuan usaha ${period.label} membukukan ${dailySummary.netProfit >= 0 ? "Surplus Bersih" : "Defisit Operasional"} ${formatCurrency(dailySummary.netProfit)} (Margin Bersih: ${financialMargin}%).`,
+          "Laporan kinerja dan laba rugi operasional dicetak dan divalidasi secara otomatis dari sistem TokoMu.",
         ];
 
   const data: ProfitLossPdfData = {
@@ -447,6 +491,7 @@ export async function buildProfitLossPdfBuffer(
       transactionCount: dailySummary.transactionCount,
       averageTicket: dailySummary.averageTicket,
     },
+    operationalBreakdown,
     physicalBalanceSheet,
     debtors,
     stockCategories,
