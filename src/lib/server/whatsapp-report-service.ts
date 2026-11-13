@@ -629,10 +629,14 @@ export async function buildWhatsAppReportMessage(
     `• Omzet Penjualan: *${formatRupiah(rollup.revenue)}*`,
     `• HPP / Modal Terjual: ${formatRupiah(rollup.cogs)}`,
     `• Laba Kotor: ${formatRupiah(rollup.grossProfit)}`,
-    `• Biaya Operasional: ${formatRupiah(rollup.expenseTotal)}`,
-    `• Laba Bersih: *${formatRupiah(rollup.netProfit)}*`,
+    `• Beban Operasional Murni: ${formatRupiah(rollup.expenseTotal)}`,
+    `• Laba Bersih Usaha: *${formatRupiah(rollup.netProfit)}*`,
     "",
-    "🧾 *Aktivitas Kasir & Aset*",
+    "🧾 *Arus Kas Stok & Titipan (Non-Beban Rugi)*",
+    `• Belanja Nota Kulakan Supplier: ${formatRupiah(rollup.kulakanTotal ?? 0)}`,
+    `• Setor Barang Titipan Konsinyasi: ${formatRupiah(rollup.titipanTotal ?? 0)}${(rollup.titipanTotal ?? 0) > 0 ? ` (Est. Untung Toko: +${formatRupiah(rollup.estimatedTitipanProfit ?? 0)})` : ""}`,
+    "",
+    "🏪 *Aktivitas Kasir & Aset*",
     `• Jumlah Transaksi: ${rollup.transactionCount} transaksi`,
     `• Rata-rata Belanja: ${formatRupiah(rollup.averageTicket)}`,
     `• Nilai Stok Saat Ini: ${formatRupiah(assetSummary.inventoryCapital)}`,
@@ -689,6 +693,15 @@ export async function buildWhatsAppReportMessage(
       lines.push(
         `${index + 1}. ${prod.name} (${prod.sold} pcs • ${formatRupiah(prod.revenue)})`
       );
+    });
+  }
+
+  if (rollup.recommendations && rollup.recommendations.length > 0) {
+    lines.push("", "💡 *REKOMENDASI EVALUASI & STRATEGI PROFIT TOKO*");
+    rollup.recommendations.slice(0, 5).forEach((rec, index) => {
+      const icon = rec.priority === "tinggi" ? "🔴" : rec.priority === "sedang" ? "🟡" : "🟢";
+      lines.push(`${index + 1}. ${icon} *${rec.title}*`);
+      lines.push(`   _${rec.detail}_`);
     });
   }
 

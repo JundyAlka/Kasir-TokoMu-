@@ -24,6 +24,8 @@ export type PeriodProfit = {
   transactionCount: number;
   averageTicket: number;
   profitDistribution: number;
+  kulakanTotal?: number;
+  titipanTotal?: number;
 };
 
 export type PayoutPreview = {
@@ -146,6 +148,8 @@ export async function calculatePeriodProfit(
     revenue: number;
     cogs: number;
     expenses: number;
+    kulakanTotal: number;
+    titipanTotal: number;
     transactionCount: number;
     profitDistribution: number;
     totalSalary: number;
@@ -170,7 +174,9 @@ export async function calculatePeriodProfit(
       ),
       exp as (
         select
-          coalesce(sum(case when is_cash_movement = false and expense_type <> 'bagi_hasil_investor' then amount else 0 end), 0)::int as expenses,
+          coalesce(sum(case when is_cash_movement = false and expense_type in ('operasional', 'gaji_sosial') then amount else 0 end), 0)::int as expenses,
+          coalesce(sum(case when expense_type = 'sales_toko' then amount else 0 end), 0)::int as "kulakanTotal",
+          coalesce(sum(case when expense_type = 'sales_titipan' then amount else 0 end), 0)::int as "titipanTotal",
           coalesce(sum(case when expense_type = 'bagi_hasil_investor' then amount else 0 end), 0)::int as "profitDistribution"
         from expenses
         where user_id = $1
@@ -187,6 +193,8 @@ export async function calculatePeriodProfit(
         tx.revenue,
         item_cost.cogs,
         exp.expenses,
+        exp."kulakanTotal",
+        exp."titipanTotal",
         exp."profitDistribution",
         salaries.total_salary as "totalSalary",
         tx.transaction_count as "transactionCount"
@@ -195,9 +203,19 @@ export async function calculatePeriodProfit(
     [workspaceOwnerId, start, end]
   );
 
-  const row = result.rows[0] ?? { revenue: 0, cogs: 0, expenses: 0, profitDistribution: 0, totalSalary: 0, transactionCount: 0 };
+  const row = result.rows[0] ?? {
+    revenue: 0,
+    cogs: 0,
+    expenses: 0,
+    kulakanTotal: 0,
+    titipanTotal: 0,
+    profitDistribution: 0,
+    totalSalary: 0,
+    transactionCount: 0,
+  };
   const grossProfit = row.revenue - row.cogs;
-  // Beban total adalah beban expense biasa ditambah beban gaji karyawan (snapshot saat ini)
+  // Beban total adalah beban operasional & upah murni ditambah gaji tetap karyawan;
+  // kulakan stok (sales_toko) dan setor barang titipan (sales_titipan) dipisahkan sebagai arus kas non-beban.
   const expenseTotal = row.expenses + Number(row.totalSalary || 0);
   const baseProfit = grossProfit - expenseTotal;
 
@@ -212,6 +230,8 @@ export async function calculatePeriodProfit(
     transactionCount: row.transactionCount,
     averageTicket: row.transactionCount > 0 ? row.revenue / row.transactionCount : 0,
     profitDistribution: row.profitDistribution,
+    kulakanTotal: row.kulakanTotal,
+    titipanTotal: row.titipanTotal,
   };
 }
 

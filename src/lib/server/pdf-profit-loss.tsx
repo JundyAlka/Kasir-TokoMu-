@@ -5,6 +5,7 @@ import {
   Text,
   View,
 } from "@react-pdf/renderer";
+import type { StoreRecommendationItem } from "@/lib/server/store-recommendations";
 
 export type ProfitLossPdfData = {
   generatedAt: string;
@@ -40,6 +41,10 @@ export type ProfitLossPdfData = {
     operatingExpenses: number;
     profitDistribution: number;
     totalExpenses: number;
+    kulakanTotal?: number;
+    titipanTotal?: number;
+    estimatedTitipanProfit?: number;
+    cashMovementTotal?: number;
     netProfit: number;
     isSurplus: boolean;
     pcmPct?: number;
@@ -107,11 +112,13 @@ export type ProfitLossPdfData = {
     id: string;
     title: string;
     category: string;
+    expenseType?: string;
     amount: number;
     createdAt: string;
   }>;
   expenseCategories: Array<{
     category: string;
+    expenseType?: string;
     amount: number;
     percentage?: string;
   }>;
@@ -128,6 +135,7 @@ export type ProfitLossPdfData = {
     revenue: number;
   }>;
   ownerNotes: string[];
+  recommendations?: StoreRecommendationItem[];
   payouts: Array<{
     investorName: string;
     amount: number;
@@ -442,12 +450,22 @@ function FinancialRow({
 }>) {
   return (
     <View style={isHighlight ? styles.tableRowHighlight : styles.tableRow}>
-      <Text style={[styles.cell, isBold ? styles.boldCell : {}, col("62%")]}>{label}</Text>
-      <Text style={[styles.cell, styles.lastCell, styles.right, isBold ? styles.boldCell : {}, col("38%")]}>
+      <Text style={[styles.cell, isBold ? styles.boldCell : {}, col("65%")]}>{label}</Text>
+      <Text style={[styles.cell, styles.lastCell, styles.right, isBold ? styles.boldCell : {}, col("35%")]}>
         {typeof value === "number" ? formatCurrency(value) : value}
       </Text>
     </View>
   );
+}
+
+function formatExpenseTypeLabel(raw?: string) {
+  const key = (raw || "operasional").toLowerCase().trim();
+  if (key === "sales_toko" || key === "kulakan" || key === "stok") return "Kulakan (Non-Beban)";
+  if (key === "sales_titipan" || key === "titipan") return "Titipan (Non-Beban)";
+  if (key === "gaji_sosial") return "Gaji & Upah";
+  if (key === "setoran_tabungan") return "Mutasi Kas";
+  if (key === "bagi_hasil_investor") return "Bagi Hasil";
+  return "Beban Ops";
 }
 
 function EmptyRow({ text }: Readonly<{ text: string }>) {
@@ -541,9 +559,11 @@ export function ProfitLossReportDocument({
               <Text style={styles.summarySubtext}>Margin Laba Kotor: {grossMargin} (setelah HPP {formatCurrency(financial.cogs)})</Text>
             </View>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Beban Operasional / Pengeluaran</Text>
+              <Text style={styles.summaryLabel}>Beban Operasional Murni</Text>
               <Text style={styles.summaryValue}>{formatCurrency(financial.expenseTotal)}</Text>
-              <Text style={styles.summarySubtext}>{data.expenseCategories.length} kategori pengeluaran tercatat</Text>
+              <Text style={styles.summarySubtext}>
+                Kulakan Stok: {formatCurrency(opBreakdown.kulakanTotal ?? 0)} • Setor Titipan: {formatCurrency(opBreakdown.titipanTotal ?? 0)}
+              </Text>
             </View>
             <View style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>Laba Bersih Usaha</Text>
@@ -608,6 +628,8 @@ export function ProfitLossReportDocument({
                 ) : (
                   <FinancialRow label="• Alokasi Hasil" value="Tidak ada pembagian saat defisit" />
                 )}
+                <FinancialRow label="Info Kulakan Stok (Non-Beban)" value={opBreakdown.kulakanTotal ?? 0} />
+                <FinancialRow label="Info Setor Titipan (Non-Beban)" value={opBreakdown.titipanTotal ?? 0} />
               </View>
             </View>
           </View>
@@ -620,7 +642,7 @@ export function ProfitLossReportDocument({
                   Hasil Pembukuan: {opBreakdown.isSurplus ? "Surplus Laba Bersih Usaha" : "Defisit Operasional"} Periode {data.period.label}
                 </Text>
                 <Text style={styles.calloutFormula}>
-                  Rumus: Laba Kotor ({formatCurrency(financial.grossProfit)}) − Beban Operasional ({formatCurrency(financial.expenseTotal)}) = Laba Bersih ({formatCurrency(financial.netProfit)})
+                  Rumus: Laba Kotor ({formatCurrency(financial.grossProfit)}) - Beban Operasional ({formatCurrency(financial.expenseTotal)}) = Laba Bersih ({formatCurrency(financial.netProfit)})
                 </Text>
               </View>
               <Text style={[styles.calloutAmount, { color: opBreakdown.isSurplus ? "#059669" : "#e11d48" }]}>
@@ -745,24 +767,24 @@ export function ProfitLossReportDocument({
           </View>
         ) : null}
 
-        {/* 7. DETAIL BEBAN PENGELUARAN */}
+        {/* 7. DETAIL BEBAN PENGELUARAN & ARUS KAS KELUAR */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>7. Rincian Detail Pengeluaran &amp; Beban Toko</Text>
+          <Text style={styles.sectionTitle}>7. Rincian Detail Pengeluaran &amp; Arus Kas Keluar</Text>
           <View style={styles.table}>
             <View style={styles.tableHeader}>
               <Text style={[styles.cell, styles.headCell, col("8%"), styles.center]}>No</Text>
-              <Text style={[styles.cell, styles.headCell, col("18%")]}>Tanggal</Text>
-              <Text style={[styles.cell, styles.headCell, col("42%")]}>Keterangan / Keperluan</Text>
-              <Text style={[styles.cell, styles.headCell, col("16%")]}>Kategori</Text>
+              <Text style={[styles.cell, styles.headCell, col("16%")]}>Tanggal</Text>
+              <Text style={[styles.cell, styles.headCell, col("38%")]}>Keterangan / Keperluan</Text>
+              <Text style={[styles.cell, styles.headCell, col("22%")]}>Klasifikasi</Text>
               <Text style={[styles.cell, styles.headCell, styles.lastCell, styles.right, col("16%")]}>Nominal</Text>
             </View>
             {data.expenseItems && data.expenseItems.length > 0 ? (
               data.expenseItems.map((item, idx) => (
                 <View key={item.id || idx} style={idx % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
                   <Text style={[styles.cell, col("8%"), styles.center]}>{idx + 1}</Text>
-                  <Text style={[styles.cell, col("18%")]}>{formatDate(item.createdAt)}</Text>
-                  <Text style={[styles.cell, col("42%")]}>{item.title}</Text>
-                  <Text style={[styles.cell, col("16%")]}>{item.category}</Text>
+                  <Text style={[styles.cell, col("16%")]}>{formatDate(item.createdAt)}</Text>
+                  <Text style={[styles.cell, col("38%")]}>{item.title}</Text>
+                  <Text style={[styles.cell, col("22%")]}>{formatExpenseTypeLabel(item.expenseType || item.category)}</Text>
                   <Text style={[styles.cell, styles.lastCell, styles.right, styles.boldCell, col("16%")]}>
                     {formatCurrency(item.amount)}
                   </Text>
@@ -772,9 +794,9 @@ export function ProfitLossReportDocument({
               data.expenseCategories.map((item, idx) => (
                 <View key={item.category} style={idx % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
                   <Text style={[styles.cell, col("8%"), styles.center]}>{idx + 1}</Text>
-                  <Text style={[styles.cell, col("18%")]}>-</Text>
-                  <Text style={[styles.cell, col("42%")]}>{item.category}</Text>
-                  <Text style={[styles.cell, col("16%")]}>Operasional</Text>
+                  <Text style={[styles.cell, col("16%")]}>-</Text>
+                  <Text style={[styles.cell, col("38%")]}>{item.category}</Text>
+                  <Text style={[styles.cell, col("22%")]}>{formatExpenseTypeLabel(item.expenseType || item.category)}</Text>
                   <Text style={[styles.cell, styles.lastCell, styles.right, styles.boldCell, col("16%")]}>
                     {formatCurrency(item.amount)}
                   </Text>
@@ -784,11 +806,21 @@ export function ProfitLossReportDocument({
               <EmptyRow text="Tidak ada catatan pengeluaran pada periode ini." />
             )}
             <View style={styles.tableRowHighlight}>
-              <Text style={[styles.cell, styles.boldCell, col("84%")]}>Total Beban Pengeluaran</Text>
+              <Text style={[styles.cell, styles.boldCell, col("84%")]}>Total Beban Operasional (Pengurang Laba Usaha)</Text>
               <Text style={[styles.cell, styles.lastCell, styles.right, styles.boldCell, col("16%")]}>
                 {formatCurrency(financial.expenseTotal)}
               </Text>
             </View>
+            {(opBreakdown.kulakanTotal ?? 0) > 0 || (opBreakdown.titipanTotal ?? 0) > 0 ? (
+              <View style={styles.tableRow}>
+                <Text style={[styles.cell, col("84%"), { color: "#475569" }]}>
+                  Info Non-Beban: Kulakan Stok ({formatCurrency(opBreakdown.kulakanTotal ?? 0)}) + Setor Barang Titipan ({formatCurrency(opBreakdown.titipanTotal ?? 0)})
+                </Text>
+                <Text style={[styles.cell, styles.lastCell, styles.right, styles.boldCell, col("16%"), { color: "#475569" }]}>
+                  {formatCurrency((opBreakdown.kulakanTotal ?? 0) + (opBreakdown.titipanTotal ?? 0))}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -840,7 +872,7 @@ export function ProfitLossReportDocument({
           </View>
         ) : null}
 
-        {/* 10. CATATAN PENGELOLA & PENGESAHAN */}
+        {/* 10. CATATAN PENGELOLA */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>10. Catatan &amp; Analisis Pengelola Toko</Text>
           {data.ownerNotes.length > 0 ? (
@@ -855,6 +887,38 @@ export function ProfitLossReportDocument({
             </View>
           )}
         </View>
+
+        {/* 11. EVALUASI MANDIRI & REKOMENDASI STRATEGI PROFIT TOKO */}
+        {data.recommendations && data.recommendations.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>11. Rekomendasi Evaluasi Produk &amp; Peningkatan Omzet Toko</Text>
+            <View style={styles.table}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.cell, styles.headCell, col("8%"), styles.center]}>No</Text>
+                <Text style={[styles.cell, styles.headCell, col("14%"), styles.center]}>Prioritas</Text>
+                <Text style={[styles.cell, styles.headCell, col("78%"), styles.lastCell]}>Evaluasi &amp; Tindakan yang Disarankan</Text>
+              </View>
+              {data.recommendations.map((rec, index) => {
+                const priorityLabel =
+                  rec.priority === "tinggi" ? "PRIORITAS" : rec.priority === "sedang" ? "TINDAK LANJUT" : "INFO";
+                const priorityColor =
+                  rec.priority === "tinggi" ? "#b91c1c" : rec.priority === "sedang" ? "#b45309" : "#047857";
+                return (
+                  <View key={`${rec.category}-${index}`} style={index % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
+                    <Text style={[styles.cell, col("8%"), styles.center]}>{index + 1}</Text>
+                    <Text style={[styles.cell, col("14%"), styles.center, styles.boldCell, { color: priorityColor }]}>
+                      {priorityLabel}
+                    </Text>
+                    <View style={[styles.cell, styles.lastCell, col("78%")]}>
+                      <Text style={styles.boldCell}>{rec.title}</Text>
+                      <Text style={{ color: "#475569", marginTop: 1 }}>{rec.detail}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
         {/* LEMBAR PENGESAHAN */}
         <View style={styles.signatureSection} wrap={false}>

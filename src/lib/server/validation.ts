@@ -196,6 +196,10 @@ export const ExpenseCreateSchema = z
     expenseType: z.enum(expenseTypes),
     investorId: z.string().trim().min(1).optional(),
     settleIntakeIds: z.array(z.string().trim().min(1)).default([]),
+    notaNumber: z.string().trim().max(64).optional(),
+    supplierOrPartnerName: z.string().trim().max(120).optional(),
+    titipanGrossSales: nonNegativeInteger("Total penjualan titipan").optional(),
+    titipanStoreProfit: nonNegativeInteger("Keuntungan toko dari titipan").optional(),
     restock: z.object({
       productId: z.string().trim().min(1, "Produk restok wajib dipilih."),
       quantity: positiveInteger("Jumlah restok"),
@@ -207,16 +211,19 @@ export const ExpenseCreateSchema = z
     if (value.expenseType === "bagi_hasil_investor" && !value.investorId) {
       ctx.addIssue({ code: "custom", path: ["investorId"], message: "Investor wajib dipilih." });
     }
-    if (value.expenseType === "sales_titipan" && !value.investorId) {
-      ctx.addIssue({ code: "custom", path: ["investorId"], message: "Mitra titipan wajib dipilih." });
-    }
-    if (value.expenseType === "sales_titipan" && value.settleIntakeIds.length === 0) {
-      ctx.addIssue({ code: "custom", path: ["settleIntakeIds"], message: "Pilih minimal satu barang titipan yang dilunasi." });
-    }
     if (value.expenseType !== "sales_toko" && value.restock) {
-      ctx.addIssue({ code: "custom", path: ["restock"], message: "Restok hanya tersedia untuk kategori sales toko." });
+      ctx.addIssue({ code: "custom", path: ["restock"], message: "Restok hanya tersedia untuk kategori belanja stok / kulakan." });
     }
   });
+
+export const ExpenseUpdateSchema = z
+  .object({
+    id: requiredText("ID pengeluaran"),
+    expenseType: z.enum(expenseTypes).optional(),
+    title: requiredText("Keterangan pengeluaran").optional(),
+    amount: positiveInteger("Jumlah pengeluaran").optional(),
+  })
+  .strict();
 
 
 export type ProductCreateInput = z.infer<typeof ProductCreateSchema>;
@@ -228,6 +235,7 @@ export type DebtUpdateInput = z.infer<typeof DebtUpdateSchema>;
 export type DebtPaymentCreateInput = z.infer<typeof DebtPaymentCreateSchema>;
 export type SettingsUpdateInput = z.infer<typeof SettingsUpdateSchema>;
 export type ExpenseCreateInput = z.infer<typeof ExpenseCreateSchema>;
+export type ExpenseUpdateInput = z.infer<typeof ExpenseUpdateSchema>;
 
 export function formatValidationIssues(error: ZodError) {
   return error.issues.map((issue) => ({

@@ -32,7 +32,7 @@ export const routePolicy: Record<string, RoutePolicy> = {
   "/api/debts/[id]": { GET: ALL_ROLES, PATCH: ALL_ROLES },
   "/api/debts/[id]/payments": { POST: ALL_ROLES },
   "/api/debts/[id]/remind": { POST: ALL_ROLES },
-  "/api/expenses": { GET: ALL_ROLES, POST: ALL_ROLES },
+  "/api/expenses": { GET: ALL_ROLES, POST: ALL_ROLES, PATCH: ALL_ROLES },
   "/api/investments": { GET: FINANCE_ROLES, POST: FINANCE_ROLES },
   "/api/investments/batch": { POST: FINANCE_ROLES },
   "/api/investments/[id]": { PATCH: FINANCE_ROLES, DELETE: FINANCE_ROLES },

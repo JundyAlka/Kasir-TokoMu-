@@ -60,46 +60,57 @@ type RestockPlan = {
 const EXPENSE_CATEGORIES = [
   {
     value: "operasional",
-    label: "Operasional Toko",
-    desc: "Biaya rutin (Listrik, Wifi, Air, Kebersihan, Perlengkapan)",
+    label: "Beban Operasional Toko",
+    shortLabel: "Operasional",
+    desc: "Biaya rutin yang mengurangi laba (Listrik, Wifi, Plastik/Cup, Kebersihan)",
     icon: Wrench,
-    badge: "Beban Operasional",
+    badge: "Mengurangi Laba",
+    tone: "rose",
   },
   {
     value: "sales_toko",
-    label: "Belanja Stok / Kulakan",
-    desc: "Pembelian stok persediaan barang dagang toko",
+    label: "Bayar Nota / Kulakan Stok Supplier",
+    shortLabel: "Kulakan / Nota",
+    desc: "Belanja stok barang dagangan / bayar nota sales (Perputaran Modal, Non-Beban)",
     icon: ShoppingBag,
-    badge: "Kulakan Stok",
+    badge: "Modal Stok (Non-Beban)",
+    tone: "amber",
+  },
+  {
+    value: "sales_titipan",
+    label: "Bayar Barang Titipan (Konsinyasi)",
+    shortLabel: "Barang Titipan",
+    desc: "Setor hasil jualan barang titipan ke penitip & catat untung toko (Non-Beban)",
+    icon: Handshake,
+    badge: "Titipan (Non-Beban)",
+    tone: "emerald",
   },
   {
     value: "gaji_sosial",
     label: "Gaji & Upah Karyawan",
+    shortLabel: "Gaji / Upah",
     desc: "Gaji harian kasir/karyawan, lembur, dan insentif",
     icon: Users,
-    badge: "Beban Upah",
+    badge: "Mengurangi Laba",
+    tone: "rose",
   },
   {
     value: "setoran_tabungan",
     label: "Setor Kas / Tabungan",
-    desc: "Pindah kas laci ke brankas/rekening bank toko",
+    shortLabel: "Mutasi Kas",
+    desc: "Pindah kas laci ke brankas/rekening bank toko (Non-Beban)",
     icon: Landmark,
     badge: "Mutasi Kas (Non-Beban)",
-  },
-  {
-    value: "sales_titipan",
-    label: "Setor Titipan Mitra",
-    desc: "Pelunasan penjualan barang konsinyasi mitra",
-    icon: Handshake,
-    badge: "Konsinyasi Mitra",
-    adminOnly: true,
+    tone: "blue",
   },
   {
     value: "bagi_hasil_investor",
     label: "Bagi Hasil Investor",
+    shortLabel: "Bagi Hasil",
     desc: "Penyaluran bagi hasil keuntungan modal investor",
     icon: Coins,
     badge: "Distribusi Laba",
+    tone: "slate",
     adminOnly: true,
   },
 ];
@@ -118,6 +129,10 @@ export function ExpenseRecordDialog({
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<string>("operasional");
+  const [supplierOrPartnerName, setSupplierOrPartnerName] = useState("");
+  const [notaNumber, setNotaNumber] = useState("");
+  const [titipanGrossSales, setTitipanGrossSales] = useState("");
+  const [titipanStoreProfit, setTitipanStoreProfit] = useState("");
   const [partners, setPartners] = useState<Array<{ id: string; name: string; partnerType: string }>>([]);
   const [products, setProducts] = useState<Array<{ id: string; name: string; buyPrice: number }>>([]);
   const [investorId, setInvestorId] = useState("");
@@ -127,6 +142,15 @@ export function ExpenseRecordDialog({
   const [restockProductId, setRestockProductId] = useState("");
   const [restockQuantity, setRestockQuantity] = useState("");
   const isCashier = role === "kasir";
+
+  const computedTitipanProfit = useMemo(() => {
+    const manualProfit = Number(titipanStoreProfit || 0);
+    if (manualProfit > 0) return manualProfit;
+    const gross = Number(titipanGrossSales || 0);
+    const payOut = Number(amount || 0);
+    if (gross > 0 && gross > payOut) return gross - payOut;
+    return 0;
+  }, [amount, titipanGrossSales, titipanStoreProfit]);
 
   useEffect(() => {
     if (!open) return;
@@ -170,17 +194,6 @@ export function ExpenseRecordDialog({
       return;
     }
 
-    if (category === "sales_titipan") {
-      if (!investorId) {
-        toast.error("Mitra titipan wajib dipilih.");
-        return;
-      }
-      if (settleIntakeIds.length === 0) {
-        toast.error("Pilih minimal satu barang titipan yang dilunasi.");
-        return;
-      }
-    }
-
     if (category === "sales_toko" && restockEnabled) {
       if (!restockProductId) {
         toast.error("Pilih produk yang ingin direstok.");
@@ -200,6 +213,16 @@ export function ExpenseRecordDialog({
         expenseType: category,
         investorId: investorId || undefined,
         settleIntakeIds,
+        supplierOrPartnerName: supplierOrPartnerName.trim() || undefined,
+        notaNumber: notaNumber.trim() || undefined,
+        titipanGrossSales:
+          category === "sales_titipan" && Number(titipanGrossSales || 0) > 0
+            ? Number(titipanGrossSales)
+            : undefined,
+        titipanStoreProfit:
+          category === "sales_titipan" && computedTitipanProfit > 0
+            ? computedTitipanProfit
+            : undefined,
         restock:
           category === "sales_toko" && restockEnabled
             ? {
@@ -220,11 +243,15 @@ export function ExpenseRecordDialog({
         throw new Error(errorData?.error?.issues?.[0]?.message || errorData?.error || "Gagal mencatat pengeluaran");
       }
 
-      toast.success("Pengeluaran berhasil dicatat");
+      toast.success("Catatan kas keluar berhasil disimpan");
       onOpenChange(false);
       setTitle("");
       setAmount("");
       setCategory("operasional");
+      setSupplierOrPartnerName("");
+      setNotaNumber("");
+      setTitipanGrossSales("");
+      setTitipanStoreProfit("");
       setInvestorId("");
       setSettleIntakeIds([]);
       setRestockEnabled(false);
@@ -262,25 +289,62 @@ export function ExpenseRecordDialog({
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className="overflow-y-auto px-5 sm:px-6 py-4 space-y-4 sm:space-y-4.5 flex-1 min-h-0">
-            {/* Kategori Pengeluaran */}
-            <div className="space-y-1.5">
-              <label className="text-xs sm:text-sm font-semibold text-foreground flex items-center justify-between">
-                <span>Kategori Pengeluaran <span className="text-destructive">*</span></span>
-                <span className="text-[11px] font-normal text-muted-foreground">Pilih jenis alokasi kas</span>
-              </label>
+            {/* Pilih Cepat 3 Jenis Kas Keluar Utama agar Kasir Tidak Keliru */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs sm:text-sm font-semibold text-foreground">
+                  Pilih Jenis Kas Keluar <span className="text-destructive">*</span>
+                </label>
+                <span className="text-[11px] font-normal text-muted-foreground">Bedakan beban vs kulakan &amp; titipan</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {EXPENSE_CATEGORIES.slice(0, 3).map((cat) => {
+                  const CatIcon = cat.icon;
+                  const isActive = category === cat.value;
+                  return (
+                    <button
+                      key={cat.value}
+                      type="button"
+                      onClick={() => setCategory(cat.value)}
+                      className={cn(
+                        "flex flex-col items-start text-left p-3 rounded-xl border transition-all cursor-pointer",
+                        isActive
+                          ? "border-primary bg-primary/10 ring-2 ring-primary/20 shadow-xs"
+                          : "border-border/70 bg-background/70 hover:bg-muted/50"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <CatIcon className={cn("size-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
+                        <span className="font-bold text-xs text-foreground truncate">{cat.shortLabel}</span>
+                      </div>
+                      <span
+                        className={cn(
+                          "mt-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border",
+                          cat.value === "operasional"
+                            ? "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25"
+                            : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25"
+                        )}
+                      >
+                        {cat.badge}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
               <Select value={category} onValueChange={(val) => setCategory(val || "operasional")}>
-                <SelectTrigger className="w-full h-11 sm:h-12 rounded-xl border border-input bg-background/90 px-3.5 cursor-pointer hover:bg-accent/40 transition-colors">
+                <SelectTrigger className="w-full h-10 rounded-xl border border-input bg-background/90 px-3.5 cursor-pointer hover:bg-accent/40 transition-colors">
                   <div className="flex items-center gap-2.5 truncate text-left w-full">
-                    <CategoryIcon className="size-4.5 text-primary shrink-0" />
-                    <span className="font-semibold text-xs sm:text-sm text-foreground truncate">
-                      {selectedCategoryMeta.label}
+                    <CategoryIcon className="size-4 text-primary shrink-0" />
+                    <span className="font-medium text-xs text-foreground truncate">
+                      Kategori lain / detail: {selectedCategoryMeta.label}
                     </span>
-                    <span className="ml-auto mr-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border/50 shrink-0 hidden sm:inline-block">
+                    <span className="ml-auto mr-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border/50 shrink-0 hidden sm:inline-block">
                       {selectedCategoryMeta.badge}
                     </span>
                   </div>
                 </SelectTrigger>
-                <SelectContent className="rounded-xl border border-border/80 bg-popover p-1.5 shadow-2xl max-h-72 w-[calc(100vw-2.5rem)] sm:w-[420px]">
+                <SelectContent className="rounded-xl border border-border/80 bg-popover p-1.5 shadow-2xl max-h-72 w-[calc(100vw-2.5rem)] sm:w-[440px]">
                   {EXPENSE_CATEGORIES.filter((cat) => !cat.adminOnly || !isCashier).map((cat) => {
                     const CatIcon = cat.icon;
                     return (
@@ -315,18 +379,104 @@ export function ExpenseRecordDialog({
               </p>
             </div>
 
+            {/* Nama Mitra/Supplier & No. Nota (Khusus Kulakan & Titipan) */}
+            {(category === "sales_toko" || category === "sales_titipan") && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-border/70 bg-muted/20 p-3.5">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground">
+                    {category === "sales_titipan" ? "Nama Penitip / Produk Titipan" : "Nama Sales / Agen Supplier"}
+                  </label>
+                  <Input
+                    value={supplierOrPartnerName}
+                    onChange={(e) => setSupplierOrPartnerName(e.target.value)}
+                    placeholder={category === "sales_titipan" ? "Misal: Mba Lilik, Roti Larissa, Bu Dewi" : "Misal: Agen Telur, Sales Yakult, Grosir"}
+                    className="h-10 rounded-xl bg-background border-border/80 text-xs font-medium"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground">
+                    No. Nota / Referensi (Opsional)
+                  </label>
+                  <Input
+                    value={notaNumber}
+                    onChange={(e) => setNotaNumber(e.target.value)}
+                    placeholder="Misal: Nota #104 / Bon Harian"
+                    className="h-10 rounded-xl bg-background border-border/80 text-xs font-medium"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Keterangan / Keperluan */}
             <div className="space-y-1.5">
               <label className="text-xs sm:text-sm font-semibold text-foreground">
-                Keterangan / Keperluan Pengeluaran <span className="text-destructive">*</span>
+                {category === "sales_titipan"
+                  ? "Rincian Barang Titipan yang Dibayar *"
+                  : category === "sales_toko"
+                    ? "Rincian Barang Nota / Kulakan *"
+                    : "Keterangan / Keperluan Pengeluaran *"}
               </label>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Contoh: Token Listrik PLN, Beli Lakban & Plastik, Galon Toko"
+                placeholder={
+                  category === "sales_titipan"
+                    ? "Contoh: Peyek 15 bks, Kue Basah 20 pcs"
+                    : category === "sales_toko"
+                      ? "Contoh: Telur 2 peti, Galon 10 bh, Minyak 1 dus"
+                      : "Contoh: Token Listrik PLN, Beli Plastik & Lakban, Wifi"
+                }
                 className="h-11 rounded-xl border border-input bg-background/90 text-sm font-medium px-3.5 focus-visible:ring-2 focus-visible:ring-primary/20"
               />
             </div>
+
+            {/* Kalkulator Untung Titipan (Khusus Barang Titipan) */}
+            {category === "sales_titipan" && (
+              <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                    Hitung Otomatis Keuntungan Toko dari Titipan
+                  </p>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                    Bukan Beban Rugi
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-muted-foreground">
+                      Total Uang Penjualan Titipan (Laku Rp)
+                    </label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={titipanGrossSales ? new Intl.NumberFormat("id-ID").format(Number(titipanGrossSales)) : ""}
+                      onChange={(e) => setTitipanGrossSales(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Misal: 100.000 (Opsional)"
+                      className="h-10 rounded-xl bg-background border-border/80 text-xs font-semibold tabular-nums"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-muted-foreground">
+                      Atau Isi Langsung Untung Toko (Rp)
+                    </label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={titipanStoreProfit ? new Intl.NumberFormat("id-ID").format(Number(titipanStoreProfit)) : ""}
+                      onChange={(e) => setTitipanStoreProfit(e.target.value.replace(/\D/g, ""))}
+                      placeholder={computedTitipanProfit > 0 ? new Intl.NumberFormat("id-ID").format(computedTitipanProfit) : "Otomatis: Laku - Setor"}
+                      className="h-10 rounded-xl bg-background border-border/80 text-xs font-semibold tabular-nums"
+                    />
+                  </div>
+                </div>
+                {computedTitipanProfit > 0 && (
+                  <div className="rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-2 text-xs font-semibold text-emerald-900 dark:text-emerald-200 flex items-center justify-between">
+                    <span>Keuntungan Bersih Toko dari Titipan Ini:</span>
+                    <span className="font-bold tabular-nums">+{formatCurrency(computedTitipanProfit)}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Kolom Harga / Jumlah Nominal (Hero Section) */}
             <div className="space-y-2">
@@ -411,14 +561,14 @@ export function ExpenseRecordDialog({
               </div>
             )}
 
-            {(category === "bagi_hasil_investor" || category === "sales_titipan") && (
+            {(category === "bagi_hasil_investor" || (category === "sales_titipan" && !isCashier && partners.some((p) => p.partnerType === "titipan_bagihasil" || p.partnerType === "sales_harian"))) && (
               <div className="space-y-2.5 rounded-xl border border-border/70 bg-muted/20 p-4">
                 <label className="text-xs sm:text-sm font-semibold text-foreground">
-                  {category === "sales_titipan" ? "Pilih Mitra Titipan (Konsinyasi)" : "Pilih Investor Pemodal"} <span className="text-destructive">*</span>
+                  {category === "sales_titipan" ? "Hubungkan ke Mitra Terdaftar (Opsional)" : "Pilih Investor Pemodal *"}
                 </label>
                 <Select value={investorId} onValueChange={(value) => setInvestorId(value ?? "")}>
                   <SelectTrigger className="h-10.5 rounded-xl bg-background border-border/80 text-xs font-medium">
-                    <SelectValue placeholder={category === "sales_titipan" ? "Pilih mitra titip jual..." : "Pilih nama investor pemodal..."} />
+                    <SelectValue placeholder={category === "sales_titipan" ? "Opsional: pilih mitra jika ada pencatatan intake..." : "Pilih nama investor pemodal..."} />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
                     {partners
@@ -567,60 +717,60 @@ const CATEGORY_MAP: Record<string, CategoryMeta> = {
     name: "Operasional Warung",
     badgeLabel: "Operasional",
     desc: "Beban rutin, listrik, wifi, perlengkapan",
-    badgeClass: "bg-muted/70 text-foreground border-border/70",
-    avatarBg: "bg-muted text-foreground",
-    avatarText: "text-foreground",
+    badgeClass: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30",
+    avatarBg: "bg-rose-500/10 text-rose-600",
+    avatarText: "text-rose-600",
     icon: Wrench,
-    impactLabel: "Beban Laba/Rugi",
-    impactClass: "bg-muted/50 text-muted-foreground",
+    impactLabel: "Mengurangi Laba",
+    impactClass: "text-rose-600 dark:text-rose-400 font-medium",
   },
   sales_toko: {
     key: "sales_toko",
-    name: "Kulakan / Belanja Stok",
-    badgeLabel: "Kulakan Stok",
-    desc: "Pembelian stok persediaan barang dagang",
-    badgeClass: "bg-muted/70 text-foreground border-border/70",
-    avatarBg: "bg-muted text-foreground",
-    avatarText: "text-foreground",
+    name: "Kulakan / Nota Supplier",
+    badgeLabel: "Kulakan / Nota",
+    desc: "Pembelian stok persediaan barang dagang (Non-Beban)",
+    badgeClass: "bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30",
+    avatarBg: "bg-amber-500/10 text-amber-700",
+    avatarText: "text-amber-700",
     icon: ShoppingBag,
-    impactLabel: "Belanja Kulakan",
-    impactClass: "bg-muted/50 text-muted-foreground",
+    impactLabel: "Modal Stok (Non-Beban)",
+    impactClass: "text-amber-700 dark:text-amber-300 font-medium",
   },
   sales_titipan: {
     key: "sales_titipan",
-    name: "Setor Titipan Mitra",
-    badgeLabel: "Titipan Konsinyasi",
-    desc: "Pelunasan barang titipan pihak ketiga",
-    badgeClass: "bg-muted/70 text-foreground border-border/70",
-    avatarBg: "bg-muted text-foreground",
-    avatarText: "text-foreground",
+    name: "Bayar Barang Titipan",
+    badgeLabel: "Barang Titipan",
+    desc: "Setor uang hasil jual barang titipan ke penitip (Non-Beban)",
+    badgeClass: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+    avatarBg: "bg-emerald-500/10 text-emerald-600",
+    avatarText: "text-emerald-600",
     icon: Handshake,
-    impactLabel: "Setoran Konsinyasi",
-    impactClass: "bg-muted/50 text-muted-foreground",
+    impactLabel: "Titipan (Non-Beban)",
+    impactClass: "text-emerald-700 dark:text-emerald-300 font-medium",
   },
   gaji_sosial: {
     key: "gaji_sosial",
     name: "Upah & Gaji Karyawan",
     badgeLabel: "Upah & Gaji",
     desc: "Upah harian karyawan, lembur, infak/sosial",
-    badgeClass: "bg-muted/70 text-foreground border-border/70",
-    avatarBg: "bg-muted text-foreground",
-    avatarText: "text-foreground",
+    badgeClass: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30",
+    avatarBg: "bg-rose-500/10 text-rose-600",
+    avatarText: "text-rose-600",
     icon: Users,
-    impactLabel: "Beban Upah",
-    impactClass: "bg-muted/50 text-muted-foreground",
+    impactLabel: "Mengurangi Laba",
+    impactClass: "text-rose-600 dark:text-rose-400 font-medium",
   },
   setoran_tabungan: {
     key: "setoran_tabungan",
     name: "Setor Kas / Tabungan",
     badgeLabel: "Mutasi Kas",
     desc: "Setor kas shift ke bank/tabungan (Non-Beban)",
-    badgeClass: "bg-muted/70 text-foreground border-border/70",
-    avatarBg: "bg-muted text-foreground",
-    avatarText: "text-foreground",
+    badgeClass: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30",
+    avatarBg: "bg-blue-500/10 text-blue-600",
+    avatarText: "text-blue-600",
     icon: Landmark,
-    impactLabel: "Non-Beban / Mutasi",
-    impactClass: "bg-muted/50 text-muted-foreground",
+    impactLabel: "Mutasi Kas (Non-Beban)",
+    impactClass: "text-blue-600 dark:text-blue-400 font-medium",
   },
   bagi_hasil_investor: {
     key: "bagi_hasil_investor",
@@ -632,7 +782,7 @@ const CATEGORY_MAP: Record<string, CategoryMeta> = {
     avatarText: "text-foreground",
     icon: Coins,
     impactLabel: "Distribusi Laba",
-    impactClass: "bg-muted/50 text-muted-foreground",
+    impactClass: "text-muted-foreground font-medium",
   },
 };
 
@@ -841,14 +991,53 @@ export function PengeluaranRestokView() {
     }
   }
 
-  // Statistics
-  const totalExpensesAmount = expenses.reduce((acc, e) => acc + (e.amount || 0), 0);
+  async function handleReclassifyExpense(expenseId: string, nextType: string) {
+    try {
+      const res = await fetch("/api/expenses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: expenseId, expenseType: nextType }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Gagal mengubah kategori pengeluaran.");
+      setExpenses((prev) =>
+        prev.map((item) =>
+          item.id === expenseId
+            ? {
+                ...item,
+                expenseType: data.expense?.expenseType ?? nextType,
+                category: data.expense?.category ?? nextType,
+                isCashMovement: data.expense?.isCashMovement ?? nextType === "setoran_tabungan",
+              }
+            : item
+        )
+      );
+      toast.success("Klasifikasi pengeluaran berhasil diperbarui.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal mengubah jenis pengeluaran.");
+    }
+  }
+
+  // Statistics (dipisah agar Beban Operasional tidak tercampur dengan Kulakan & Titipan)
   const operationalExpensesAmount = expenses
     .filter((e) => {
       const meta = getCategoryMeta(e);
       return meta.key === "operasional" || meta.key === "gaji_sosial";
     })
     .reduce((acc, e) => acc + (e.amount || 0), 0);
+  const kulakanExpensesAmount = expenses
+    .filter((e) => getCategoryMeta(e).key === "sales_toko")
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
+  const titipanExpensesAmount = expenses
+    .filter((e) => getCategoryMeta(e).key === "sales_titipan")
+    .reduce((acc, e) => acc + (e.amount || 0), 0);
+  const titipanRecordedProfitAmount = expenses
+    .filter((e) => getCategoryMeta(e).key === "sales_titipan")
+    .reduce((acc, e) => {
+      const match = /untung\s*toko\s*:?\s*rp\.?\s*([\d.]+)/i.exec(e.title || "");
+      const parsed = match?.[1] ? Number(match[1].replace(/\./g, "")) : 0;
+      return acc + (Number.isFinite(parsed) ? parsed : 0);
+    }, 0);
 
   const pendingPlans = plans.filter((p) => p.isDone === 0);
   const completedPlans = plans.filter((p) => p.isDone === 1);
@@ -967,28 +1156,66 @@ export function PengeluaranRestokView() {
       {/* Top Stat Cards */}
       <section className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Beban Operasional"
+          title="Beban Operasional Murni"
           value={formatCurrency(operationalExpensesAmount)}
-          description="Listrik, upah & perlengkapan toko."
+          description="Listrik, plastik, wifi & upah (mengurangi laba)."
           tone="warn"
         />
         <StatCard
-          title="Total Kas Keluar"
-          value={formatCurrency(totalExpensesAmount)}
-          description={`${expenses.length} total transaksi tercatat.`}
+          title="Kulakan / Nota Supplier"
+          value={formatCurrency(kulakanExpensesAmount)}
+          description="Modal belanja stok barang (Non-Beban rugi)."
+        />
+        <StatCard
+          title="Setoran Barang Titipan"
+          value={formatCurrency(titipanExpensesAmount)}
+          description={
+            titipanRecordedProfitAmount > 0
+              ? `Tercatat untung titipan +${formatCurrency(titipanRecordedProfitAmount)}`
+              : "Bayar hasil jual barang titipan ke penitip."
+          }
+          tone="accent"
         />
         <StatCard
           title="Rencana Belanja Restok"
           value={`${pendingPlans.length} Item`}
-          description={`Est: ${formatCurrency(estimatedRestokCost)}`}
-          tone="accent"
-        />
-        <StatCard
-          title="Restok Terbeli"
-          value={`${completedPlans.length} Selesai`}
-          description={`${restokProgressPercent}% dari rencana terbeli.`}
+          description={`Est: ${formatCurrency(estimatedRestokCost)} (${completedPlans.length} selesai)`}
         />
       </section>
+
+      {/* Panduan Pembeda Kasir: Beban vs Nota Kulakan vs Barang Titipan */}
+      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3.5 sm:p-4">
+        <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-foreground mb-2">
+          <Sparkles className="size-4 text-primary shrink-0" />
+          <span>Panduan Kasir: Bedakan 3 Jenis Kas Keluar Agar Laporan Laba Akurat</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+          <div className="rounded-xl border border-rose-500/25 bg-card/80 p-2.5">
+            <p className="font-bold text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+              <Wrench className="size-3.5" /> 1. Operasional Toko (Mengurangi Laba)
+            </p>
+            <p className="text-muted-foreground mt-0.5 leading-snug">
+              Khusus biaya toko habis pakai: token listrik, plastik/kresek, cup, lakban, wifi, bensin, gaji.
+            </p>
+          </div>
+          <div className="rounded-xl border border-amber-500/25 bg-card/80 p-2.5">
+            <p className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+              <ShoppingBag className="size-3.5" /> 2. Nota Kulakan Supplier (Non-Beban)
+            </p>
+            <p className="text-muted-foreground mt-0.5 leading-snug">
+              Bayar nota belanja barang dagangan/agen (telur, galon, gas, beras, snack). Masuk modal stok, bukan beban rugi!
+            </p>
+          </div>
+          <div className="rounded-xl border border-emerald-500/25 bg-card/80 p-2.5">
+            <p className="font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+              <Handshake className="size-3.5" /> 3. Bayar Barang Titipan (Non-Beban)
+            </p>
+            <p className="text-muted-foreground mt-0.5 leading-snug">
+              Setor uang barang titipan ke penitip (roti, peyek, kue). Bisa catat total laku &amp; otomatis hitung untung toko!
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Header with Title and Action Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-1">
@@ -1405,25 +1632,40 @@ export function PengeluaranRestokView() {
                                     </div>
                                   </div>
                                 </TableCell>
-                                <TableCell className="w-[150px] whitespace-nowrap py-3">
-                                  <span className="px-2.5 py-1 text-[11px] font-medium rounded-lg border bg-background/80 text-muted-foreground border-border/70 inline-flex items-center gap-1.5">
-                                    <CategoryIcon className="size-3 text-muted-foreground" />
+                                <TableCell className="w-[165px] whitespace-nowrap py-3">
+                                  <span className={cn("px-2.5 py-1 text-[11px] font-medium rounded-lg border inline-flex items-center gap-1.5", meta.badgeClass)}>
+                                    <CategoryIcon className="size-3" />
                                     <span>{meta.badgeLabel}</span>
                                   </span>
                                 </TableCell>
-                                <TableCell className="w-[140px] whitespace-nowrap py-3">
-                                  <span className="text-xs text-muted-foreground font-normal">
+                                <TableCell className="w-[155px] whitespace-nowrap py-3">
+                                  <span className={cn("text-xs", meta.impactClass)}>
                                     {meta.impactLabel}
                                   </span>
                                 </TableCell>
-                                <TableCell className="w-[140px] whitespace-nowrap text-right py-3 font-semibold text-foreground tabular-nums text-xs sm:text-sm">
+                                <TableCell className="w-[130px] whitespace-nowrap text-right py-3 font-semibold text-foreground tabular-nums text-xs sm:text-sm">
                                   {formatCurrency(expense.amount)}
                                 </TableCell>
-                                <TableCell className="w-[120px] whitespace-nowrap text-center py-3 pr-4">
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                                    <Check className="size-3" />
-                                    Masuk Laporan
-                                  </span>
+                                <TableCell className="w-[150px] whitespace-nowrap text-center py-3 pr-4">
+                                  <Select
+                                    value={meta.key}
+                                    onValueChange={(nextVal) => {
+                                      if (nextVal && nextVal !== meta.key) {
+                                        void handleReclassifyExpense(expense.id, nextVal);
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-7.5 w-[136px] rounded-lg border-border/70 bg-background/80 text-[11px] font-medium px-2">
+                                      <SelectValue placeholder="Ubah Jenis" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl text-xs">
+                                      <SelectItem value="operasional">Operasional (Beban)</SelectItem>
+                                      <SelectItem value="sales_toko">Kulakan / Nota</SelectItem>
+                                      <SelectItem value="sales_titipan">Barang Titipan</SelectItem>
+                                      <SelectItem value="gaji_sosial">Upah &amp; Gaji</SelectItem>
+                                      <SelectItem value="setoran_tabungan">Mutasi Kas</SelectItem>
+                                    </SelectContent>
+                                  </Select>
                                 </TableCell>
                               </TableRow>
                             );

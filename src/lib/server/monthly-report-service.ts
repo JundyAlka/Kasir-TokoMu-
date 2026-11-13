@@ -1,10 +1,33 @@
 import { pool } from "@/db/client";
 import { calculatePeriodProfit } from "@/lib/server/profit-sharing";
+import {
+  buildStoreRecommendations,
+  getExpenseFlowBreakdown,
+  type StoreRecommendationItem,
+} from "@/lib/server/store-recommendations";
 import { getJakartaDayRange, getJakartaMonthRange, getJakartaWeekRange } from "@/lib/server/timezone";
 
 export type DailyRollup = { reportDate: string; revenue: number; cogs: number; expenseTotal: number; grossProfit: number; netProfit: number; profitDistribution: number; transactionCount: number; status: "draft" | "locked" };
 export type DailyTransactionSummary = { dateKey: string; revenue: number; transactionCount: number };
-export type DailyReportRollup = { periodStart: string; periodEnd: string; revenue: number; cogs: number; grossProfit: number; expenseTotal: number; netProfit: number; profitDistribution: number; transactionCount: number; averageTicket: number; dailyReports: DailyRollup[]; dailyTransactions?: DailyTransactionSummary[]; source: "daily_reports" | "live_transactions" };
+export type DailyReportRollup = {
+  periodStart: string;
+  periodEnd: string;
+  revenue: number;
+  cogs: number;
+  grossProfit: number;
+  expenseTotal: number;
+  netProfit: number;
+  profitDistribution: number;
+  kulakanTotal?: number;
+  titipanTotal?: number;
+  estimatedTitipanProfit?: number;
+  transactionCount: number;
+  averageTicket: number;
+  dailyReports: DailyRollup[];
+  dailyTransactions?: DailyTransactionSummary[];
+  recommendations?: StoreRecommendationItem[];
+  source: "daily_reports" | "live_transactions";
+};
 
 function number(value: unknown) { return Number(value ?? 0); }
 function dayRange(date: string) { return getJakartaDayRange(new Date(`${date}T12:00:00.000Z`)); }
@@ -40,7 +63,7 @@ async function getLiveReportRollup(
     start: jakartaDateKey(range.start),
     end: jakartaDateKey(range.end),
   };
-  const [summary, dailyRollup, liveTransactions] = await Promise.all([
+  const [summary, dailyRollup, liveTransactions, expenseFlow] = await Promise.all([
     calculatePeriodProfit(workspaceOwnerId, range.start, range.end),
     getDailyReportRollup(workspaceOwnerId, dailyDateRange),
     pool.query<{ occurredAt: string; total: number }>(
@@ -52,6 +75,7 @@ async function getLiveReportRollup(
        order by occurred_at asc`,
       [workspaceOwnerId, range.start, range.end]
     ),
+    getExpenseFlowBreakdown(workspaceOwnerId, range.start, range.end),
   ]);
 
   const dailyMap = new Map<string, { revenue: number; transactionCount: number }>();
@@ -81,6 +105,20 @@ async function getLiveReportRollup(
   const transactionCount = Math.max(summary.transactionCount, dailyRollup.transactionCount);
   const averageTicket = transactionCount ? Math.round(revenue / transactionCount) : 0;
 
+  const recommendations = await buildStoreRecommendations(
+    workspaceOwnerId,
+    range.start,
+    range.end,
+    {
+      revenue,
+      cogs,
+      grossProfit,
+      operationalExpense: expenseTotal,
+      netProfit,
+      transactionCount,
+    }
+  );
+
   return {
     periodStart: range.start,
     periodEnd: range.end,
@@ -90,10 +128,14 @@ async function getLiveReportRollup(
     expenseTotal,
     netProfit,
     profitDistribution: summary.profitDistribution || dailyRollup.profitDistribution,
+    kulakanTotal: expenseFlow.kulakanExpense,
+    titipanTotal: expenseFlow.titipanSettlement,
+    estimatedTitipanProfit: expenseFlow.estimatedTitipanProfit,
     transactionCount,
     averageTicket,
     dailyReports: dailyRollup.dailyReports,
     dailyTransactions,
+    recommendations,
     source: hasDaily && summary.revenue === 0 ? "daily_reports" : "live_transactions",
   };
 }

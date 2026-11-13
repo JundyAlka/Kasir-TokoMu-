@@ -114,7 +114,7 @@ export async function buildDailyReport(
     ),
     pool.query<{ expenseTotal: number | string; profitDistribution: number | string }>(
       `select
-         coalesce(sum(case when e.is_cash_movement = false and e.expense_type <> 'bagi_hasil_investor' then e.amount else 0 end), 0) as "expenseTotal",
+         coalesce(sum(case when e.is_cash_movement = false and e.expense_type in ('operasional', 'gaji_sosial') then e.amount else 0 end), 0) as "expenseTotal",
          coalesce(sum(case when e.expense_type = 'bagi_hasil_investor' then e.amount else 0 end), 0) as "profitDistribution"
        from expenses e left join shift_sessions ss on ss.id = e.shift_session_id
        where e.user_id = $1

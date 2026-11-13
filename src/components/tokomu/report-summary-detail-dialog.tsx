@@ -24,6 +24,15 @@ export type ProfitLossSummary = {
   expenseTotal: number;
   netProfit: number;
   profitDistribution?: number;
+  kulakanTotal?: number;
+  titipanTotal?: number;
+  estimatedTitipanProfit?: number;
+  recommendations?: Array<{
+    category: "margin" | "produk_laris" | "stok_prioritas" | "stok_mengendap" | "arus_kas";
+    title: string;
+    detail: string;
+    priority: "tinggi" | "sedang" | "info";
+  }>;
   source?: "daily_reports" | "live_transactions";
   transactionCount: number;
   averageTicket: number;

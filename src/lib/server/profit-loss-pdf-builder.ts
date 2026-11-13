@@ -17,6 +17,10 @@ import {
   getTopProductsForPeriod,
 } from "@/lib/server/reporting";
 import {
+  buildStoreRecommendations,
+  getExpenseFlowBreakdown,
+} from "@/lib/server/store-recommendations";
+import {
   getJakartaDateKey,
   getJakartaDayRange,
   getJakartaWeekRange,
@@ -122,15 +126,19 @@ async function getExpenseCategories(
 ) {
   const result = await pool.query<{
     category: string;
+    expenseType: string;
     amount: string;
   }>(
     `
-      select category, coalesce(sum(amount), 0)::text as amount
+      select
+        coalesce(expense_type, category, 'operasional') as "expenseType",
+        coalesce(expense_type, category, 'operasional') as category,
+        coalesce(sum(amount), 0)::text as amount
       from expenses
       where user_id = $1
         and created_at >= $2::timestamptz
         and created_at < $3::timestamptz
-      group by category
+      group by coalesce(expense_type, category, 'operasional')
       order by sum(amount) desc, category asc
     `,
     [workspaceOwnerId, periodStart, periodEnd]
@@ -138,6 +146,7 @@ async function getExpenseCategories(
 
   return result.rows.map((r) => ({
     category: r.category,
+    expenseType: r.expenseType,
     amount: Number(r.amount || 0),
   }));
 }
@@ -188,6 +197,7 @@ export async function buildProfitLossPdfBuffer(
     dailySummary,
     expenseCategories,
     expenseItemsResult,
+    expenseFlow,
     lowStockProducts,
     topProducts,
     bottomProducts,
@@ -196,6 +206,7 @@ export async function buildProfitLossPdfBuffer(
     assetSummary,
     productStatsResult,
     paymentBreakdownResult,
+    periodNewDebtsResult,
     debtsResult,
     stockCategoriesResult,
     supplierDebtsResult,
@@ -209,15 +220,17 @@ export async function buildProfitLossPdfBuffer(
       title: string;
       amount: string;
       category: string;
+      expenseType: string;
       createdAt: string;
     }>(
-      `select id, title, coalesce(amount, 0)::text as amount, category, created_at as "createdAt"
+      `select id, title, coalesce(amount, 0)::text as amount, category, coalesce(expense_type, category, 'operasional') as "expenseType", created_at as "createdAt"
        from expenses
        where user_id = $1 and created_at >= $2::timestamptz and created_at < $3::timestamptz
        order by created_at desc, id desc
-       limit 50`,
+       limit 60`,
       [workspaceOwnerId, period.range.start, period.range.end]
     ),
+    getExpenseFlowBreakdown(workspaceOwnerId, period.range.start, period.range.end),
     getLowStockProducts(workspaceOwnerId),
     getTopProductsForPeriod(workspaceOwnerId, period.range.start, period.range.end, 5),
     getBottomProductsForPeriod(workspaceOwnerId, period.range.start, period.range.end, 5),
@@ -239,10 +252,16 @@ export async function buildProfitLossPdfBuffer(
       [workspaceOwnerId]
     ),
     pool.query<{ paymentMethod: string; total: string; count: string }>(
-      `select coalesce(payment_method, 'cash') as "paymentMethod", coalesce(sum(total), 0)::text as total, count(*)::text as count
+      `select coalesce(payment_method, 'Tunai') as "paymentMethod", coalesce(sum(total), 0)::text as total, count(*)::text as count
        from transactions
-       where user_id = $1 and occurred_at >= $2::timestamptz and occurred_at < $3::timestamptz
+       where user_id = $1 and coalesce(occurred_at, created_at) >= $2::timestamptz and coalesce(occurred_at, created_at) < $3::timestamptz
        group by payment_method`,
+      [workspaceOwnerId, period.range.start, period.range.end]
+    ),
+    pool.query<{ count: string; amount: string }>(
+      `select count(*)::text as count, coalesce(sum(amount), 0)::text as amount
+       from debts
+       where user_id = $1 and created_at >= $2::timestamptz and created_at < $3::timestamptz`,
       [workspaceOwnerId, period.range.start, period.range.end]
     ),
     pool.query<{
@@ -298,29 +317,43 @@ export async function buildProfitLossPdfBuffer(
   const totalStockUnits = Number(productStatsResult.rows[0]?.totalUnits ?? 0);
   const totalAssets = assetSummary.inventoryCapital + assetSummary.activeReceivables;
 
-  const salesChannels = paymentBreakdownResult.rows.map((r) => ({
-    method:
-      r.paymentMethod === "cash"
-        ? "Tunai (Cash)"
-        : r.paymentMethod === "kasbon"
-          ? "Kasbon (Piutang)"
-          : r.paymentMethod === "transfer"
-            ? "Transfer Bank"
-            : r.paymentMethod === "qris"
-              ? "QRIS"
-              : r.paymentMethod,
-    count: Number(r.count || 0),
-    total: Number(r.total || 0),
-  }));
+  const normalizedMethodLabel = (rawMethod: string) => {
+    const key = (rawMethod || "cash").toLowerCase().trim();
+    if (key === "cash" || key === "tunai") return "Tunai (Cash)";
+    if (key === "kasbon" || key === "piutang" || key === "hutang") return "Kasbon (Piutang)";
+    if (key === "transfer") return "Transfer Bank";
+    if (key === "qris") return "QRIS";
+    return rawMethod;
+  };
 
-  const totalExpense =
-    dailySummary.expenseTotal ||
-    expenseCategories.reduce((sum, item) => sum + item.amount, 0);
+  const periodNewDebtsCount = Number(periodNewDebtsResult.rows[0]?.count ?? 0);
+  const periodNewDebtsAmount = Number(periodNewDebtsResult.rows[0]?.amount ?? 0);
+
+  const salesChannelsMap = new Map<string, { method: string; count: number; total: number }>();
+  for (const r of paymentBreakdownResult.rows) {
+    const label = normalizedMethodLabel(r.paymentMethod);
+    const cur = salesChannelsMap.get(label) ?? { method: label, count: 0, total: 0 };
+    cur.count += Number(r.count || 0);
+    cur.total += Number(r.total || 0);
+    salesChannelsMap.set(label, cur);
+  }
+  const hasTxnKasbon = salesChannelsMap.has("Kasbon (Piutang)");
+  if (!hasTxnKasbon && periodNewDebtsAmount > 0) {
+    salesChannelsMap.set("Kasbon (Piutang)", {
+      method: "Kasbon (Piutang Baru)",
+      count: periodNewDebtsCount,
+      total: periodNewDebtsAmount,
+    });
+  }
+  const salesChannels = Array.from(salesChannelsMap.values()).sort((a, b) => b.total - a.total);
+
+  const operationalExpenseTotal = dailySummary.expenseTotal;
+  const totalAllCashOutflow = expenseCategories.reduce((sum, item) => sum + item.amount, 0);
   const enrichedExpenseCategories = expenseCategories.map((item) => ({
     ...item,
     percentage:
-      totalExpense > 0
-        ? `${Math.round((item.amount / totalExpense) * 1000) / 10}%`
+      totalAllCashOutflow > 0
+        ? `${Math.round((item.amount / totalAllCashOutflow) * 1000) / 10}%`
         : "0%",
   }));
 
@@ -328,6 +361,7 @@ export async function buildProfitLossPdfBuffer(
     id: e.id,
     title: e.title,
     category: e.category,
+    expenseType: e.expenseType,
     amount: Number(e.amount || 0),
     createdAt: e.createdAt,
   }));
@@ -389,7 +423,7 @@ export async function buildProfitLossPdfBuffer(
       ? assetSummary.investorMoneyCapital
       : 7000000;
   const totalHutang = hutangToko + hutangSalesTitipan + hutangInvestasi;
-  const biayaAtk = totalExpense > 0 ? totalExpense : 46000;
+  const biayaAtk = operationalExpenseTotal > 0 ? operationalExpenseTotal : 46000;
   const totalKewajibanDanBiaya = modalAwal + totalHutang + biayaAtk;
   const labaRugiBerjalan = totalPhysicalAssets - totalKewajibanDanBiaya;
 
@@ -420,14 +454,24 @@ export async function buildProfitLossPdfBuffer(
   const executorAmount = Math.max(0, distributable - pcmAmount - reserveAmount);
 
   const cashSales = paymentBreakdownResult.rows
-    .filter((r) => r.paymentMethod === "cash")
+    .filter((r) => {
+      const m = (r.paymentMethod || "").toLowerCase().trim();
+      return m === "cash" || m === "tunai";
+    })
     .reduce((sum, r) => sum + Number(r.total || 0), 0);
   const nonCashSales = paymentBreakdownResult.rows
-    .filter((r) => r.paymentMethod === "transfer" || r.paymentMethod === "qris")
+    .filter((r) => {
+      const m = (r.paymentMethod || "").toLowerCase().trim();
+      return m === "transfer" || m === "qris";
+    })
     .reduce((sum, r) => sum + Number(r.total || 0), 0);
-  const kasbonSales = paymentBreakdownResult.rows
-    .filter((r) => r.paymentMethod === "kasbon")
+  const txnKasbonSales = paymentBreakdownResult.rows
+    .filter((r) => {
+      const m = (r.paymentMethod || "").toLowerCase().trim();
+      return m === "kasbon" || m === "piutang" || m === "hutang";
+    })
     .reduce((sum, r) => sum + Number(r.total || 0), 0);
+  const kasbonSales = txnKasbonSales > 0 ? txnKasbonSales : periodNewDebtsAmount;
 
   const operationalBreakdown = {
     cashSales,
@@ -439,6 +483,10 @@ export async function buildProfitLossPdfBuffer(
     operatingExpenses: dailySummary.expenseTotal,
     profitDistribution: dailySummary.profitDistribution,
     totalExpenses: dailySummary.expenseTotal + dailySummary.profitDistribution,
+    kulakanTotal: expenseFlow.kulakanExpense,
+    titipanTotal: expenseFlow.titipanSettlement,
+    estimatedTitipanProfit: expenseFlow.estimatedTitipanProfit,
+    cashMovementTotal: expenseFlow.cashMovementTotal,
     netProfit: dailySummary.netProfit,
     isSurplus: dailySummary.netProfit >= 0,
     pcmPct,
@@ -448,6 +496,17 @@ export async function buildProfitLossPdfBuffer(
     executorPct,
     executorAmount,
   };
+
+  const recommendations =
+    dailySummary.recommendations ??
+    (await buildStoreRecommendations(workspaceOwnerId, period.range.start, period.range.end, {
+      revenue: dailySummary.revenue,
+      cogs: dailySummary.cogs,
+      grossProfit: dailySummary.grossProfit,
+      operationalExpense: dailySummary.expenseTotal,
+      netProfit: dailySummary.netProfit,
+      transactionCount: dailySummary.transactionCount,
+    }));
 
   const financialMargin =
     dailySummary.revenue > 0
@@ -459,11 +518,11 @@ export async function buildProfitLossPdfBuffer(
       ? requestedNotes
       : [
           `Laba bersih usaha ${period.label} tercatat ${formatCurrency(dailySummary.netProfit)} dengan omzet penjualan ${formatCurrency(dailySummary.revenue)}.`,
-          `Total beban operasional dan pengeluaran tercatat senilai ${formatCurrency(dailySummary.expenseTotal)}.`,
+          `Beban operasional murni tercatat ${formatCurrency(dailySummary.expenseTotal)}. Belanja kulakan/nota supplier (${formatCurrency(expenseFlow.kulakanExpense)}) dan setor barang titipan (${formatCurrency(expenseFlow.titipanSettlement)}) dicatat terpisah sebagai perputaran stok/konsinyasi (bukan beban rugi).`,
           `Nilai modal stok aktif barang dagangan saat ini senilai ${formatCurrency(assetSummary.inventoryCapital)} dari ${totalActiveProducts} SKU (${totalStockUnits} unit fisik).`,
           `Piutang kasbon aktif pelanggan toko tercatat senilai ${formatCurrency(assetSummary.activeReceivables)}.`,
           `Hasil pembukuan usaha ${period.label} membukukan ${dailySummary.netProfit >= 0 ? "Surplus Bersih" : "Defisit Operasional"} ${formatCurrency(dailySummary.netProfit)} (Margin Bersih: ${financialMargin}%).`,
-          "Laporan kinerja dan laba rugi operasional dicetak dan divalidasi secara otomatis dari sistem TokoMu.",
+          "Laporan kinerja, laba rugi operasional, dan rekomendasi strategis dicetak otomatis dari sistem TokoMu.",
         ];
 
   const data: ProfitLossPdfData = {
@@ -518,6 +577,7 @@ export async function buildProfitLossPdfBuffer(
     topProducts,
     bottomProducts,
     ownerNotes,
+    recommendations,
     payouts: payoutSummary.payouts,
     restockPlans: pendingRestocks,
     lowStockProducts,

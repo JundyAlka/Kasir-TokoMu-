@@ -3082,9 +3082,13 @@ export function LaporanView() {
           onClick={() => setActiveSummaryMetric("laba_kotor")}
         />
         <StatCard
-          title="Pengeluaran"
+          title="Beban Operasional"
           value={formatCurrency(summary.expenseTotal)}
-          description="Biaya operasional yang tercatat di periode ini."
+          description={
+            (summary.kulakanTotal ?? 0) > 0 || (summary.titipanTotal ?? 0) > 0
+              ? `Non-beban: Kulakan ${formatCompactCurrency(summary.kulakanTotal ?? 0)}, Titipan ${formatCompactCurrency(summary.titipanTotal ?? 0)}`
+              : "Biaya operasional murni yang tercatat di periode ini."
+          }
           onClick={() => setActiveSummaryMetric("pengeluaran")}
         />
         <StatCard
@@ -3529,6 +3533,62 @@ export function LaporanView() {
           </CardContent>
         </Card>
       </div>
+
+      {summary.recommendations && summary.recommendations.length > 0 ? (
+        <Card className="border-border/60 bg-card/74 shadow-[0_20px_50px_-38px_rgba(66,38,20,0.45)]">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <CardTitle className="font-heading text-xl flex items-center gap-2">
+                  <TrendingUp className="size-5 text-primary" />
+                  Analisa Mandiri &amp; Rekomendasi Peningkatan Profit Toko
+                </CardTitle>
+                <CardDescription>
+                  Saran otomatis berbasis margin produk, kecepatan laku, stok kritis, dan arus kas periode {periodLabel}.
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="w-fit rounded-full px-3 py-1 text-xs font-semibold">
+                {summary.recommendations.length} Rekomendasi
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-2">
+              {summary.recommendations.map((rec, index) => (
+                <div
+                  key={`${rec.category}-${index}`}
+                  className={cn(
+                    "rounded-2xl border p-4 space-y-1.5",
+                    rec.priority === "tinggi"
+                      ? "border-rose-500/30 bg-rose-500/5"
+                      : rec.priority === "sedang"
+                        ? "border-amber-500/30 bg-amber-500/5"
+                        : "border-emerald-500/25 bg-emerald-500/5"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-sm text-foreground">{rec.title}</span>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px] shrink-0 uppercase font-bold",
+                        rec.priority === "tinggi"
+                          ? "border-rose-500/40 text-rose-700 dark:text-rose-300"
+                          : rec.priority === "sedang"
+                            ? "border-amber-500/40 text-amber-800 dark:text-amber-300"
+                            : "border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
+                      )}
+                    >
+                      {rec.priority === "tinggi" ? "Prioritas" : rec.priority === "sedang" ? "Tindak Lanjut" : "Info"}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{rec.detail}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <ReportSummaryDetailDialog
         expenses={expenses}
