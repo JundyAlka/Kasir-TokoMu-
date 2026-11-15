@@ -6,7 +6,12 @@ import {
   whatsappReportConfigs,
 } from "@/db/schema";
 import { logEvent } from "@/lib/server/audit";
-import { getReportRollupByMode } from "@/lib/server/monthly-report-service";
+import {
+  DailyReportRollup,
+  getMonthToDateProfitSummary,
+  getReportRollupByMode,
+} from "@/lib/server/monthly-report-service";
+import type { StoreRecommendationItem } from "@/lib/server/store-recommendations";
 import {
   getOpenWaSessionStatus,
   normalizeOpenWaBaseUrl,
@@ -567,6 +572,89 @@ function resolveRangeFromMode(
   };
 }
 
+function buildWhatsAppRecommendationSummary(
+  rollup: DailyReportRollup,
+  topProducts: { name: string; sold: number; revenue: number }[],
+  recommendations?: StoreRecommendationItem[]
+): string[] {
+  if (!recommendations || recommendations.length === 0) {
+    return [];
+  }
+
+  const marginRec = recommendations.find((r) => r.category === "margin");
+  const urgentRec = recommendations.find((r) => r.category === "stok_prioritas");
+  const slowRec = recommendations.find((r) => r.category === "stok_mengendap");
+
+  const marginPct =
+    rollup.revenue > 0
+      ? ((rollup.grossProfit / rollup.revenue) * 100).toFixed(1)
+      : "0";
+
+  const fastProductsText = topProducts?.length
+    ? topProducts.slice(0, 3).map((p) => p.name).join(", ")
+    : "";
+
+  let urgentList: string[] = [];
+  if (urgentRec?.detail) {
+    const parts = urgentRec.detail.split(":");
+    if (parts.length > 1) {
+      const afterColon = parts[1].split(". Kekosongan")[0];
+      urgentList = afterColon.split(";").map((s) => s.trim()).filter(Boolean).slice(0, 3);
+    }
+  }
+
+  let highMarginList: string[] = [];
+  if (marginRec?.detail) {
+    const match = /tertinggi:\s*([^.]+?)\s*di rak/i.exec(marginRec.detail);
+    if (match?.[1]) {
+      highMarginList = match[1]
+        .split(";")
+        .map((s) => s.replace(/\s*\([^)]*\)/g, "").trim())
+        .filter(Boolean)
+        .slice(0, 2);
+    }
+  }
+
+  // Paragraf 1: Kondisi Usaha
+  let p1 = `• *Kondisi Usaha:* Margin kotor toko tercatat ${marginPct}%`;
+  if (rollup.revenue > 0) {
+    p1 += ` (${formatRupiah(rollup.grossProfit)} dari omzet ${formatRupiah(rollup.revenue)})`;
+  }
+  if (fastProductsText) {
+    p1 += `, dengan perputaran harian tercepat didorong oleh produk magnet toko (${fastProductsText}).`;
+  } else {
+    p1 += `, dengan perputaran penjualan harian berjalan stabil.`;
+  }
+  p1 += ` Arus kas operasional tercatat disiplin dan terpisah dari belanja stok/titipan sehingga laba usaha riil terjaga.`;
+
+  // Paragraf 2: Saran Optimasi & Tindakan Nyata
+  let p2 = `• *Saran Optimasi:* `;
+  const actionPoints: string[] = [];
+  if (urgentList.length > 0) {
+    actionPoints.push(`Prioritaskan restok produk laris yang menipis (${urgentList.join(", ")})`);
+  }
+  if (highMarginList.length > 0) {
+    actionPoints.push(`dorong penjualan produk bermargin tebal (${highMarginList.join(", ")}) di dekat kasir`);
+  }
+  if (slowRec) {
+    actionPoints.push(`evaluasi produk yang lambat berputar agar modal tidak mengendap`);
+  }
+  if (actionPoints.length > 0) {
+    p2 += actionPoints.join(", ") + ".";
+  } else {
+    p2 += `Pertahankan ketersediaan stok produk pancingan dan jaga efisiensi beban operasional warung.`;
+  }
+  p2 += ` Rincian evaluasi & strategi produk lengkap tersaji pada lampiran PDF.`;
+
+  return [
+    "",
+    "💡 *Evaluasi & Rekomendasi Toko*",
+    p1,
+    "",
+    p2,
+  ];
+}
+
 export async function buildWhatsAppReportMessage(
   workspaceOwnerId: string,
   mode: "harian" | "mingguan" | "bulanan",
@@ -574,7 +662,7 @@ export async function buildWhatsAppReportMessage(
 ) {
   const resolved = resolveRangeFromMode(mode, periodValue);
 
-  const [[profile], rollup, assetSummary, topProducts, dailyShiftRes] =
+  const [[profile], rollup, assetSummary, topProducts, dailyShiftRes, mtdProfit] =
     await Promise.all([
       db
         .select({
@@ -611,6 +699,9 @@ export async function buildWhatsAppReportMessage(
             [workspaceOwnerId, resolved.start, resolved.end]
           )
         : Promise.resolve({ rows: [] }),
+      mode === "harian" || mode === "mingguan"
+        ? getMonthToDateProfitSummary(workspaceOwnerId, resolved.periodValue)
+        : Promise.resolve(null),
     ]);
 
   const storeName = profile?.storeName?.trim() || "TokoMu";
@@ -649,21 +740,61 @@ export async function buildWhatsAppReportMessage(
     );
   }
 
+  // Persentase Bagi Hasil (Default: PCM 30%, Cadangan 20%, Toko 50%)
+  const pcmPct = profile?.profitSharePcmPct ?? 30;
+  const reservePct = profile?.profitShareReservePct ?? 20;
+  const executorPct = Math.max(0, 100 - pcmPct - reservePct);
+
+  // 1. Alokasi Laba Bersih Periode Berjalan (Hari Ini / Pekan Ini / Bulan Ini Penuh)
+  const allocTitle =
+    mode === "harian"
+      ? "🤝 *Alokasi Laba Bersih (Hari Ini)*"
+      : mode === "mingguan"
+        ? "🤝 *Alokasi Laba Bersih (Pekan Ini)*"
+        : "🤝 *Alokasi Laba Bersih (Bulan Ini Penuh)*";
+
+  lines.push("", allocTitle);
   if (rollup.netProfit > 0) {
-    const pcmPct = profile?.profitSharePcmPct ?? 30;
-    const reservePct = profile?.profitShareReservePct ?? 20;
-    const executorPct = Math.max(0, 100 - pcmPct - reservePct);
-    const distributable = Math.max(0, rollup.netProfit);
-    const pcmAmount = Math.round((distributable * pcmPct) / 100);
-    const reserveAmount = Math.round((distributable * reservePct) / 100);
-    const executorAmount = Math.max(0, distributable - pcmAmount - reserveAmount);
+    const periodDistributable = rollup.netProfit;
+    const periodPcm = Math.round((periodDistributable * pcmPct) / 100);
+    const periodReserve = Math.round((periodDistributable * reservePct) / 100);
+    const periodExecutor = Math.max(0, periodDistributable - periodPcm - periodReserve);
+
+    lines.push(
+      `• PCM (${pcmPct}%): ${formatRupiah(periodPcm)}`,
+      `• Kas Cadangan (${reservePct}%): ${formatRupiah(periodReserve)}`,
+      `• Toko / Pelaksana (${executorPct}%): ${formatRupiah(periodExecutor)}`
+    );
+  } else {
+    lines.push(
+      `• Periode ini belum ada surplus laba bersih (${formatRupiah(rollup.netProfit)}), tidak ada bagi hasil berjalan.`
+    );
+  }
+
+  // 2. Akumulasi Bagi Hasil Bulan Berjalan (Month-To-Date) untuk Laporan Harian & Mingguan
+  if ((mode === "harian" || mode === "mingguan") && mtdProfit) {
     lines.push(
       "",
-      "🤝 *Alokasi Laba Bersih*",
-      `• PCM (${pcmPct}%): ${formatRupiah(pcmAmount)}`,
-      `• Kas Cadangan (${reservePct}%): ${formatRupiah(reserveAmount)}`,
-      `• Toko / Pelaksana (${executorPct}%): ${formatRupiah(executorAmount)}`
+      `📈 *Akumulasi Bagi Hasil Bulan Berjalan (${mtdProfit.label})*`,
+      `• Total Laba Bersih Akumulasi: *${formatRupiah(mtdProfit.netProfit)}*`
     );
+
+    if (mtdProfit.netProfit > 0) {
+      const mtdDistributable = mtdProfit.netProfit;
+      const mtdPcm = Math.round((mtdDistributable * pcmPct) / 100);
+      const mtdReserve = Math.round((mtdDistributable * reservePct) / 100);
+      const mtdExecutor = Math.max(0, mtdDistributable - mtdPcm - mtdReserve);
+
+      lines.push(
+        `• Akumulasi PCM (${pcmPct}%): ${formatRupiah(mtdPcm)}`,
+        `• Akumulasi Kas Cadangan (${reservePct}%): ${formatRupiah(mtdReserve)}`,
+        `• Akumulasi Toko / Pelaksana (${executorPct}%): ${formatRupiah(mtdExecutor)}`
+      );
+    } else {
+      lines.push(
+        `• Akumulasi laba bersih bulan berjalan masih defisit, belum ada saldo yang dialokasikan.`
+      );
+    }
   }
 
   if (mode === "harian" && dailyShiftRes.rows.length > 0) {
@@ -696,13 +827,13 @@ export async function buildWhatsAppReportMessage(
     });
   }
 
-  if (rollup.recommendations && rollup.recommendations.length > 0) {
-    lines.push("", "💡 *REKOMENDASI EVALUASI & STRATEGI PROFIT TOKO*");
-    rollup.recommendations.slice(0, 5).forEach((rec, index) => {
-      const icon = rec.priority === "tinggi" ? "🔴" : rec.priority === "sedang" ? "🟡" : "🟢";
-      lines.push(`${index + 1}. ${icon} *${rec.title}*`);
-      lines.push(`   _${rec.detail}_`);
-    });
+  const recSummaryLines = buildWhatsAppRecommendationSummary(
+    rollup,
+    topProducts,
+    rollup.recommendations
+  );
+  if (recSummaryLines.length > 0) {
+    lines.push(...recSummaryLines);
   }
 
   lines.push(

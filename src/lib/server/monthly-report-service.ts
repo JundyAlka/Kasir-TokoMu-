@@ -155,6 +155,68 @@ export async function getReportRollupByMode(workspaceOwnerId: string, mode: "har
 
 export class UnlockedDailyReportsError extends Error { constructor(readonly dates: string[]) { super("UNLOCKED_DAILY_REPORTS"); } }
 
+export type MonthToDateProfitSummary = {
+  startDateKey: string;
+  endDateKey: string;
+  label: string;
+  revenue: number;
+  cogs: number;
+  grossProfit: number;
+  expenseTotal: number;
+  netProfit: number;
+  profitDistribution: number;
+};
+
+export async function getMonthToDateProfitSummary(
+  workspaceOwnerId: string,
+  asOfDateInput: Date | string
+): Promise<MonthToDateProfitSummary> {
+  const asOfKey =
+    typeof asOfDateInput === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asOfDateInput)
+      ? asOfDateInput
+      : jakartaDateKey(String(asOfDateInput));
+
+  const [yearStr, monthStr, dayStr] = asOfKey.split("-");
+  const year = Number(yearStr) || 2026;
+  const month = Number(monthStr) || 1;
+  const day = Number(dayStr) || 1;
+
+  const startDateKey = `${year}-${String(month).padStart(2, "0")}-01`;
+  const nextDate = new Date(Date.UTC(year, month - 1, day + 1));
+  const nextDayKey = `${nextDate.getUTCFullYear()}-${String(nextDate.getUTCMonth() + 1).padStart(2, "0")}-${String(nextDate.getUTCDate()).padStart(2, "0")}`;
+
+  const monthStartIso = new Date(`${startDateKey}T00:00:00.000+07:00`).toISOString();
+  const nextDayIso = new Date(`${nextDayKey}T00:00:00.000+07:00`).toISOString();
+
+  const [summary, dailyRollup] = await Promise.all([
+    calculatePeriodProfit(workspaceOwnerId, monthStartIso, nextDayIso),
+    getDailyReportRollup(workspaceOwnerId, { start: startDateKey, end: nextDayKey }),
+  ]);
+
+  const hasDaily = dailyRollup.dailyReports.length > 0;
+  const revenue = Math.max(summary.revenue, dailyRollup.revenue);
+  const cogs = Math.max(summary.cogs, dailyRollup.cogs);
+  const expenseTotal = Math.max(summary.expenses, dailyRollup.expenseTotal);
+  const grossProfit = revenue - cogs;
+  const netProfit = hasDaily && summary.revenue === 0 ? dailyRollup.netProfit : (revenue - cogs - expenseTotal);
+
+  const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  const mName = monthNamesShort[month - 1] ?? "";
+  const label = day === 1 ? `1 ${mName} ${year}` : `1 – ${day} ${mName} ${year}`;
+
+  return {
+    startDateKey,
+    endDateKey: asOfKey,
+    label,
+    revenue,
+    cogs,
+    grossProfit,
+    expenseTotal,
+    netProfit,
+    profitDistribution: summary.profitDistribution || dailyRollup.profitDistribution,
+  };
+}
+
 export async function assertMonthLocked(workspaceOwnerId: string, year: number, month: number) {
   const range = monthDateRange(year, month);
   const result = await pool.query<{ reportDate: string }>(`select report_date as "reportDate" from daily_reports where user_id = $1 and report_date >= $2::date and report_date < $3::date and status <> 'locked' order by report_date asc`, [workspaceOwnerId, range.start, range.end]);
