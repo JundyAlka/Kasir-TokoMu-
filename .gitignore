@@ -89,7 +89,7 @@ scripts/capture-screenshots.mjs
 scripts/transfer-data.ts
 scratch/*.mjs
 
-# Screenshot assets (large binary files)
-screenshots/
+# Screenshot assets (large binary scratch files; keep docs/screenshots tracked)
+/screenshots/
 screenshots all menu.zip
 screenshot_report.md
