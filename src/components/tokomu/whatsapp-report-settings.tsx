@@ -667,7 +667,9 @@ export function WhatsAppReportSettings() {
                         onValueChange={(val) => setDailyWaitShiftClose(val === "shift_close")}
                       >
                         <SelectTrigger className="w-full h-10 rounded-xl text-xs font-medium">
-                          <SelectValue />
+                          <SelectValue>
+                            {dailyWaitShiftClose ? "Setelah Shift" : "Sesuai Jam"}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="shift_close">Setelah Shift</SelectItem>
