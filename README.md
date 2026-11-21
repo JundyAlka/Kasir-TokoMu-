@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/logo.png" alt="Kasir TokoMu Logo" width="140" />
 
-  <h1>Kasir TokoMu — WarungOS</h1>
+  <h1>Kasir TokoMu</h1>
 
   <p>
     <strong>Retail &amp; Consignment Operating System berbasis Tablet-First Web App</strong><br />
